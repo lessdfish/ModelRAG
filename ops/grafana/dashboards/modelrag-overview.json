@@ -1,0 +1,182 @@
+{
+  "uid": "modelrag-overview",
+  "title": "ModelRAG Product Operations",
+  "schemaVersion": 39,
+  "version": 2,
+  "refresh": "10s",
+  "tags": ["modelrag", "rag", "agent", "product"],
+  "time": {"from": "now-1h", "to": "now"},
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "系统健康",
+      "gridPos": {"x": 0, "y": 0, "w": 24, "h": 1}
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Backend Up",
+      "gridPos": {"x": 0, "y": 1, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [{"expr": "up{job=\"modelrag-backend\"}", "refId": "A"}]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "HTTP 5xx / min",
+      "gridPos": {"x": 6, "y": 1, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [{"expr": "sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[1m])) * 60", "refId": "A"}]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "HTTP Requests by URI",
+      "gridPos": {"x": 12, "y": 1, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [{"expr": "sum by (uri,status) (rate(http_server_requests_seconds_count[1m]))", "legendFormat": "{{status}} {{uri}}", "refId": "A"}]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "JVM Heap Usage",
+      "gridPos": {"x": 0, "y": 5, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [{"expr": "sum(jvm_memory_used_bytes{area=\"heap\"})", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "bytes"}}
+    },
+    {
+      "id": 6,
+      "type": "row",
+      "title": "检索链路",
+      "gridPos": {"x": 0, "y": 13, "w": 24, "h": 1}
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "QA Requests / min",
+      "gridPos": {"x": 0, "y": 14, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [{"expr": "sum(rate(modelrag_qa_requests_total[1m])) * 60", "refId": "A"}]
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Avg QA Latency",
+      "gridPos": {"x": 6, "y": 14, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [{"expr": "rate(modelrag_qa_latency_seconds_sum{phase=\"total\"}[5m]) / clamp_min(rate(modelrag_qa_latency_seconds_count{phase=\"total\"}[5m]), 0.001)", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "QA Latency Trend",
+      "gridPos": {"x": 12, "y": 14, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [{"expr": "rate(modelrag_qa_latency_seconds_sum{phase=\"total\"}[5m]) / clamp_min(rate(modelrag_qa_latency_seconds_count{phase=\"total\"}[5m]), 0.001)", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Retrieval Candidates by Stage",
+      "gridPos": {"x": 0, "y": 18, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [{"expr": "sum by (stage) (rate(modelrag_retrieval_candidates_total[1m]))", "legendFormat": "{{stage}}", "refId": "A"}]
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Retrieval Empty Stages",
+      "gridPos": {"x": 12, "y": 22, "w": 12, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [{"expr": "sum by (stage) (rate(modelrag_retrieval_empty_total[5m]))", "legendFormat": "{{stage}}", "refId": "A"}]
+    },
+    {
+      "id": 11,
+      "type": "row",
+      "title": "模型与成本",
+      "gridPos": {"x": 0, "y": 26, "w": 24, "h": 1}
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Token Usage by Type",
+      "gridPos": {"x": 0, "y": 27, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [{"expr": "sum by (type) (rate(modelrag_token_usage_total[5m]))", "legendFormat": "{{type}}", "refId": "A"}]
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "Rerank Calls / min",
+      "gridPos": {"x": 12, "y": 27, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [{"expr": "sum(rate(modelrag_rerank_calls_total[1m])) * 60", "refId": "A"}]
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "Model OPEN Transitions / min",
+      "gridPos": {"x": 18, "y": 27, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [{"expr": "sum(rate(modelrag_model_transitions_total{state=\"OPEN\"}[1m])) * 60", "refId": "A"}]
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Model Calls by Type / Status",
+      "gridPos": {"x": 12, "y": 31, "w": 12, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [{"expr": "sum by (model_type,status) (rate(modelrag_model_calls_total[5m]))", "legendFormat": "{{model_type}} {{status}}", "refId": "A"}]
+    },
+    {
+      "id": 15,
+      "type": "row",
+      "title": "工具与 Agent",
+      "gridPos": {"x": 0, "y": 35, "w": 24, "h": 1}
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Agent / Tool API Traffic",
+      "gridPos": {"x": 0, "y": 36, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [{"expr": "sum by (tool,status) (rate(modelrag_tool_calls_total[1m]))", "legendFormat": "{{tool}} {{status}}", "refId": "A"}]
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "Tool Latency Average",
+      "gridPos": {"x": 12, "y": 36, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [{"expr": "sum by (tool,status) (rate(modelrag_tool_latency_seconds_sum[5m])) / clamp_min(sum by (tool,status) (rate(modelrag_tool_latency_seconds_count[5m])), 0.001)", "legendFormat": "{{tool}} {{status}}", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "id": 18,
+      "type": "row",
+      "title": "RAG 质量",
+      "gridPos": {"x": 0, "y": 44, "w": 24, "h": 1}
+    },
+    {
+      "id": 19,
+      "type": "stat",
+      "title": "Refusal Rate",
+      "gridPos": {"x": 0, "y": 45, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [{"expr": "sum(rate(modelrag_qa_requests_total{status=\"refused\"}[5m])) / clamp_min(sum(rate(modelrag_qa_requests_total[5m])), 0.001)", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "percentunit"}}
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Audit / Eval / Feedback API Traffic",
+      "gridPos": {"x": 6, "y": 45, "w": 18, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [{"expr": "sum by (uri,status) (rate(http_server_requests_seconds_count{uri=~\"/api/v1/admin/retrieval-traces.*|/api/v1/eval.*|/api/v1/qa/feedback.*\"}[1m]))", "legendFormat": "{{status}} {{uri}}", "refId": "A"}]
+    }
+  ]
+}

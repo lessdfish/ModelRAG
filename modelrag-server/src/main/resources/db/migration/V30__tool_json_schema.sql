@@ -1,0 +1,1 @@
+ALTER TABLE kb_tool_definition ADD COLUMN IF NOT EXISTS json_schema JSONB NOT NULL DEFAULT '{}';

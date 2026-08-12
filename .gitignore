@@ -1,0 +1,16 @@
+.idea/
+target/
+**/target/
+modelrag-client/node_modules/
+modelrag-client/dist/
+tmp/
+output/
+**/__pycache__/
+*.pyc
+*.log
+hs_err_pid*
+*.whl
+.env
+.env.*
+!.env.example
+modelrag-server/tmp/

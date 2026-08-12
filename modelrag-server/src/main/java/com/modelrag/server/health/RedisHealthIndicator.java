@@ -1,0 +1,3 @@
+package com.modelrag.server.health;
+import org.springframework.context.annotation.Profile; import org.springframework.boot.actuate.health.*; import org.springframework.data.redis.core.StringRedisTemplate; import org.springframework.stereotype.Component;
+@Component("redisCache") @Profile("postgres") public class RedisHealthIndicator implements HealthIndicator {private final StringRedisTemplate redis;public RedisHealthIndicator(StringRedisTemplate redis){this.redis=redis;}public Health health(){try{String ping=redis.getConnectionFactory().getConnection().ping();return "PONG".equalsIgnoreCase(ping)?Health.up().build():Health.down().withDetail("ping",ping).build();}catch(Exception e){return Health.down(e).build();}}}

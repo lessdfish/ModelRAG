@@ -1,0 +1,44 @@
+spring:
+  application.name: modelrag
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+  threads.virtual.enabled: false # Java 17 默认关闭虚拟线程
+  servlet.multipart.max-file-size: 20MB
+  servlet.multipart.max-request-size: 20MB
+server:
+  port: ${SERVER_PORT:8091}
+management.endpoints.web.exposure.include: health,info,metrics,prometheus
+modelrag:
+  indexing.async: true
+  chunk-size: 512
+  chunk-overlap: 64
+  qa:
+    context-max-tokens: 1600
+    online-ab-enabled: ${MODELRAG_QA_ONLINE_AB_ENABLED:false}
+    online-ab-top-k: ${MODELRAG_QA_ONLINE_AB_TOP_K:8}
+  search:
+    rrf-vector-weight: 0.7
+    rrf-bm25-weight: 0.3
+  ollama:
+    enabled: ${MODELRAG_OLLAMA_ENABLED:true}
+    url: ${MODELRAG_OLLAMA_URL:${OLLAMA_HOST:127.0.0.1:11434}}
+    chat-model: ${MODELRAG_OLLAMA_CHAT_MODEL:deepseek-r1:1.5b}
+    canary-model: ${MODELRAG_OLLAMA_CANARY_MODEL:}
+    embedding-model: ${MODELRAG_OLLAMA_EMBEDDING_MODEL:quentinz/bge-large-zh-v1.5}
+  model:
+    canary-percent: ${MODELRAG_MODEL_CANARY_PERCENT:0}
+  reranker:
+    enabled: ${MODELRAG_RERANKER_ENABLED:false}
+    url: ${MODELRAG_RERANKER_URL:http://127.0.0.1:18080}
+  intent:
+    enabled: ${MODELRAG_INTENT_ENABLED:false}
+    url: ${MODELRAG_INTENT_URL:http://127.0.0.1:18080}
+  eval:
+    llm-judge-enabled: ${MODELRAG_EVAL_LLM_JUDGE_ENABLED:false}
+  security:
+    default-admin-enabled: ${MODELRAG_DEFAULT_ADMIN_ENABLED:false}
+    header-auth-enabled: ${MODELRAG_HEADER_AUTH_ENABLED:true}
+    tool-secret-key: ${MODELRAG_TOOL_SECRET_KEY:modelrag-local-tool-secret-change-me}

@@ -1,0 +1,1 @@
+ALTER TABLE kb_retrieval_trace ADD COLUMN IF NOT EXISTS rerank_applied BOOLEAN NOT NULL DEFAULT FALSE;

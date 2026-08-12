@@ -1,0 +1,1 @@
+ALTER TABLE kb_token_usage_daily ADD COLUMN IF NOT EXISTS estimated_cost NUMERIC(16,6) NOT NULL DEFAULT 0;

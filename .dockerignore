@@ -1,0 +1,7 @@
+.git
+**/target
+!modelrag-server/target/
+!modelrag-server/target/modelrag-server-*.jar
+modelrag-client/node_modules
+modelrag-client/dist
+*.log

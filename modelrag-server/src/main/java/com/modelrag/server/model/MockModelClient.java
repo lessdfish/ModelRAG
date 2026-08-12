@@ -1,0 +1,1 @@
+package com.modelrag.server.model; import org.springframework.core.annotation.Order; import org.springframework.stereotype.Component; @Component @Order(0) public class MockModelClient implements ModelClient {public String name(){return "mock-chat";}public ModelType type(){return ModelType.CHAT;}public String execute(String input){return "[mock] "+input;}}

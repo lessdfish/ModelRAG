@@ -1,0 +1,99 @@
+groups:
+  - name: modelrag.rules
+    rules:
+      - alert: ModelRagBackendDown
+        expr: up{job="modelrag-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ModelRAG backend is down"
+          description: "Prometheus cannot scrape the backend /actuator/prometheus endpoint."
+
+      - alert: ModelRagHighRefusalRate
+        expr: |
+          sum(rate(modelrag_qa_requests_total{status="refused"}[5m]))
+          /
+          clamp_min(sum(rate(modelrag_qa_requests_total[5m])), 0.001) > 0.35
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ModelRAG QA refusal rate is high"
+          description: "More than 35% of QA requests were refused during the last 5 minutes."
+
+      - alert: ModelRagHighQaLatency
+        expr: |
+          rate(modelrag_qa_latency_seconds_sum{phase="total"}[5m])
+          /
+          clamp_min(rate(modelrag_qa_latency_seconds_count{phase="total"}[5m]), 0.001) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ModelRAG QA latency is high"
+          description: "Average QA latency is above 5 seconds during the last 5 minutes."
+
+      - alert: ModelRagJvmHeapHigh
+        expr: |
+          sum(jvm_memory_used_bytes{area="heap", application="modelrag"})
+          /
+          clamp_min(sum(jvm_memory_max_bytes{area="heap", application="modelrag"}), 1) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ModelRAG JVM heap usage is high"
+          description: "Heap usage stayed above 85% for 5 minutes."
+
+      - alert: ModelRagHttp5xxHigh
+        expr: |
+          sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ModelRAG HTTP 5xx rate is high"
+          description: "Backend 5xx responses are above 0.05 requests/second for 5 minutes."
+
+      - alert: ModelRagTokenUsageSpike
+        expr: |
+          sum(rate(modelrag_token_usage_total[5m])) > 200
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ModelRAG token usage spiked"
+          description: "Token consumption rate is above 200 tokens/second for 5 minutes."
+
+      - alert: ModelRagRetrievalRecallEmpty
+        expr: |
+          sum(rate(modelrag_retrieval_empty_total{stage=~"vector|bm25|fused|context"}[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ModelRAG retrieval has too many empty stages"
+          description: "Retrieval empty-stage rate is high; inspect trace replay and evaluation bad cases."
+
+      - alert: ModelRagToolFailureRateHigh
+        expr: |
+          sum(rate(modelrag_tool_calls_total{status="failure"}[5m]))
+          /
+          clamp_min(sum(rate(modelrag_tool_calls_total[5m])), 0.001) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ModelRAG tool failure rate is high"
+          description: "More than 20% of tool calls failed during the last 5 minutes."
+
+      - alert: ModelRagModelCircuitOpened
+        expr: |
+          sum(rate(modelrag_model_transitions_total{state="OPEN"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ModelRAG model circuit opened"
+          description: "At least one model candidate entered OPEN state; check model health and fallback behavior."

@@ -1,0 +1,3 @@
+CREATE TABLE IF NOT EXISTS kb_conversation (id BIGSERIAL PRIMARY KEY,dataset_id BIGINT,title VARCHAR(500),model VARCHAR(100),message_count INT DEFAULT 0,token_total INT DEFAULT 0,create_time TIMESTAMP NOT NULL DEFAULT NOW(),update_time TIMESTAMP NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS kb_message (id BIGSERIAL PRIMARY KEY,conversation_id BIGINT NOT NULL REFERENCES kb_conversation(id),role VARCHAR(20) NOT NULL,content TEXT NOT NULL,citations JSONB DEFAULT '[]',confidence DECIMAL(3,2),prompt_tokens INT DEFAULT 0,completion_tokens INT DEFAULT 0,latency_ms INT,create_time TIMESTAMP NOT NULL DEFAULT NOW());
+CREATE INDEX IF NOT EXISTS idx_message_conversation ON kb_message(conversation_id,create_time);

@@ -1,0 +1,110 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    environment:
+      POSTGRES_DB: modelrag
+      POSTGRES_USER: modelrag
+      POSTGRES_PASSWORD: modelrag123
+    ports: ["15432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U modelrag -d modelrag"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  elasticsearch:
+    image: elasticsearch:8.13.0
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports: ["19200:9200"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  redis:
+    image: redis:7.2
+    ports: ["16379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  backend:
+    build:
+      context: .
+      dockerfile: modelrag-server/Dockerfile
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      SPRING_THREADS_VIRTUAL_ENABLED: "false"
+      SERVER_PORT: 8080
+      MODELRAG_JDBC_URL: jdbc:postgresql://postgres:5432/modelrag
+      MODELRAG_DB_USER: modelrag
+      MODELRAG_DB_PASSWORD: modelrag123
+      MODELRAG_REDIS_HOST: redis
+      MODELRAG_ELASTICSEARCH_ENDPOINT: http://elasticsearch:9200
+      MODELRAG_OLLAMA_ENABLED: ${MODELRAG_OLLAMA_ENABLED:-true}
+      MODELRAG_OLLAMA_URL: ${MODELRAG_OLLAMA_URL:-http://host.docker.internal:11434}
+      MODELRAG_OLLAMA_CHAT_MODEL: ${MODELRAG_OLLAMA_CHAT_MODEL:-deepseek-r1:1.5b}
+      MODELRAG_OLLAMA_EMBEDDING_MODEL: ${MODELRAG_OLLAMA_EMBEDDING_MODEL:-quentinz/bge-large-zh-v1.5}
+      MODELRAG_RERANKER_ENABLED: ${MODELRAG_RERANKER_ENABLED:-false}
+      MODELRAG_RERANKER_URL: ${MODELRAG_RERANKER_URL:-http://host.docker.internal:18080}
+      MODELRAG_INTENT_ENABLED: ${MODELRAG_INTENT_ENABLED:-false}
+      MODELRAG_INTENT_URL: ${MODELRAG_INTENT_URL:-http://host.docker.internal:18080}
+      MODELRAG_DEFAULT_ADMIN_ENABLED: ${MODELRAG_DEFAULT_ADMIN_ENABLED:-false}
+      MODELRAG_HEADER_AUTH_ENABLED: ${MODELRAG_HEADER_AUTH_ENABLED:-false}
+      MODELRAG_TOOL_SECRET_KEY: ${MODELRAG_TOOL_SECRET_KEY:-modelrag-local-tool-secret-change-me}
+    ports: ["8091:8080"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health >/dev/null"]
+      interval: 10s
+      timeout: 30s
+      retries: 12
+  prometheus:
+    image: prom/prometheus:v2.53.1
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    ports: ["19090:9090"]
+    volumes:
+      - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./ops/prometheus/rules:/etc/prometheus/rules:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/healthy >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  grafana:
+    image: grafana/grafana:11.1.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: modelrag
+      GF_USERS_DEFAULT_THEME: light
+    ports: ["13000:3000"]
+    volumes:
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_healthy
+  frontend:
+    build:
+      context: ./modelrag-client
+      dockerfile: Dockerfile
+    ports: ["3000:80"]
+    depends_on:
+      backend:
+        condition: service_healthy
