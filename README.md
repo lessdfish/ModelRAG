@@ -111,3 +111,7 @@ docker compose --env-file .env up -d
 ModelRAG 的基本原则是：企业知识问答系统只有在可追溯、可授权、可恢复的前提下，才有资格变得“智能”。
 
 所以它会在证据不足时拒答，在有证据时给出引用，在高风险动作前要求审批，并把关键状态放进真正可靠的事实库。
+
+## License
+
+本项目采用 `MIT` License，详见 [LICENSE](LICENSE)。
