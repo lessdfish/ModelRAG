@@ -13,4 +13,9 @@ hs_err_pid*
 .env
 .env.*
 !.env.example
+docker-compose.yml
+docker-compose.local.yml
+2026-07-06-modelrag-design.md
+2026-08-12-modelrag-spring-ai-refactor-plan.md
+scripts/
 modelrag-server/tmp/

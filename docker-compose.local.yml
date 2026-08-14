@@ -1,9 +1,0 @@
-services:
-  backend:
-    build:
-      dockerfile: modelrag-server/Dockerfile.local
-    environment:
-      MODELRAG_OLLAMA_ENABLED: "true"
-  frontend:
-    build:
-      dockerfile: Dockerfile.local
