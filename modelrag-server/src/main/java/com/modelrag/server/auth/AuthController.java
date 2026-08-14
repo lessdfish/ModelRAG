@@ -4,94 +4,80 @@ import com.modelrag.common.dto.ApiResponse;
 import com.modelrag.common.exception.BusinessException;
 import com.modelrag.common.exception.ErrorCode;
 import com.modelrag.common.security.AccessControlService;
-import com.modelrag.common.security.LocalSecurityStore;
 import com.modelrag.common.security.LocalAuthTokenService;
 import com.modelrag.common.security.RequestUser;
-import com.modelrag.knowledge.service.KnowledgeStore;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
+/** Database-backed authentication. There is deliberately no local-admin or in-memory fallback. */
 @RestController
-@RequestMapping("/api/v1/auth")
+@Profile("!test")
+@RequestMapping({"/api/v1/auth", "/api/v2/auth"})
 public class AuthController {
+    private final JdbcTemplate jdbc;
+    private final PasswordEncoder passwords;
     private final LocalAuthTokenService tokens;
+    private final RefreshTokenService refreshTokens;
     private final AccessControlService access;
-    private final String username;
-    private final String password;
-    private final Set<String> roles;
-    private final Set<Long> datasetIds;
-    private final ObjectProvider<JdbcTemplate> jdbc;
-    private final ObjectProvider<LocalSecurityStore> localSecurity;
-    private final KnowledgeStore knowledge;
 
-    @Autowired
-    public AuthController(
-            LocalAuthTokenService tokens,
-            AccessControlService access,
-            @Value("${modelrag.security.local-admin-username:admin}") String username,
-            @Value("${modelrag.security.local-admin-password:modelrag}") String password,
-            @Value("${modelrag.security.local-admin-roles:ADMIN,APPROVER}") String roles,
-            @Value("${modelrag.security.local-admin-dataset-ids:}") String datasetIds,
-            ObjectProvider<JdbcTemplate> jdbc,
-            ObjectProvider<LocalSecurityStore> localSecurity,
-            KnowledgeStore knowledge) {
-        this.tokens = tokens;
-        this.access = access;
-        this.username = username;
-        this.password = password;
-        this.roles = roles(roles);
-        this.datasetIds = ids(datasetIds);
+    public AuthController(JdbcTemplate jdbc, PasswordEncoder passwords, LocalAuthTokenService tokens,
+            RefreshTokenService refreshTokens, AccessControlService access) {
         this.jdbc = jdbc;
-        this.localSecurity = localSecurity;
-        this.knowledge = knowledge;
-    }
-
-    public AuthController(LocalAuthTokenService tokens, AccessControlService access, String username, String password,
-            String roles, String datasetIds, ObjectProvider<JdbcTemplate> jdbc) {
-        this(tokens, access, username, password, roles, datasetIds, jdbc, null, null);
-    }
-
-    public AuthController(LocalAuthTokenService tokens, AccessControlService access, String username, String password,
-            String roles, String datasetIds, ObjectProvider<JdbcTemplate> jdbc, ObjectProvider<LocalSecurityStore> localSecurity) {
-        this(tokens, access, username, password, roles, datasetIds, jdbc, localSecurity, null);
+        this.passwords = passwords;
+        this.tokens = tokens;
+        this.refreshTokens = refreshTokens;
+        this.access = access;
     }
 
     @PostMapping("/login")
     public ApiResponse<LoginResponse> login(@RequestBody LoginRequest request) {
-        RequestUser managedUser = managedLogin(request);
-        if (managedUser != null) {
-            return ApiResponse.success(new LoginResponse(tokens.issue(managedUser.id(), managedUser.roles(), managedUser.datasetIds()), managedUser));
-        }
-        if (request == null || !username.equals(request.username()) || !password.equals(request.password())) {
+        if (request == null || blank(request.username()) || blank(request.password())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "用户名或密码错误");
         }
-        RequestUser user = new RequestUser(username, roles, datasetIds);
-        return ApiResponse.success(new LoginResponse(tokens.issue(user.id(), user.roles(), user.datasetIds()), user));
+        RequestUser user = loadUser(request.username().trim());
+        if (!passwords.matches(request.password(), passwordHash(user.id()))) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "用户名或密码错误");
+        }
+        return ApiResponse.success(issue(user));
     }
 
     @PostMapping("/register")
     public ApiResponse<LoginResponse> register(@RequestBody RegisterRequest request) {
-        if (request == null || request.username() == null || request.username().isBlank()) {
-            throw new IllegalArgumentException("用户名不能为空");
-        }
-        if (request.password() == null || request.password().length() < 4) {
-            throw new IllegalArgumentException("密码至少 4 位");
+        if (request == null || blank(request.username()) || request.password() == null
+                || request.password().length() < 12) {
+            throw new BusinessException(ErrorCode.VALIDATION, "用户名不能为空，密码至少 12 位");
         }
         String userId = request.username().trim();
-        String displayName = request.displayName() == null || request.displayName().isBlank() ? userId : request.displayName().trim();
-        Set<Long> grants = currentDatasetIds();
-        RequestUser user = registerManagedUser(userId, displayName, request.password(), grants);
-        return ApiResponse.success(new LoginResponse(tokens.issue(user.id(), user.roles(), user.datasetIds()), user));
+        if (!jdbc.queryForList("SELECT user_id FROM kb_user_account WHERE user_id=?", userId).isEmpty()) {
+            throw new BusinessException(ErrorCode.VALIDATION, "用户已存在: " + userId);
+        }
+        String displayName = blank(request.displayName()) ? userId : request.displayName().trim();
+        jdbc.update("INSERT INTO kb_user_account(user_id,display_name,password_hash,enabled) VALUES (?,?,?,TRUE)",
+                userId, displayName, passwords.encode(request.password()));
+        jdbc.update("INSERT INTO kb_user_role(user_id,role_name) VALUES (?,'USER')", userId);
+        return ApiResponse.success(issue(new RequestUser(userId, Set.of("USER"), Set.of())));
+    }
+
+    @PostMapping("/refresh")
+    public ApiResponse<LoginResponse> refresh(@RequestBody RefreshRequest request) {
+        RequestUser user = refreshTokens.rotate(request == null ? null : request.refreshToken());
+        return ApiResponse.success(issue(user));
+    }
+
+    @PostMapping("/logout")
+    public ApiResponse<Void> logout(@RequestBody(required = false) RefreshRequest request) {
+        refreshTokens.revoke(request == null ? null : request.refreshToken());
+        return ApiResponse.success(null);
     }
 
     @GetMapping("/me")
@@ -101,119 +87,39 @@ public class AuthController {
 
     public record LoginRequest(String username, String password) {}
     public record RegisterRequest(String username, String password, String displayName) {}
-    public record LoginResponse(String token, RequestUser user) {}
+    public record RefreshRequest(String refreshToken) {}
+    public record LoginResponse(String token, String refreshToken, RequestUser user) {}
 
-    private Set<String> roles(String value) {
-        return Arrays.stream((value == null ? "" : value).split(","))
-                .map(String::trim)
-                .filter(role -> !role.isBlank())
-                .map(role -> role.toUpperCase(Locale.ROOT))
-                .collect(Collectors.toSet());
+    private LoginResponse issue(RequestUser user) {
+        return new LoginResponse(tokens.issue(user.id(), user.roles(), user.datasetIds()),
+                refreshTokens.issue(user.id()), user);
     }
 
-    private Set<Long> ids(String value) {
-        if (value == null || value.isBlank()) return Set.of();
-        return Arrays.stream(value.split(","))
-                .map(String::trim)
-                .filter(id -> !id.isBlank())
-                .map(Long::parseLong)
-                .collect(Collectors.toSet());
+    private RequestUser loadUser(String userId) {
+        List<Boolean> enabled = jdbc.query("SELECT enabled FROM kb_user_account WHERE user_id=?",
+                (rs, n) -> rs.getBoolean(1), userId);
+        if (enabled.isEmpty()) throw new BusinessException(ErrorCode.FORBIDDEN, "用户名或密码错误");
+        if (!enabled.get(0)) throw new BusinessException(ErrorCode.FORBIDDEN, "用户已禁用");
+        Set<String> roles = jdbc.queryForList("SELECT role_name FROM kb_user_role WHERE user_id=?", String.class, userId)
+                .stream().map(value -> value.toUpperCase(Locale.ROOT)).collect(Collectors.toSet());
+        java.util.Map<Long, String> permissions = jdbc.query(
+                "SELECT dataset_id,permission FROM kb_dataset_acl WHERE user_id=? AND permission IN ('READ','WRITE','ADMIN')",
+                rs -> {
+                    java.util.Map<Long, String> result = new java.util.LinkedHashMap<>();
+                    while (rs.next()) result.put(rs.getLong(1), rs.getString(2));
+                    return result;
+                }, userId);
+        return new RequestUser(userId, roles.isEmpty() ? Set.of("USER") : roles,
+                permissions.keySet(), permissions);
     }
 
-    private RequestUser managedLogin(LoginRequest request) {
-        RequestUser databaseUser = databaseLogin(request);
-        return databaseUser == null ? localLogin(request) : databaseUser;
-    }
-
-    private RequestUser databaseLogin(LoginRequest request) {
-        if (request == null || request.username() == null || request.username().isBlank()) return null;
-        JdbcTemplate db = jdbc == null ? null : jdbc.getIfAvailable();
-        if (db == null) return null;
-        try {
-            var rows = db.queryForList("SELECT password_hash,enabled FROM kb_user_account WHERE user_id=?", request.username());
-            if (rows.isEmpty()) return null;
-            Map<String, Object> row = rows.get(0);
-            if (Boolean.FALSE.equals(row.get("enabled"))) {
-                throw new BusinessException(ErrorCode.FORBIDDEN, "用户已禁用");
-            }
-            if (!passwordMatches(String.valueOf(row.get("password_hash")), request.password())) {
-                throw new BusinessException(ErrorCode.FORBIDDEN, "用户名或密码错误");
-            }
-            Set<String> dbRoles = db.queryForList("SELECT role_name FROM kb_user_role WHERE user_id=?", String.class, request.username())
-                    .stream()
-                    .map(role -> role.toUpperCase(Locale.ROOT))
-                    .collect(Collectors.toSet());
-            Set<Long> dbDatasets = db.queryForList(
-                            "SELECT dataset_id FROM kb_dataset_acl WHERE user_id=? AND permission IN ('READ','WRITE','ADMIN')",
-                            Long.class, request.username())
-                    .stream()
-                    .collect(Collectors.toSet());
-            return new RequestUser(request.username(), dbRoles.isEmpty() ? Set.of("USER") : dbRoles, dbDatasets);
-        } catch (BusinessException e) {
-            throw e;
-        } catch (Exception ignored) {
-            return null;
+    private String passwordHash(String userId) {
+        String hash = jdbc.queryForObject("SELECT password_hash FROM kb_user_account WHERE user_id=?", String.class, userId);
+        if (hash == null || !hash.startsWith("$argon2")) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "用户凭据需要管理员重置");
         }
+        return hash;
     }
 
-    private RequestUser localLogin(LoginRequest request) {
-        if (request == null || request.username() == null || request.username().isBlank()) return null;
-        LocalSecurityStore store = localSecurity == null ? null : localSecurity.getIfAvailable();
-        if (store == null || !store.exists(request.username())) return null;
-        if (!store.enabled(request.username())) throw new BusinessException(ErrorCode.FORBIDDEN, "用户已禁用");
-        if (!passwordMatches(store.passwordHash(request.username()), request.password())) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "用户名或密码错误");
-        }
-        return new RequestUser(request.username(), store.roles(request.username()), store.datasetIds(request.username()));
-    }
-
-    private RequestUser registerManagedUser(String userId, String displayName, String rawPassword, Set<Long> grants) {
-        JdbcTemplate db = jdbc == null ? null : jdbc.getIfAvailable();
-        if (db != null) try {
-            if (!db.queryForList("SELECT user_id FROM kb_user_account WHERE user_id=?", userId).isEmpty()) {
-                throw new IllegalArgumentException("用户已存在: " + userId);
-            }
-            db.update("INSERT INTO kb_user_account(user_id,display_name,password_hash,enabled) VALUES (?,?,?,TRUE)",
-                    userId, displayName, "{sha256}" + sha256(rawPassword));
-            db.update("INSERT INTO kb_user_role(user_id,role_name) VALUES (?,'USER') ON CONFLICT(user_id,role_name) DO NOTHING", userId);
-            for (Long datasetId : grants) {
-                db.update("INSERT INTO kb_dataset_acl(dataset_id,user_id,permission) VALUES (?,?,'READ') ON CONFLICT(dataset_id,user_id) DO UPDATE SET permission='READ'",
-                        datasetId, userId);
-            }
-            return new RequestUser(userId, Set.of("USER"), grants);
-        } catch (IllegalArgumentException e) {
-            throw e;
-        } catch (Exception ignored) {
-            // fall back to local store for the default in-memory profile
-        }
-        LocalSecurityStore store = localSecurity == null ? null : localSecurity.getIfAvailable();
-        if (store == null) throw new IllegalStateException("当前环境未启用用户注册存储");
-        if (store.exists(userId)) throw new IllegalArgumentException("用户已存在: " + userId);
-        store.upsert(userId, displayName, "{sha256}" + sha256(rawPassword), true, Set.of("USER"));
-        for (Long datasetId : grants) store.grant(userId, datasetId);
-        return new RequestUser(userId, Set.of("USER"), grants);
-    }
-
-    private Set<Long> currentDatasetIds() {
-        if (knowledge == null) return Set.of();
-        return knowledge.datasets().stream().map(dataset -> dataset.id()).collect(Collectors.toSet());
-    }
-
-    private boolean passwordMatches(String stored, String raw) {
-        if (stored == null || raw == null) return false;
-        if (stored.startsWith("{plain}")) return stored.substring(7).equals(raw);
-        if (stored.startsWith("{sha256}")) return stored.substring(8).equalsIgnoreCase(sha256(raw));
-        return stored.equals(raw);
-    }
-
-    private String sha256(String value) {
-        try {
-            byte[] bytes = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
-            StringBuilder out = new StringBuilder();
-            for (byte b : bytes) out.append(String.format("%02x", b));
-            return out.toString();
-        } catch (Exception e) {
-            throw new IllegalStateException("无法校验密码", e);
-        }
-    }
+    private boolean blank(String value) { return value == null || value.isBlank(); }
 }

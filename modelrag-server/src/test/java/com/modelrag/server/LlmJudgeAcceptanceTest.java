@@ -14,7 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@SpringBootTest(properties = {"modelrag.security.default-admin-enabled=true", "modelrag.eval.llm-judge-enabled=true", "modelrag.ollama.enabled=false"})
+@SpringBootTest(properties = {"modelrag.eval.llm-judge-enabled=true", "modelrag.ollama.enabled=false"})
 class LlmJudgeAcceptanceTest {
     @Autowired KnowledgeStore store;
     @Autowired IndexingPipeline indexing;
@@ -30,9 +30,10 @@ class LlmJudgeAcceptanceTest {
 
         EvalReport report = eval.run(datasetId, List.of(new EvalItem("评测模型不可用时报告写明什么", List.of(expected)))).data();
 
-        assertEquals("LLM", report.parameters().get("judgeRequestedMode"));
-        assertEquals(1, ((Number) report.parameters().get("judgeFallbacks")).intValue());
-        assertTrue(String.valueOf(report.parameters().get("judgeModeCounts")).contains("HEURISTIC_FALLBACK"));
-        assertEquals("HEURISTIC_FALLBACK", report.caseResults().get(0).get("judgeMode"));
+        assertEquals("LLM", report.parameters().judgeRequestedMode());
+        assertEquals(1, report.parameters().judgeFallbacks());
+        assertTrue(report.parameters().judgeModeCounts().stream()
+                .anyMatch(mode -> "HEURISTIC_FALLBACK".equals(mode.mode())));
+        assertEquals("HEURISTIC_FALLBACK", report.caseResults().get(0).judgeMode());
     }
 }

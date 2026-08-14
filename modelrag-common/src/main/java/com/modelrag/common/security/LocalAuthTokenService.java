@@ -3,6 +3,7 @@ package com.modelrag.common.security;
 import com.modelrag.common.exception.BusinessException;
 import com.modelrag.common.exception.ErrorCode;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
@@ -20,25 +21,45 @@ public class LocalAuthTokenService {
     private final long ttlSeconds;
 
     public LocalAuthTokenService(
-            @Value("${modelrag.security.token-secret:modelrag-local-dev-secret-change-me}") String secret,
-            @Value("${modelrag.security.token-ttl-seconds:86400}") long ttlSeconds) {
-        this.secret = secret == null || secret.isBlank() ? "modelrag-local-dev-secret-change-me" : secret;
-        this.ttlSeconds = Math.max(300, ttlSeconds);
+            @Value("${modelrag.security.token-secret}") String secret,
+            @Value("${modelrag.security.token-ttl-seconds:900}") long ttlSeconds) {
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException("modelrag.security.token-secret must be supplied explicitly");
+        }
+        this.secret = secret;
+        this.ttlSeconds = Math.max(60, Math.min(900, ttlSeconds));
     }
 
     public String issue(String userId, Set<String> roles, Set<Long> datasetIds) {
+        if (userId == null || userId.isBlank() || userId.indexOf('|') >= 0 || userId.length() > 128) {
+            throw new IllegalArgumentException("令牌用户标识不合法");
+        }
+        if (roles != null && roles.stream().anyMatch(role -> role == null || role.isBlank()
+                || role.indexOf('|') >= 0 || role.indexOf(',') >= 0)) {
+            throw new IllegalArgumentException("令牌角色不合法");
+        }
+        if (datasetIds != null && datasetIds.stream().anyMatch(id -> id == null || id <= 0)) {
+            throw new IllegalArgumentException("令牌知识库范围不合法");
+        }
         long expiresAt = Instant.now().plusSeconds(ttlSeconds).getEpochSecond();
-        String payload = safe(userId) + "|" + joinRoles(roles) + "|" + joinIds(datasetIds) + "|" + expiresAt;
+        String payload = userId.trim() + "|" + joinRoles(roles) + "|" + joinIds(datasetIds) + "|" + expiresAt;
         String encodedPayload = encode(payload.getBytes(StandardCharsets.UTF_8));
         return encodedPayload + "." + sign(encodedPayload);
     }
 
     public RequestUser parse(String token) {
         String[] parts = token == null ? new String[0] : token.split("\\.", -1);
-        if (parts.length != 2 || !sign(parts[0]).equals(parts[1])) throw forbidden();
-        String payload = new String(Base64.getUrlDecoder().decode(parts[0]), StandardCharsets.UTF_8);
+        if (parts.length != 2 || !MessageDigest.isEqual(sign(parts[0]).getBytes(StandardCharsets.US_ASCII),
+                parts[1].getBytes(StandardCharsets.US_ASCII))) throw forbidden();
+        String payload;
+        try {
+            payload = new String(Base64.getUrlDecoder().decode(parts[0]), StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException error) {
+            throw forbidden();
+        }
         String[] fields = payload.split("\\|", -1);
         if (fields.length != 4) throw forbidden();
+        if (fields[0].isBlank() || fields[0].length() > 128) throw forbidden();
         long expiresAt;
         try {
             expiresAt = Long.parseLong(fields[3]);
@@ -46,7 +67,11 @@ public class LocalAuthTokenService {
             throw forbidden();
         }
         if (Instant.now().getEpochSecond() > expiresAt) throw forbidden();
-        return new RequestUser(fields[0], roles(fields[1]), ids(fields[2]));
+        try {
+            return new RequestUser(fields[0], roles(fields[1]), ids(fields[2]));
+        } catch (RuntimeException error) {
+            throw forbidden();
+        }
     }
 
     private Set<String> roles(String value) {
@@ -90,10 +115,6 @@ public class LocalAuthTokenService {
 
     private String encode(byte[] bytes) {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-    }
-
-    private String safe(String value) {
-        return value == null ? "" : value.replace("|", "").trim();
     }
 
     private BusinessException forbidden() {

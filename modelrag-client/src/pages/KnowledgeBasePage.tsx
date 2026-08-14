@@ -2,7 +2,6 @@ import {useEffect,useMemo,useState} from 'react';
 import {Button,Card,Descriptions,Drawer,Form,Input,InputNumber,Popconfirm,Select,Space,Table,Tag,Typography,Upload,message} from 'antd';
 import {DeleteOutlined,EditOutlined,EyeOutlined,InboxOutlined,PlusOutlined,ReloadOutlined} from '@ant-design/icons';
 import {adminSecurityApi,kbApi,type KnowledgeBasePayload} from '../api/api';
-import {useSSE} from '../hooks/useSSE';
 import type {Chunk,Dataset,Document,SecurityUser} from '../types';
 
 export function KnowledgeBasePage({admin}:{admin:boolean}){
@@ -14,11 +13,10 @@ export function KnowledgeBasePage({admin}:{admin:boolean}){
   const [open,setOpen]=useState(false);
   const [editing,setEditing]=useState(false);
   const [indexingId,setIndexingId]=useState<number>();
+  const [indexingStatus,setIndexingStatus]=useState<string>();
   const [chunks,setChunks]=useState<Chunk[]>([]);
   const [chunkOpen,setChunkOpen]=useState(false);
   const [form]=Form.useForm();
-  const stream=useSSE(indexingId?`/api/v1/knowledge-bases/${active?.id}/documents/${indexingId}/stream`:undefined);
-
   const load=async()=>{
     const [kbs,userRows]=await Promise.all([
       kbApi.list(),
@@ -35,18 +33,37 @@ export function KnowledgeBasePage({admin}:{admin:boolean}){
   };
 
   useEffect(()=>{load().catch(()=>undefined)},[]);
-  useEffect(()=>{if(stream.events.length)refresh()},[stream.events.length]);
+
+  useEffect(()=>{
+    if(!indexingId)return;
+    let stopped=false;
+    const poll=async()=>{
+      try{
+        const result=await kbApi.indexStatus(indexingId);
+        if(stopped)return;
+        setIndexingStatus(result.status);
+        await refresh();
+        if(['READY','FAILED'].includes(result.status))setIndexingId(undefined);
+      }catch{
+        if(!stopped)setIndexingStatus('UNKNOWN');
+      }
+    };
+    void poll();
+    const timer=window.setInterval(()=>void poll(),1000);
+    return()=>{stopped=true;window.clearInterval(timer)};
+  },[indexingId,active]);
 
   const select=async(dataset:Dataset)=>{
     setActive(dataset);
     setIndexingId(undefined);
+    setIndexingStatus(undefined);
     setGrantUser(undefined);
     setDocs(await kbApi.documents(dataset.id));
   };
 
   const openCreate=()=>{
     setEditing(false);
-    form.setFieldsValue({chunkSize:512,chunkOverlap:64,topK:5,threshold:.7});
+    form.setFieldsValue({chunkSize:600,chunkOverlap:80,topK:5,threshold:.7});
     setOpen(true);
   };
 
@@ -62,7 +79,7 @@ export function KnowledgeBasePage({admin}:{admin:boolean}){
     setOpen(false);
     await load();
     await select(dataset);
-    message.success(editing?'知识库已保存；切分参数变化时会自动清缓存并重建索引':'知识库已创建，请继续上传文档');
+    message.success(editing?'知识库已保存并提交重建':'知识库已创建，请继续上传文档');
   };
 
   const removeDataset=async()=>{
@@ -71,14 +88,14 @@ export function KnowledgeBasePage({admin}:{admin:boolean}){
     setActive(undefined);
     setDocs([]);
     await load();
-    message.success('知识库、索引与问答缓存已删除');
+    message.success('知识库、索引与文档已删除');
   };
 
   const removeDocument=async(document:Document)=>{
     if(!active)return;
     await kbApi.removeDocument(active.id,document.id);
     await refresh();
-    message.success('文档已删除，历史问答缓存已失效');
+    message.success('文档已删除，相关索引已失效');
   };
 
   const showChunks=async(document:Document)=>{
@@ -132,7 +149,7 @@ export function KnowledgeBasePage({admin}:{admin:boolean}){
           {admin&&<>
             <Space className="kb-actions" wrap>
               <Button icon={<EditOutlined/>} onClick={openEdit}>编辑知识库</Button>
-              <Button icon={<ReloadOutlined/>} onClick={async()=>{const result=await kbApi.rebuild(active.id);message.success(`已清缓存并提交 ${result.documents} 份文档重建；${result.requeued} 条旧任务已重新入队`)}}>重建索引</Button>
+              <Button icon={<ReloadOutlined/>} onClick={async()=>{const result=await kbApi.rebuild(active.id);message.success(`已提交 ${result.documents} 份文档重建；${result.requeued} 条旧任务已重新入队`)}}>重建索引</Button>
               <Popconfirm title="将删除此知识库及全部文档，确认吗？" onConfirm={removeDataset}><Button danger icon={<DeleteOutlined/>}>删除知识库</Button></Popconfirm>
             </Space>
             <Card size="small" type="inner" title="开放给哪些用户" className="kb-acl-card" extra={<Space>
@@ -149,8 +166,9 @@ export function KnowledgeBasePage({admin}:{admin:boolean}){
               try{
                 const document=await kbApi.upload(active.id,option.file as File);
                 setIndexingId(document.id);
+                setIndexingStatus(document.status);
                 await refresh();
-                message.success('已提交索引，历史问答缓存已失效');
+                message.success('已提交索引，完成后将自动切换到新版本');
                 option.onSuccess?.({});
               }catch(error){option.onError?.(error as Error);}
             }}>
@@ -158,7 +176,7 @@ export function KnowledgeBasePage({admin}:{admin:boolean}){
               <p>拖入 PDF、DOCX、MD 或 TXT 文件</p>
             </Upload.Dragger>
           </>}
-          {indexingId&&<p className="indexing-status">实时索引状态：<Tag color={stream.connected?'blue':'default'}>{stream.events[stream.events.length-1]?.type||'正在连接'}</Tag></p>}
+          {indexingId&&<p className="indexing-status">索引状态：<Tag color={indexingStatus==='READY'?'green':indexingStatus==='FAILED'?'red':'blue'}>{indexingStatus||'BUILDING'}</Tag></p>}
           <Table className="document-table" size="small" rowKey="id" dataSource={docs} pagination={{pageSize:5,size:'small'}} scroll={{y:220}} columns={[
             {title:'文件',dataIndex:'fileName',ellipsis:true},
             {title:'分块',dataIndex:'chunkCount',width:62},
@@ -178,7 +196,7 @@ export function KnowledgeBasePage({admin}:{admin:boolean}){
           <Form.Item name="topK" label="问答 TopK" rules={[{required:true,message:'请输入 TopK'}]}><InputNumber min={1} max={20}/></Form.Item>
           <Form.Item name="threshold" label="相似度阈值" rules={[{required:true,message:'请输入阈值'}]}><InputNumber min={0} max={1} step={0.05}/></Form.Item>
         </Space>
-        <Typography.Text type="secondary">修改切分参数会清理旧问答缓存，并按新参数重建文档分块、向量和 BM25 索引；知识库版本会递增，旧版本回答缓存不会再命中。</Typography.Text>
+        <Typography.Text type="secondary">修改切分参数会按新参数重建文档分块、向量和 BM25 索引；新版本完成双索引同步后才会成为可检索版本。</Typography.Text>
         <br/><br/>
         <Button htmlType="submit" type="primary">{editing?'保存':'创建'}</Button>
       </Form>

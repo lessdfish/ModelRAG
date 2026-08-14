@@ -128,7 +128,7 @@ CREATE TABLE kb_dataset (
     name            VARCHAR(200)  NOT NULL,
     description     VARCHAR(1000),
     -- 模型配置
-    embedding_model VARCHAR(100)  NOT NULL DEFAULT 'bge-large-zh-v1.5',
+    embedding_model VARCHAR(100)  NOT NULL DEFAULT 'Qwen3-Embedding-0.6B',
     llm_model       VARCHAR(100)  NOT NULL DEFAULT 'qwen-72b',
     rerank_model    VARCHAR(100)  NOT NULL DEFAULT 'bge-reranker-v2-m3',
     -- 分块配置
@@ -202,7 +202,7 @@ CREATE TABLE kb_chunk (
     dataset_id      BIGINT        NOT NULL REFERENCES kb_dataset(id),
     chunk_index     INT           NOT NULL,      -- 文档内序号
     content         TEXT          NOT NULL,      -- 分块原文
-    -- pgvector 向量存储 (1024 = bge-large-zh-v1.5 维度)
+    -- pgvector 向量存储 (Qwen3-Embedding-0.6B，1024 维)
     embedding       vector(1024),
     -- 索引多态 (借鉴 FastGPT indexes[])
     index_type      VARCHAR(20)   NOT NULL DEFAULT 'default',
@@ -467,7 +467,7 @@ CREATE TABLE kb_approval_record (
 
 | 模型角色 | 主要职责 | 设计约束 |
 |---------|---------|---------|
-| Embedding 模型 | 文档分块和查询向量化 | 同一知识库内向量维度必须一致；当前默认 `bge-large-zh-v1.5` 对应 `vector(1024)` |
+| Embedding 模型 | 文档分块和查询向量化 | 同一知识库内向量维度必须一致；当前默认 `Qwen3-Embedding-0.6B` 对应 `vector(1024)` |
 | 路由/意图分类 | 判断走直接 RAG、Agent、工具调用或历史记忆检索 | 优先使用轻量规则或小模型，避免占用主模型上下文 |
 | 主 LLM | 查询改写、规划、答案生成、记忆提取 | 低温度生成，严格基于上下文回答，不在证据不足时编造 |
 | Rerank 模型 | 对召回 Top-N 候选做精排 | 作为检索质量的关键环节，结果写入检索审计日志 |
@@ -562,7 +562,7 @@ IndexingPipeline.execute(Document doc):
 
 | 参数 | 值 | 推导逻辑 |
 |------|-----|---------|
-| chunkSize | 512 tokens | 贴近 BGE-large-zh-v1.5 常用输入长度上限，避免长文本被截断；中文约 350-500 字/块，对应企业制度文档一个自然段落 |
+| chunkSize | 600 tokens | 以结构优先切分和 Qwen3-Embedding-0.6B 的 1024 维向量服务为基准，兼顾制度条款完整性与上下文预算 |
 | chunkOverlap | 64 tokens (12.5%) | 64 是 512 的 1/8，能覆盖边界条款和标题上下文，同时比 20% 以上重叠更省存储、检索和 rerank 成本 |
 | 中文分隔符优先级 | `\n\n → \n → 。→ ；→ ，` | 段落边界 > 句子边界 > 子句边界，保证语义完整性 |
 
@@ -1231,7 +1231,7 @@ RAG 效果不能只看主观体验，需要离线评估 + 线上回放结合：
 
 > 面试时不能只说"512 因为别人都这么设"。
 
-- **BGE-large-zh-v1.5 输入长度**: 512 tokens 贴近模型常用输入长度上限，首期按 512 控制可避免超长文本被截断
+- **Qwen3-Embedding-0.6B 输入约束**: 统一由 Embedding provider 的 token 限制和批处理器控制，切分默认约 600 tokens
 - **中文企业文档平均段落长度**: ~300-500 字，512 tokens (约 350-500 中文字) 对应一个自然段落
 - **下游问答任务**: 512 tokens 的单 chunk 足够覆盖一个完整的制度条款 (如"年假申请条件")
 - **64 overlap** 是 chunkSize 的 1/8，既能覆盖落在边界的条款，也能控制重复向量、BM25 文档量和 rerank 成本
@@ -1375,7 +1375,8 @@ GET /actuator/prometheus       → Prometheus Metrics 端点
 | 1.0 | 2026-07-06 | 初始设计规格，含 6 章设计 + 22 项自审修复 |
 | 1.1 | 2026-07-27 | 补充记忆判断与压缩、检索审计、工具 RPC 治理、模型分工、成本监控、在线灰度与 GraphRAG 远期规划 |
 | 1.2 | 2026-07-27 | 将关键词召回升级为 Elasticsearch BM25，明确向量 + BM25 混合检索、outbox 索引同步和工具意图识别 + 渐进式披露 |
-| 1.3 | 2026-07-27 | 确认中文优先模型栈：BGE-large-zh-v1.5 1024 维、BGE-reranker-v2-m3、默认切分 512/64，并收敛首期文件格式为 PDF/DOCX/Markdown/TXT |
+| 1.3 | 2026-07-27 | 确认中文优先模型栈、BGE-reranker-v2-m3、默认切分 512/64，并收敛首期文件格式为 PDF/DOCX/Markdown/TXT |
+| 1.5 | 2026-08-13 | Embedding 统一迁移至 Qwen3-Embedding-0.6B/1024；数据库迁移脚本保留历史兼容更新，不再作为运行时配置 |
 | 1.4 | 2026-07-27 | 借鉴 Ragent 设计，补充 QaPipeline 八阶段短路、意图树、检索通道后处理链和模型路由三态熔断 |
 
 ---

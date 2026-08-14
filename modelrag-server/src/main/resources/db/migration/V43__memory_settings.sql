@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS kb_memory_setting (
+    user_id VARCHAR(128) PRIMARY KEY REFERENCES kb_user_account(user_id) ON DELETE CASCADE,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    retention_days INTEGER NOT NULL DEFAULT 180 CHECK (retention_days BETWEEN 1 AND 3650),
+    update_time TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

@@ -1,21 +1,5 @@
+# Compatibility alias. PostgreSQL is the only production profile and is enabled by default.
 spring:
-  autoconfigure:
-    exclude: []
-  datasource:
-    url: ${MODELRAG_JDBC_URL:jdbc:postgresql://localhost:15432/modelrag}
-    username: ${MODELRAG_DB_USER:modelrag}
-    password: ${MODELRAG_DB_PASSWORD:modelrag123}
-  data:
-    redis:
-      host: ${MODELRAG_REDIS_HOST:localhost}
-      port: ${MODELRAG_REDIS_PORT:6379}
-  flyway:
-    enabled: true
-    locations: classpath:db/migration
-management:
-  endpoint:
-    health:
-      show-details: always
-modelrag:
-  elasticsearch:
-    endpoint: ${MODELRAG_ELASTICSEARCH_ENDPOINT:http://localhost:19200}
+  config:
+    activate:
+      on-profile: postgres

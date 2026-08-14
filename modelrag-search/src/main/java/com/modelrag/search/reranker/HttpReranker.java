@@ -21,7 +21,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-/** Calls the local BGE cross-encoder runtime; RRF order remains available during local development. */
+/** Calls an optional local cross-encoder runtime; RRF order remains the degraded path. */
 @Service
 public class HttpReranker implements Reranker {
     private static final Pattern FAQ = Pattern.compile("问[:：]\\s*([^？?\\n]+)[？?]\\s*答[:：]\\s*([^。！？\\n]+)");
@@ -31,7 +31,7 @@ public class HttpReranker implements Reranker {
     private final ObjectMapper json;
     private final TokenUsageTracker tokens;
     private final ObjectProvider<ModelHealthRegistry> health;
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
+    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(200)).build();
 
     public HttpReranker(@Value("${modelrag.reranker.enabled:false}") boolean enabled,
             @Value("${modelrag.reranker.url:http://127.0.0.1:18080}") String url, ObjectMapper json,
@@ -40,16 +40,22 @@ public class HttpReranker implements Reranker {
     }
 
     @Override public List<ScoredChunk> rerank(long datasetId, String query, List<ScoredChunk> candidates) {
+        return rerank(datasetId, query, candidates, Duration.ofMillis(500));
+    }
+
+    @Override public List<ScoredChunk> rerank(long datasetId, String query, List<ScoredChunk> candidates,
+            Duration timeout) {
         if (candidates.isEmpty()) return candidates;
-        if (!enabled) return candidates;
+        if (!enabled) return localRerank(query, candidates);
         String modelName = "http-reranker-" + url;
         ModelHealthRegistry registry = health.getIfAvailable();
         if (registry != null && !registry.available("RERANK", modelName)) return localRerank(query, candidates);
         try {
             String request = json.writeValueAsString(Map.of("query", query,
                     "documents", candidates.stream().map(ScoredChunk::content).toList()));
+            long timeoutMillis = timeout == null ? 500 : Math.max(50, Math.min(500, timeout.toMillis()));
             HttpResponse<String> response = http.send(HttpRequest.newBuilder(URI.create(url + "/rerank"))
-                    .timeout(Duration.ofSeconds(60)).header("Content-Type", "application/json")
+                    .timeout(Duration.ofMillis(timeoutMillis)).header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(request)).build(), HttpResponse.BodyHandlers.ofString());
             JsonNode scores = json.readTree(response.body()).path("scores");
             if (response.statusCode() / 100 != 2 || scores.size() != candidates.size()) {

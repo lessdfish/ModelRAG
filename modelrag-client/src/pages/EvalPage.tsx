@@ -60,7 +60,7 @@ export function EvalPage({initialDatasetId}:{initialDatasetId?:number}){
     return items;
   };
   const run=async()=>{if(!datasetId)return message.warning('请选择知识库');try{setRunning(true);setReport(await evalApi.run(datasetId,parse()));}catch(error){message.error(error instanceof Error?error.message:'评测集格式错误')}finally{setRunning(false)}};
-  const compare=async()=>{if(!datasetId)return message.warning('请选择知识库');try{setRunning(true);setComparisons(await evalApi.compare(datasetId,parse(),[1,3,5,8,10]));message.success('TopK A/B 对照已完成');}catch(error){message.error(error instanceof Error?error.message:'A/B 对照失败')}finally{setRunning(false)}};
+  const compare=async()=>{if(!datasetId)return message.warning('请选择知识库');try{setRunning(true);setComparisons(await evalApi.compare(datasetId,parse(),[1,3,5,8,10]));message.success('离线 TopK 对照已完成');}catch(error){message.error(error instanceof Error?error.message:'离线对照失败')}finally{setRunning(false)}};
   const save=async()=>{if(!datasetId)return message.warning('请选择知识库');try{const items=parse();setSaving(true);for(const item of items){if(item.id)await evalApi.update(item.id,item);else await evalApi.save(datasetId,item)}await refresh(datasetId);message.success(`已保存 ${items.length} 条评测样本`);}catch(error){message.error(error instanceof Error?error.message:'保存失败')}finally{setSaving(false)}};
   const bootstrap=async()=>{if(!datasetId)return message.warning('请选择知识库');setSaving(true);try{const result=await evalApi.bootstrap(datasetId,20);await refresh(datasetId);if(result.items.length>0)setRaw(JSON.stringify(result.items,null,2));message.success(result.created>0?`已从文档生成 ${result.created} 条评测样本`:'没有可生成的新评测样本')}catch(error){message.error(error instanceof Error?error.message:'生成评测集失败')}finally{setSaving(false)}};
   const securityRedTeam=async()=>{if(!datasetId)return message.warning('请选择知识库');setSaving(true);try{const result=await evalApi.securityRedTeam(datasetId);await refresh(datasetId);if(result.items.length>0)setRaw(JSON.stringify(result.items,null,2));message.success(result.created>0?`已生成 ${result.created} 条安全红队样本`:'安全红队样本已存在')}catch(error){message.error(error instanceof Error?error.message:'生成安全红队样本失败')}finally{setSaving(false)}};
@@ -77,7 +77,7 @@ export function EvalPage({initialDatasetId}:{initialDatasetId?:number}){
       <Space wrap>
         <Select style={{minWidth:220}} placeholder="选择知识库" value={datasetId} onChange={setDatasetId} options={datasets.map(d=>({value:d.id,label:d.name}))}/>
         <Button type="primary" loading={running} onClick={run}>运行当前 JSON</Button>
-        <Button loading={running} onClick={compare}>运行 TopK A/B</Button>
+        <Button loading={running} onClick={compare}>运行离线 TopK 对照</Button>
         <Button loading={saving} onClick={save}>保存/更新评测集</Button>
         <Button loading={saving} onClick={bootstrap}>从文档生成评测集</Button>
         <Button loading={saving} onClick={securityRedTeam}>生成安全红队样本</Button>
@@ -97,7 +97,7 @@ export function EvalPage({initialDatasetId}:{initialDatasetId?:number}){
         {title:'操作',width:150,render:(_,record)=><Space><Button size="small" onClick={()=>edit(record)}>编辑</Button><Popconfirm title="删除该评测样本？" onConfirm={()=>remove(record)}><Button size="small" danger disabled={!record.id}>删除</Button></Popconfirm></Space>}
       ]}/>
     </Card>
-    {comparisons.length>0&&<Card title="TopK A/B 检索对照" className="monitor"><Table size="small" rowKey="variant" dataSource={comparisons} pagination={false} columns={[
+    {comparisons.length>0&&<Card title="离线 TopK 检索对照" className="monitor"><Table size="small" rowKey="variant" dataSource={comparisons} pagination={false} columns={[
       {title:'变体',dataIndex:'variant',render:value=><Tag color="blue">{value}</Tag>},
       {title:'样本',dataIndex:'answerable'},
       {title:'Recall@Final',dataIndex:'recallAtFinal',render:fixed},
@@ -172,14 +172,13 @@ export function EvalPage({initialDatasetId}:{initialDatasetId?:number}){
       <Card size="small" title="最终证据摘要" className="monitor">
         {(replay?.evidencePreview||[]).length===0?<Typography.Text type="secondary">无最终上下文证据</Typography.Text>:(replay?.evidencePreview||[]).map(item=><Card key={`${item.chunkId}-${item.rank}`} size="small" style={{marginBottom:8}}><Space wrap><Tag>#{item.chunkId}</Tag><Tag>rank {item.rank}</Tag><Tag>{item.channel||'context'}</Tag><Tag>{Number(item.score||0).toFixed(3)}</Tag></Space><Typography.Paragraph style={{marginBottom:0,whiteSpace:'pre-wrap'}}>{item.excerpt}</Typography.Paragraph></Card>)}
       </Card>
-      <Card size="small" title="向量 Top-N / BM25 Top-N / RRF / Rerank / MMR / Small-to-Big / A/B / 最终上下文" className="monitor">
+      <Card size="small" title="向量 Top-N / BM25 Top-N / RRF / Rerank / MMR / Small-to-Big / 最终上下文" className="monitor">
         <Typography.Paragraph copyable={{text:jsonText(replay?.vectorResults)}} ellipsis={{rows:2,expandable:true,symbol:'展开向量召回'}}>向量：{jsonText(replay?.vectorResults)}</Typography.Paragraph>
         <Typography.Paragraph copyable={{text:jsonText(replay?.bm25Results)}} ellipsis={{rows:2,expandable:true,symbol:'展开 BM25'}}>BM25：{jsonText(replay?.bm25Results)}</Typography.Paragraph>
         <Typography.Paragraph copyable={{text:jsonText(replay?.fusedResults)}} ellipsis={{rows:2,expandable:true,symbol:'展开 RRF'}}>RRF：{jsonText(replay?.fusedResults)}</Typography.Paragraph>
         <Typography.Paragraph copyable={{text:jsonText(replay?.rerankResults)}} ellipsis={{rows:2,expandable:true,symbol:'展开 Rerank'}}>Rerank：{jsonText(replay?.rerankResults)}</Typography.Paragraph>
         <Typography.Paragraph copyable={{text:jsonText(replay?.mmrResults)}} ellipsis={{rows:2,expandable:true,symbol:'展开 MMR'}}>MMR：{jsonText(replay?.mmrResults)}</Typography.Paragraph>
         <Typography.Paragraph copyable={{text:jsonText(replay?.smallToBigContext)}} ellipsis={{rows:3,expandable:true,symbol:'展开 Small-to-Big'}}>Small-to-Big：{jsonText(replay?.smallToBigContext)}</Typography.Paragraph>
-        <Typography.Paragraph copyable={{text:jsonText(replay?.abVariants)}} ellipsis={{rows:2,expandable:true,symbol:'展开 A/B 影子变体'}}>A/B 影子变体：{jsonText(replay?.abVariants)}</Typography.Paragraph>
         <Typography.Paragraph copyable={{text:jsonText(replay?.contextChunks)}} ellipsis={{rows:4,expandable:true,symbol:'展开上下文'}}>上下文：{jsonText(replay?.contextChunks)}</Typography.Paragraph>
       </Card>
     </Modal>

@@ -6,6 +6,7 @@ import com.modelrag.agent.intent.IntentNode;
 import com.modelrag.agent.intent.IntentTreeService;
 import com.modelrag.agent.router.ComplexityRouter;
 import com.modelrag.agent.router.RouteDecision;
+import com.modelrag.api.ConversationContextBuilder;
 import com.modelrag.knowledge.model.Dataset;
 import com.modelrag.knowledge.service.KnowledgeStore;
 import com.modelrag.qa.dto.QaRequest;
@@ -15,9 +16,13 @@ import com.modelrag.search.dto.HybridSearchRequest;
 import com.modelrag.search.dto.ScoredChunk;
 import com.modelrag.search.dto.SearchStages;
 import com.modelrag.search.facade.SearchFacade;
+
 import java.util.Comparator;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
+
 import org.springframework.stereotype.Service;
 
 @Service
@@ -28,14 +33,17 @@ public class AutoQaService {
     private final QaOrchestrator qa;
     private final AgentOrchestrator agent;
     private final IntentTreeService intents;
+    private final ConversationContextBuilder contexts;
 
-    public AutoQaService(KnowledgeStore store, SearchFacade search, ComplexityRouter router, QaOrchestrator qa, AgentOrchestrator agent, IntentTreeService intents) {
+    public AutoQaService(KnowledgeStore store, SearchFacade search, ComplexityRouter router, QaOrchestrator qa,
+                         AgentOrchestrator agent, IntentTreeService intents, ConversationContextBuilder contexts) {
         this.store = store;
         this.search = search;
         this.router = router;
         this.qa = qa;
         this.agent = agent;
         this.intents = intents;
+        this.contexts = contexts;
     }
 
     public AutoQaResult answer(AutoQaRequest request) {
@@ -51,10 +59,41 @@ public class AutoQaService {
     }
 
     public AutoQaResult answer(AutoQaRequest request, Set<Long> allowedDatasetIds, String userId, Set<String> userRoles) {
+        return answer(request, allowedDatasetIds, userId, userRoles, null);
+    }
+
+    public AutoQaResult answer(AutoQaRequest request, Set<Long> allowedDatasetIds, String userId, Set<String> userRoles,
+                               Consumer<String> tokenConsumer) {
+        return answer(request, allowedDatasetIds, userId, userRoles, tokenConsumer, null, null);
+    }
+
+    public AutoQaResult answer(AutoQaRequest request, Set<Long> allowedDatasetIds, String userId, Set<String> userRoles,
+                               Consumer<String> tokenConsumer, String executionId, Consumer<String> agentStarted) {
         if (request.query() == null || request.query().isBlank()) throw new IllegalArgumentException("问题不能为空");
+        String routedQuestion = request.query();
+        ConversationContextBuilder context = contexts;
+        List<Dataset> preselected = store.routeDatasets(request.query(), allowedDatasetIds, 3);
+        ConversationContextBuilder.ConversationContext resolvedContext = null;
+        {
+            List<ConversationContextBuilder.DatasetCandidate> routingCandidates = preselected.stream()
+                    .map(dataset -> new ConversationContextBuilder.DatasetCandidate(dataset.id(), dataset.name(),
+                            dataset.description()))
+                    .toList();
+            resolvedContext = context.build(userId, 0, request.conversationId(), request.query(), routingCandidates);
+            routedQuestion = resolvedContext.standaloneQuestion();
+            if (resolvedContext.routingDecision() != null) {
+                var decision = resolvedContext.routingDecision();
+                if (!decision.missingSlots().isEmpty() || decision.confidence() < .55
+                        || "HIGH".equalsIgnoreCase(decision.riskLevel())) {
+                    return clarification(decision.missingSlots());
+                }
+            }
+        }
         Candidate candidate;
         try {
-            candidate = selectCandidate(request.query(), allowedDatasetIds);
+            List<Long> selectedIds = resolvedContext == null || resolvedContext.routingDecision() == null
+                    ? List.of() : resolvedContext.routingDecision().datasetCandidates();
+            candidate = selectCandidate(routedQuestion, allowedDatasetIds, preselected, selectedIds);
         } catch (IllegalStateException unavailable) {
             return new AutoQaResult(0, "未匹配知识库", RouteDecision.DIRECT_RAG, "REFUSED",
                     "没有找到当前用户可访问且已完成索引的知识库。请确认权限范围，或先上传并完成文档索引。",
@@ -66,16 +105,29 @@ public class AutoQaService {
                     List.of(), 0, true, null, null, null, List.of("AUTO_DATASET_LOW_CONFIDENCE", "REFUSED"));
         }
         Dataset dataset = candidate.dataset();
-        RouteDecision route = candidate.route() == null ? router.route(request.query()) : candidate.route();
-        QaRequest qaRequest = new QaRequest(dataset.id(), request.query(), request.conversationId(), userId, userRoles == null ? Set.of() : userRoles);
-        if (route == RouteDecision.AGENT) {
-            AgentResult result = agent.execute(qaRequest);
-            return new AutoQaResult(dataset.id(), dataset.name(), result.route(), result.status(), result.answer(),
-                    result.citations(), result.confidence(), result.refused(), result.traceId(), result.executionId(), result.approvalId(), result.steps());
+        RouteDecision route = route(candidate, resolvedContext, request.query());
+        if (resolvedContext != null) {
+            resolvedContext = context.scopeToDataset(userId, dataset.id(), routedQuestion, resolvedContext);
         }
-        QaResult result = qa.answer(qaRequest);
+        QaRequest qaRequest = new QaRequest(dataset.id(), request.query(), request.conversationId(), userId,
+                userRoles == null ? Set.of() : userRoles).withResolvedContext(resolvedContext);
+        if (route == RouteDecision.AGENT) {
+            AgentResult result;
+            if (executionId == null || executionId.isBlank()) {
+                result = agent.execute(qaRequest);
+            } else {
+                agent.registerExecution(qaRequest, executionId);
+                if (agentStarted != null) agentStarted.accept(executionId);
+                result = agent.executeRegistered(qaRequest, executionId);
+            }
+            return new AutoQaResult(dataset.id(), dataset.name(), result.route(), result.status(), result.answer(),
+                    result.citations(), result.confidence(), result.refused(), result.traceId(), result.executionId(), result.approvalId(),
+                    result.steps(), result.degradedComponents());
+        }
+        QaResult result = tokenConsumer == null ? qa.answer(qaRequest) : qa.answer(qaRequest, tokenConsumer);
         return new AutoQaResult(dataset.id(), dataset.name(), route, result.refused() ? "REFUSED" : "DONE",
-                result.answer(), result.citations(), result.confidence(), result.refused(), result.traceId(), null, null, List.of("AUTO_DATASET", "DIRECT_RAG", "DONE"));
+                result.answer(), result.citations(), result.confidence(), result.refused(), result.traceId(), null, null,
+                List.of("AUTO_DATASET", "DIRECT_RAG", "DONE"), result.degradedComponents());
     }
 
     public Dataset selectDataset(String query) {
@@ -83,22 +135,53 @@ public class AutoQaService {
     }
 
     public Dataset selectDataset(String query, Set<Long> allowedDatasetIds) {
-        Candidate candidate = selectCandidate(query, allowedDatasetIds);
+        Candidate candidate = selectCandidate(query, allowedDatasetIds, store.routeDatasets(query, allowedDatasetIds, 3), List.of());
         if (!candidate.confident()) throw new IllegalStateException("没有匹配到足够相关的知识库");
         return candidate.dataset();
     }
 
-    private Candidate selectCandidate(String query, Set<Long> allowedDatasetIds) {
-        Candidate intentCandidate = selectIntentCandidate(query, allowedDatasetIds);
+    private Candidate selectCandidate(String query, Set<Long> allowedDatasetIds, List<Dataset> initialCandidates,
+                                      List<Long> structuredCandidateIds) {
+        List<Dataset> preselected = orderedCandidates(
+                expandStructuredCandidates(initialCandidates, structuredCandidateIds, allowedDatasetIds),
+                structuredCandidateIds);
+        Candidate intentCandidate = selectIntentCandidate(query, preselected);
         if (intentCandidate != null && intentCandidate.route() == RouteDecision.AGENT) return intentCandidate;
-        List<Candidate> candidates = store.datasets().stream()
-                .filter(dataset -> allowed(dataset, allowedDatasetIds))
-                .filter(dataset -> !store.chunks(dataset.id()).isEmpty())
-                .map(dataset -> score(dataset, query))
-                .toList();
-        if (candidates.isEmpty()) throw new IllegalStateException("没有可用知识库，请先上传并完成索引");
-        Candidate contentCandidate = bestContentCandidate(candidates);
+        if (preselected.isEmpty()) throw new IllegalStateException("没有可用知识库，请先上传并完成索引");
+        // Metadata/name routing preselects at most three candidates; only the best
+        // candidate enters the formal hybrid retrieval path once.
+        Candidate contentCandidate = score(preselected.get(0), query);
         return contentCandidate.confident() || intentCandidate == null ? contentCandidate : intentCandidate;
+    }
+
+    private List<Dataset> expandStructuredCandidates(List<Dataset> initialCandidates, List<Long> structuredIds,
+                                                     Set<Long> allowedDatasetIds) {
+        List<Dataset> values = new ArrayList<>(initialCandidates == null ? List.of() : initialCandidates);
+        if (structuredIds == null || structuredIds.isEmpty()) return values;
+        Set<Long> indexed = store.indexedDatasetIds();
+        for (Long id : structuredIds.stream().distinct().toList()) {
+            if (id == null || values.stream().anyMatch(dataset -> dataset.id() == id)) continue;
+            if (allowedDatasetIds != null && !allowedDatasetIds.isEmpty() && !allowedDatasetIds.contains(id)) continue;
+            if (!indexed.contains(id)) continue;
+            try {
+                values.add(store.dataset(id));
+            } catch (RuntimeException ignored) {
+                // A stale model candidate must not break auto routing.
+            }
+        }
+        return values;
+    }
+
+    private List<Dataset> orderedCandidates(List<Dataset> initialCandidates, List<Long> structuredIds) {
+        List<Dataset> values = initialCandidates == null ? List.of() : initialCandidates;
+        if (structuredIds == null || structuredIds.isEmpty()) return values;
+        List<Dataset> selected = structuredIds.stream().distinct()
+                .flatMap(id -> values.stream().filter(dataset -> dataset.id() == id).findFirst().stream()).toList();
+        return selected.isEmpty() ? values : selected;
+    }
+
+    private int metadataRelevance(Dataset dataset, String query) {
+        return relevance(query, dataset.name() + " " + (dataset.description() == null ? "" : dataset.description()));
     }
 
     private Candidate bestContentCandidate(List<Candidate> candidates) {
@@ -115,9 +198,8 @@ public class AutoQaService {
                 .orElseThrow();
     }
 
-    private Candidate selectIntentCandidate(String query, Set<Long> allowedDatasetIds) {
-        return store.datasets().stream()
-                .filter(dataset -> allowed(dataset, allowedDatasetIds))
+    private Candidate selectIntentCandidate(String query, List<Dataset> candidates) {
+        return candidates.stream()
                 .map(dataset -> intents.match(dataset.id(), query)
                         .filter(intent -> indexedIntent(dataset, intent))
                         .map(intent -> new Candidate(dataset, 10_000 + intent.priority(), 2, 0, 0, route(intent)))
@@ -127,16 +209,33 @@ public class AutoQaService {
                 .orElse(null);
     }
 
+    private RouteDecision route(Candidate candidate, ConversationContextBuilder.ConversationContext context,
+                                String originalQuestion) {
+        if (candidate.route() != null) return candidate.route();
+        if (context != null && context.routingDecision() != null && context.routingDecision().modelInvoked()) {
+            String intent = context.routingDecision().intent().toUpperCase(java.util.Locale.ROOT);
+            if (intent.contains("TOOL") || intent.contains("WRITE") || intent.contains("ACTION")) {
+                return RouteDecision.AGENT;
+            }
+            return RouteDecision.DIRECT_RAG;
+        }
+        return router.route(originalQuestion);
+    }
+
+    private AutoQaResult clarification(List<String> missingSlots) {
+        String suffix = missingSlots == null || missingSlots.isEmpty() ? "" : " 缺少：" + String.join("、", missingSlots) + "。";
+        return new AutoQaResult(0, "待澄清", RouteDecision.DIRECT_RAG, "REFUSED",
+                "当前问题依赖的上下文或必要参数不足，请补充完整问题。" + suffix,
+                List.of(), 0, true, null, null, null, List.of("ROUTING_CLARIFICATION"),
+                List.of("ROUTING_LOW_CONFIDENCE", "REFUSED"));
+    }
+
     private static double scoreBucket(Candidate candidate) {
         return Math.floor(candidate.score() * 10) / 10;
     }
 
     private boolean indexedIntent(Dataset dataset, IntentNode intent) {
         return "TOOL".equals(intent.targetType()) || !store.chunks(dataset.id()).isEmpty();
-    }
-
-    private boolean allowed(Dataset dataset, Set<Long> allowedDatasetIds) {
-        return allowedDatasetIds == null || allowedDatasetIds.isEmpty() || allowedDatasetIds.contains(dataset.id());
     }
 
     private RouteDecision route(IntentNode intent) {
@@ -180,7 +279,8 @@ public class AutoQaService {
                 "需要", "申请", "审批", "流程", "周期", "问题", "查询").contains(pair);
     }
 
-    private record Candidate(Dataset dataset, double score, int evidence, double lexical, int metadata, RouteDecision route) {
+    private record Candidate(Dataset dataset, double score, int evidence, double lexical, int metadata,
+                             RouteDecision route) {
         boolean confident() {
             return evidence >= 2 || (lexical > 0 && evidence >= 1) || (metadata >= 2 && (evidence >= 1 || lexical > 0));
         }

@@ -1,37 +1,74 @@
-import {useEffect,useState} from 'react';
-import {AUTH_TOKEN_KEY} from '../api/client';
+import { useEffect, useState } from 'react';
 
-export type StreamEvent={type:string;message:string;data:Record<string,unknown>};
+export type StreamEvent = { type: string; message: string; data: Record<string, unknown> };
+export type SSERequest = { url: string; method?: 'GET' | 'POST'; body?: unknown };
 
-export function useSSE(url?:string){
-  const [connected,setConnected]=useState(false),[events,setEvents]=useState<StreamEvent[]>([]);
-  useEffect(()=>{
-    if(!url){setConnected(false);return;}
-    setEvents([]);let delay=500,closed=false,es:EventSource,retry:number|undefined;
-    const open=()=>{
-      if(closed)return;
-      es=new EventSource(withToken(url));
-      es.onopen=()=>{setConnected(true);delay=500};
-      es.onerror=()=>{setConnected(false);es.close();retry=window.setTimeout(open,delay);delay=Math.min(delay*2,10000)};
-      ['THINK','PLAN','ACT','OBSERVE','ANSWER','THINKING','ROUTING','RETRIEVING','GENERATING','APPROVAL_REQUIRED','TOOL_CALL','DONE','ERROR','PARSING','CHUNKING','INDEXING','READY','FAILED'].forEach(type=>es.addEventListener(type,event=>{
-        const payload=JSON.parse((event as MessageEvent<string>).data) as StreamEvent;
-        setEvents(current=>[...current.slice(-19),payload]);
-      }));
+export function parseSseFrame(frame: string): StreamEvent | undefined {
+  const value = frame.split(/\r?\n/)
+    .filter(line => line.startsWith('data:'))
+    .map(line => line.slice(5).trim())
+    .join('');
+  if (!value) return undefined;
+  try { return JSON.parse(value) as StreamEvent; } catch { return undefined; }
+}
+
+export function useSSE(request?: string | SSERequest) {
+  const [connected, setConnected] = useState(false);
+  const [events, setEvents] = useState<StreamEvent[]>([]);
+
+  useEffect(() => {
+    if (!request) {
+      setConnected(false);
+      return;
+    }
+    setEvents([]);
+    let closed = false;
+    const controller = new AbortController();
+    const target = typeof request === 'string' ? { url: request, method: 'GET' as const } : request;
+
+    const open = async () => {
+      try {
+        const token = localStorage.getItem('modelrag.auth.token');
+        const headers: Record<string, string> = {};
+        if (token) headers.Authorization = `Bearer ${token}`;
+        if (target.body !== undefined) headers['Content-Type'] = 'application/json';
+        const response = await fetch(target.url, {
+          method: target.method || 'GET',
+          headers,
+          body: target.body === undefined ? undefined : JSON.stringify(target.body),
+          signal: controller.signal
+        });
+        if (!response.ok || !response.body) throw new Error('SSE connection failed');
+        setConnected(true);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (!closed) {
+          const next = await reader.read();
+          if (next.done) break;
+          buffer += decoder.decode(next.value, { stream: true });
+          const frames = buffer.split(/\r?\n\r?\n/);
+          buffer = frames.pop() || '';
+          for (const frame of frames) {
+            const event = parseSseFrame(frame);
+            if (event) setEvents(current => [...current.slice(-19), event]);
+          }
+        }
+      } catch {
+        if (!closed) setConnected(false);
+      } finally {
+        if (!closed) setConnected(false);
+      }
     };
-    open();
-    return()=>{closed=true;es?.close();if(retry)window.clearTimeout(retry);};
-  },[url]);
-  return {connected,events};
+    void open();
+    return () => { closed = true; controller.abort(); };
+  }, [targetKey(request)]);
+
+  return { connected, events };
 }
 
-function withToken(url:string){
-  const token=localStorage.getItem(AUTH_TOKEN_KEY);
-  return appendSseAccessToken(url,token,window.location.origin);
-}
-
-export function appendSseAccessToken(url:string,token:string|null,origin:string){
-  if(!token)return url;
-  const next=new URL(url,origin);
-  if(!next.searchParams.has('access_token'))next.searchParams.set('access_token',token);
-  return next.pathname+next.search+next.hash;
+function targetKey(request?: string | SSERequest) {
+  if (!request) return '';
+  if (typeof request === 'string') return request;
+  return `${request.method || 'GET'}:${request.url}:${JSON.stringify(request.body ?? null)}`;
 }

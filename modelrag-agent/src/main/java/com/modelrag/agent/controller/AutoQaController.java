@@ -32,7 +32,7 @@ public class AutoQaController {
             AccessControlService access,
             ConversationMemory memory,
             SseEmitterService sse,
-            @Qualifier("indexingExecutor") Executor streamExecutor) {
+            @Qualifier("answerExecutor") Executor streamExecutor) {
         this.auto = auto;
         this.access = access;
         this.memory = memory;
@@ -68,7 +68,7 @@ public class AutoQaController {
             AutoQaResult result = auto.answer(request, allowed, userId, userRoles);
             sse.publish(streamKey, new SseEvent("DONE", "自动问答完成", Map.of("result", result)));
         } catch (RuntimeException error) {
-            sse.publish(streamKey, new SseEvent("ERROR", error.getMessage(), Map.of()));
+            sse.publish(streamKey, new SseEvent("ERROR", "自动问答处理失败，请稍后重试", Map.of()));
         } finally {
             sse.complete(streamKey);
         }

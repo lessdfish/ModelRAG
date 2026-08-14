@@ -1,8 +1,8 @@
 package com.modelrag.indexing.pipeline;
 
-import com.modelrag.common.cache.QaAnswerCache;
 import com.modelrag.common.dto.SseEvent;
 import com.modelrag.common.event.IndexingCompletedEvent;
+import com.modelrag.common.exception.SafeErrorSummary;
 import com.modelrag.common.event.ReembedDatasetEvent;
 import com.modelrag.common.outbox.IndexOutbox;
 import com.modelrag.common.sse.SseEmitterService;
@@ -13,36 +13,52 @@ import com.modelrag.knowledge.model.Chunk;
 import com.modelrag.knowledge.model.Dataset;
 import com.modelrag.knowledge.model.Document;
 import com.modelrag.knowledge.service.KnowledgeStore;
+import com.modelrag.knowledge.service.ObjectStorageService;
 import com.modelrag.knowledge.splitter.RecursiveCharSplitter;
 import java.util.ArrayList;
+import java.io.Reader;
+import java.io.StringReader;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class IndexingPipeline {
+    private static final Logger LOG = LoggerFactory.getLogger(IndexingPipeline.class);
+    private static final int PARENT_TOKEN_BUDGET = 1800;
     private final KnowledgeStore store;
     private final EmbeddingService embed;
     private final VectorStore vectors;
     private final ApplicationEventPublisher events;
     private final SseEmitterService sse;
     private final IndexOutbox outbox;
-    private final QaAnswerCache answers;
+    private final ObjectStorageService storage;
+    private final TransactionOperations transaction;
+    private final ExecutorService embeddingExecutor;
     private final RecursiveCharSplitter splitter = new RecursiveCharSplitter();
 
     public IndexingPipeline(KnowledgeStore store, EmbeddingService embed, VectorStore vectors,
-            ApplicationEventPublisher events, SseEmitterService sse, IndexOutbox outbox, QaAnswerCache answers) {
+            ApplicationEventPublisher events, SseEmitterService sse, IndexOutbox outbox, ObjectStorageService storage,
+            TransactionOperations transaction,
+            @org.springframework.beans.factory.annotation.Qualifier("embeddingExecutor") ExecutorService embeddingExecutor) {
         this.store = store;
         this.embed = embed;
         this.vectors = vectors;
         this.events = events;
         this.sse = sse;
         this.outbox = outbox;
-        this.answers = answers;
+        this.storage = storage;
+        this.transaction = transaction;
+        this.embeddingExecutor = embeddingExecutor;
     }
 
     @EventListener
@@ -51,72 +67,153 @@ public class IndexingPipeline {
     }
 
     public int reembedDataset(long datasetId) {
-        List<VectorDocument> docs = store.chunks(datasetId).stream()
-                .map(c -> new VectorDocument(c.id(), c.documentId(), c.datasetId(), c.content(),
-                        embed.embed(datasetId, c.content()), c.metadata()))
-                .toList();
-        vectors.upsert(docs);
-        answers.invalidateDataset(datasetId);
-        return docs.size();
+        List<Chunk> chunks = store.chunks(datasetId);
+        int total = 0;
+        for (int start = 0; start < chunks.size(); start += 64) {
+            List<Chunk> window = chunks.subList(start, Math.min(chunks.size(), start + 64));
+            vectors.upsert(embedChunks(datasetId, window));
+            total += window.size();
+        }
+        return total;
     }
 
     public int rebuildDataset(long datasetId) {
-        List<Chunk> oldChunks = store.chunks(datasetId);
-        oldChunks.forEach(c -> outbox.append("DELETE_CHUNK", datasetId, c.documentId(), c.id(), "{}"));
         List<Document> documents = store.documents(datasetId);
-        documents.forEach(d -> vectors.deleteDocument(d.id()));
-        answers.invalidateDataset(datasetId);
         documents.forEach(d -> index(d.id()));
         return documents.size();
     }
 
     public void index(long id) {
         try {
+            long indexVersion = store.beginIndexVersion(id);
             Document document = store.document(id);
             Dataset dataset = store.dataset(document.datasetId());
             status(id, "PARSING", null, 0);
             status(id, "CHUNKING", null, 0);
-            List<String> parts = splitter.split(document.content(), dataset.chunkSize(), dataset.chunkOverlap());
-            List<Chunk> chunks = new ArrayList<>();
-            List<VectorDocument> docs = new ArrayList<>();
-            List<PendingOutbox> pendingOutbox = new ArrayList<>();
-            Map<String, String> documentMetadata = metadata(document);
-            Long parentId = null;
-            String currentTitlePath = document.fileName();
-            for (int i = 0; i < parts.size(); i++) {
-                long chunkId = store.nextId();
-                String detectedTitle = titleIn(parts.get(i));
-                if (detectedTitle != null && !detectedTitle.equals(currentTitlePath)) {
-                    currentTitlePath = detectedTitle;
-                    parentId = null;
-                }
-                if (parentId == null) parentId = chunkId;
-                Map<String, String> chunkMetadata = new LinkedHashMap<>(documentMetadata);
-                chunkMetadata.put("titlePath", currentTitlePath);
-                Chunk chunk = new Chunk(chunkId, document.id(), document.datasetId(), i, parts.get(i), chunkMetadata, parentId);
-                chunks.add(chunk);
-                docs.add(new VectorDocument(chunk.id(), chunk.documentId(), chunk.datasetId(), chunk.content(),
-                        embed.embed(chunk.datasetId(), chunk.content()), chunk.metadata()));
-                pendingOutbox.add(new PendingOutbox(chunk.datasetId(), chunk.documentId(), chunk.id(), json(chunk, document)));
+            Map<String, String> documentMetadata = metadata(document, indexVersion);
+            store.beginChunks(id, indexVersion);
+            IndexState state = new IndexState(document.fileName());
+            try (Reader content = content(document)) {
+                splitter.forEachWindow(content, dataset.chunkSize(), dataset.chunkOverlap(), 64, parts -> {
+                    List<Chunk> chunks = new ArrayList<>(parts.size());
+                    List<PendingOutbox> pendingOutbox = new ArrayList<>(parts.size());
+                    for (String rawPart : parts) {
+                        String part = rawPart.replaceAll("\\[\\[MODELRAG_PAGE:\\d+]]", "").trim();
+                        if (part.isBlank()) continue;
+                        long chunkId = store.nextId();
+                        String detectedTitle = titleIn(part);
+                        if (detectedTitle != null && !detectedTitle.equals(state.currentTitlePath)) {
+                            state.currentTitlePath = detectedTitle;
+                            state.parentId = null;
+                            state.parentTokens = 0;
+                        }
+                        int childTokens = tokenEstimate(part);
+                        if (state.parentId == null || (state.parentTokens > 0
+                                && state.parentTokens + childTokens > PARENT_TOKEN_BUDGET)) {
+                            state.parentId = chunkId;
+                            state.parentTokens = 0;
+                        }
+                        Map<String, String> chunkMetadata = new LinkedHashMap<>(documentMetadata);
+                        chunkMetadata.put("titlePath", state.currentTitlePath);
+                        String page = pageIn(rawPart);
+                        if (page != null) state.currentPage = page;
+                        if (state.currentPage != null) chunkMetadata.put("page", state.currentPage);
+                        Chunk chunk = new Chunk(chunkId, document.id(), document.datasetId(), state.chunkIndex++, part,
+                                chunkMetadata, state.parentId);
+                        state.parentTokens += childTokens;
+                        chunks.add(chunk);
+                        pendingOutbox.add(new PendingOutbox(chunk.datasetId(), chunk.documentId(), chunk.id(), json(chunk, document)));
+                    }
+                    List<VectorDocument> docs = embedChunks(document.datasetId(), chunks);
+                    Runnable persist = () -> {
+                        store.appendChunks(id, chunks);
+                        vectors.upsert(docs);
+                        pendingOutbox.forEach(event -> outbox.append("UPSERT_CHUNK", event.datasetId(), event.documentId(),
+                                event.chunkId(), event.payload()));
+                    };
+                    transaction.executeWithoutResult(ignored -> persist.run());
+                    state.totalChunks += chunks.size();
+                    status(id, "INDEXING", null, state.totalChunks);
+                });
             }
-            status(id, "INDEXING", null, 0);
-            store.chunks(id, chunks);
-            vectors.upsert(docs);
-            answers.invalidateDataset(document.datasetId());
-            status(id, "READY", null, chunks.size());
-            pendingOutbox.forEach(event -> outbox.append("UPSERT_CHUNK", event.datasetId(), event.documentId(),
-                    event.chunkId(), event.payload()));
+            status(id, "VECTOR_READY", null, state.totalChunks);
+            status(id, "SEARCH_SYNCING", null, state.totalChunks);
+            if (state.totalChunks == 0) store.activateIndexVersion(id, indexVersion);
             events.publishEvent(new IndexingCompletedEvent(this, id, true, null));
         } catch (Exception error) {
+            LOG.error("Document indexing failed: documentId={}", id, error);
+            String safeError = SafeErrorSummary.of(error);
             try {
-                status(id, "FAILED", error.getMessage(), 0);
-            } catch (Exception ignored) {
+                status(id, "FAILED", safeError, 0);
+            } catch (Exception statusError) {
+                LOG.error("Unable to persist FAILED indexing status: documentId={}", id, statusError);
             }
-            events.publishEvent(new IndexingCompletedEvent(this, id, false, error.getMessage()));
+            events.publishEvent(new IndexingCompletedEvent(this, id, false, safeError));
         }
     }
 
     private record PendingOutbox(long datasetId, long documentId, long chunkId, String payload) {
+    }
+
+    private static final class IndexState {
+        private String currentTitlePath;
+        private String currentPage;
+        private Long parentId;
+        private int chunkIndex;
+        private int totalChunks;
+        private int parentTokens;
+
+        private IndexState(String currentTitlePath) {
+            this.currentTitlePath = currentTitlePath;
+        }
+    }
+
+    private int tokenEstimate(String value) {
+        double tokens = 0;
+        for (int index = 0; index < value.length(); index++) {
+            tokens += Character.UnicodeScript.of(value.charAt(index)) == Character.UnicodeScript.HAN ? 1 : .25;
+        }
+        return Math.max(1, (int) Math.ceil(tokens));
+    }
+
+    private List<VectorDocument> embedChunks(long datasetId, List<Chunk> chunks) {
+        List<VectorDocument> result = new ArrayList<>(chunks.size());
+        for (int start = 0; start < chunks.size(); start += 64) {
+            List<Chunk> window = chunks.subList(start, Math.min(chunks.size(), start + 64));
+            List<java.util.concurrent.Future<List<float[]>>> futures = new ArrayList<>();
+            for (int batchStart = 0; batchStart < window.size(); batchStart += 32) {
+                List<Chunk> batch = window.subList(batchStart, Math.min(window.size(), batchStart + 32));
+                futures.add(embeddingExecutor.submit(
+                        () -> embed.embedBatch(datasetId, batch.stream().map(Chunk::content).toList())));
+                if (futures.size() == 2 || batchStart + 32 >= window.size()) {
+                    for (int futureIndex = 0; futureIndex < futures.size(); futureIndex++) {
+                        List<float[]> vectors = get(futures.get(futureIndex));
+                        int offset = futureIndex * 32;
+                        List<Chunk> completed = window.subList(offset, Math.min(window.size(), offset + vectors.size()));
+                        for (int index = 0; index < vectors.size(); index++) {
+                            Chunk chunk = completed.get(index);
+                            result.add(new VectorDocument(chunk.id(), chunk.documentId(), chunk.datasetId(),
+                                    chunk.content(), vectors.get(index), chunk.metadata()));
+                        }
+                    }
+                    futures.clear();
+                }
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private List<float[]> get(java.util.concurrent.Future<List<float[]>> future) {
+        try {
+            return future.get();
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Embedding 批处理被中断", error);
+        } catch (java.util.concurrent.ExecutionException error) {
+            Throwable cause = error.getCause();
+            if (cause instanceof RuntimeException runtime) throw runtime;
+            throw new IllegalStateException("Embedding 批处理失败", cause);
+        }
     }
 
     private void status(long id, String value, String error, int chunks) {
@@ -125,18 +222,26 @@ public class IndexingPipeline {
                 Map.of("documentId", id, "status", value, "chunkCount", chunks)));
     }
 
-    private Map<String, String> metadata(Document document) {
+    private Reader content(Document document) {
+        if (document.content() != null && !document.content().isBlank()) return new StringReader(document.content());
+        if (document.artifactObjectKey() == null || document.artifactObjectKey().isBlank()) {
+            throw new IllegalStateException("文档 artifact 不存在");
+        }
+        try {
+            return new java.io.BufferedReader(new java.io.InputStreamReader(storage.open(document.artifactObjectKey()),
+                    java.nio.charset.StandardCharsets.UTF_8));
+        } catch (java.io.IOException error) {
+            throw new IllegalStateException("无法读取文档 artifact", error);
+        }
+    }
+
+    private Map<String, String> metadata(Document document, long indexVersion) {
         Map<String, String> values = new LinkedHashMap<>();
         values.put("parser", parser(document.fileType()));
         values.put("charset", charset(document.fileType()));
         values.put("titlePath", document.fileName());
-        values.put("version", "1");
+        values.put("version", String.valueOf(indexVersion));
         values.put("indexType", "default");
-        values.put("titleCount", String.valueOf(titleCount(document.content())));
-        values.put("paragraphCount", String.valueOf(paragraphCount(document.content())));
-        values.put("charCount", String.valueOf(document.content() == null ? 0 : document.content().length()));
-        values.put("tokenEstimate", String.valueOf(Math.max(1,
-                (document.content() == null ? 0 : document.content().length()) / 4)));
         return values;
     }
 
@@ -154,23 +259,6 @@ public class IndexingPipeline {
         return "MD".equals(fileType) || "TXT".equals(fileType) ? "UTF-8" : "extracted-text";
     }
 
-    private int titleCount(String content) {
-        if (content == null || content.isBlank()) return 0;
-        int count = 0;
-        for (String line : content.split("\\R")) {
-            String value = line.trim();
-            if (value.startsWith("#") || value.matches("[一二三四五六七八九十0-9]+[、.．].{2,80}")) count++;
-        }
-        return count;
-    }
-
-    private int paragraphCount(String content) {
-        if (content == null || content.isBlank()) return 0;
-        int count = 0;
-        for (String part : content.split("\\R\\s*\\R|\\R")) if (!part.trim().isBlank()) count++;
-        return count;
-    }
-
     private String titleIn(String content) {
         if (content == null || content.isBlank()) return null;
         String title = null;
@@ -184,6 +272,15 @@ public class IndexingPipeline {
             }
         }
         return title;
+    }
+
+    private String pageIn(String content) {
+        if (content == null || content.isBlank()) return null;
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("\\[\\[MODELRAG_PAGE:(\\d+)]]").matcher(content);
+        String page = null;
+        while (matcher.find()) page = matcher.group(1);
+        return page;
     }
 
     private String json(Chunk chunk, Document document) {

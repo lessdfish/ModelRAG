@@ -1,98 +1,125 @@
 package com.modelrag.indexing.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.modelrag.api.TextEmbeddingProvider;
 import com.modelrag.common.cache.EmbeddingCache;
 import com.modelrag.common.metrics.TokenUsageTracker;
 import com.modelrag.common.model.ModelHealthRegistry;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.ollama.OllamaEmbeddingModel;
+import org.springframework.ai.ollama.api.OllamaApi;
+import org.springframework.ai.ollama.api.OllamaEmbeddingOptions;
+import org.springframework.ai.ollama.management.ModelManagementOptions;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
-/** Uses the configured local Ollama embedding model first; deterministic vectors only keep offline tests reproducible. */
+/** Production embedding boundary. Qwen3-Embedding-0.6B is the only accepted profile. */
 @Service
-public class EmbeddingService {
-    private static final Logger log = LoggerFactory.getLogger(EmbeddingService.class);
+@Profile("!test")
+public class EmbeddingService implements TextEmbeddingProvider {
+    private static final int DIMENSIONS = 1024;
+    private static final String REQUIRED_MODEL = "Qwen3-Embedding-0.6B";
+    private static final String OLLAMA_MODEL = "qwen3-embedding:0.6b";
     private final EmbeddingCache cache;
-    private final boolean ollamaEnabled;
-    private final String ollamaUrl;
+    private final boolean enabled;
     private final String model;
     private final TokenUsageTracker tokens;
     private final ObjectProvider<ModelHealthRegistry> health;
-    private final ObjectMapper json = new ObjectMapper();
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+    private final EmbeddingModel embedding;
 
     public EmbeddingService(EmbeddingCache cache,
-            @Value("${modelrag.ollama.enabled:true}") boolean enabled,
+            @Value("${modelrag.ollama.enabled:false}") boolean enabled,
             @Value("${modelrag.ollama.url:http://127.0.0.1:11434}") String url,
-            @Value("${modelrag.ollama.embedding-model:quentinz/bge-large-zh-v1.5}") String model,
+            @Value("${modelrag.ollama.embedding-model:Qwen3-Embedding-0.6B}") String model,
             TokenUsageTracker tokens, ObjectProvider<ModelHealthRegistry> health) {
-        this.cache = cache; ollamaEnabled = enabled; ollamaUrl = normalizeUrl(url); this.model = model; this.tokens = tokens; this.health = health;
+        if (!REQUIRED_MODEL.equals(model)) {
+            throw new IllegalStateException("生产 Embedding 只允许 " + REQUIRED_MODEL);
+        }
+        this.cache = cache;
+        this.enabled = enabled;
+        this.model = model;
+        this.tokens = tokens;
+        this.health = health;
+        this.embedding = OllamaEmbeddingModel.builder()
+                .ollamaApi(OllamaApi.builder().baseUrl(normalizeUrl(url)).build())
+                .options(OllamaEmbeddingOptions.builder().model(OLLAMA_MODEL).dimensions(DIMENSIONS).build())
+                .modelManagementOptions(ModelManagementOptions.defaults())
+                .build();
     }
 
-    public float[] embed(String text) {
-        return embed(0,text);
-    }
+    public float[] embed(String text) { return embed(0, text); }
 
-    public float[] embed(long datasetId,String text) {
-        return cache.get((ollamaEnabled ? model : "deterministic") + "\n" + text, ignored -> {
-            if (datasetId > 0) tokens.recordEmbedding(datasetId,text);
+    @Override
+    public float[] embed(long datasetId, String text) {
+        if (text == null || text.isBlank()) throw new IllegalArgumentException("Embedding 文本不能为空");
+        return cache.get(cacheKey(text), ignored -> {
+            if (datasetId > 0) tokens.recordEmbedding(datasetId, text);
             return compute(text);
         });
     }
 
-    private float[] compute(String text) {
-        String modelName = "ollama-embedding-" + model;
+    /** Provider requests are capped at 32 inputs while preserving one cache entry per text. */
+    @Override
+    public List<float[]> embedBatch(long datasetId, List<String> texts) {
+        if (texts == null || texts.isEmpty()) return List.of();
+        List<String> normalized = texts.stream().map(value -> value == null ? "" : value).toList();
+        if (normalized.stream().anyMatch(String::isBlank)) throw new IllegalArgumentException("Embedding 文本不能为空");
+        List<float[]> result = new ArrayList<>(normalized.size());
+        Map<String, List<Integer>> missing = new LinkedHashMap<>();
+        for (int index = 0; index < normalized.size(); index++) {
+            String value = normalized.get(index);
+            float[] cached = cache.getIfPresent(cacheKey(value));
+            result.add(cached);
+            if (cached == null) missing.computeIfAbsent(value, ignored -> new ArrayList<>()).add(index);
+        }
+        List<String> inputs = List.copyOf(missing.keySet());
+        for (int start = 0; start < inputs.size(); start += 32) {
+            List<String> batch = inputs.subList(start, Math.min(inputs.size(), start + 32));
+            List<float[]> computed = computeBatch(batch);
+            for (int index = 0; index < batch.size(); index++) {
+                String value = batch.get(index);
+                float[] vector = computed.get(index);
+                cache.put(cacheKey(value), vector);
+                if (datasetId > 0) tokens.recordEmbedding(datasetId, value);
+                for (Integer position : missing.get(value)) result.set(position, vector);
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    protected float[] compute(String text) {
+        return computeBatch(List.of(text)).get(0);
+    }
+
+    private List<float[]> computeBatch(List<String> texts) {
+        String modelName = "ollama-embedding-" + OLLAMA_MODEL;
+        if (!enabled) throw new IllegalStateException("Ollama Embedding 未启用，无法生成真实向量");
         ModelHealthRegistry registry = health.getIfAvailable();
-        if (ollamaEnabled && (registry == null || registry.available("EMBEDDING", modelName))) try {
-            float[] vector = ollama(text);
+        if (registry != null && !registry.available("EMBEDDING", modelName)) {
+            throw new IllegalStateException("Embedding 模型暂时熔断: " + model);
+        }
+        try {
+            List<float[]> values = embedding.embed(texts);
+            if (values.size() != texts.size() || values.stream().anyMatch(value -> value == null || value.length != DIMENSIONS)) {
+                throw new IllegalStateException("Embedding 期望 1024 维");
+            }
             if (registry != null) registry.success("EMBEDDING", modelName);
-            return vector;
+            return values;
         } catch (RuntimeException error) {
             if (registry != null) registry.failure("EMBEDDING", modelName);
-            log.warn("Ollama Embedding unavailable, using deterministic local embedding: {}", error.getMessage());
+            throw new IllegalStateException("Ollama Embedding 调用失败", error);
         }
-        return deterministic(text);
     }
 
-    private float[] deterministic(String text) {
-        float[] vector = new float[1024];
-        byte[] bytes = text.toLowerCase().getBytes(StandardCharsets.UTF_8);
-        for (int i = 0; i < bytes.length; i++) vector[(bytes[i] & 255) % vector.length] += i % 2 == 0 ? 1f : -1f;
-        float norm = 0;
-        for (float value : vector) norm += value * value;
-        norm = (float) Math.sqrt(norm);
-        if (norm > 0) for (int i = 0; i < vector.length; i++) vector[i] /= norm;
-        return vector;
-    }
-
-    private float[] ollama(String text) {
-        try {
-            String body = json.writeValueAsString(Map.of("model", model, "input", text));
-            HttpRequest request = HttpRequest.newBuilder(URI.create(ollamaUrl + "/api/embed"))
-                    .timeout(Duration.ofSeconds(30)).header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body)).build();
-            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() / 100 != 2) throw new IllegalStateException("HTTP " + response.statusCode());
-            JsonNode vector = json.readTree(response.body()).path("embeddings").path(0);
-            if (vector.size() != 1024) throw new IllegalStateException("期望 1024 维，实际 " + vector.size());
-            float[] result = new float[1024];
-            for (int i = 0; i < result.length; i++) result[i] = (float) vector.get(i).asDouble();
-            return result;
-        } catch (Exception error) { throw new IllegalStateException("Ollama Embedding 调用失败", error); }
-    }
+    private String cacheKey(String text) { return model + ":" + DIMENSIONS + "\n" + text; }
 
     private String normalizeUrl(String value) {
-        String text = value == null || value.isBlank() ? "127.0.0.1:11434" : value.trim();
+        String text = value == null || value.isBlank() ? "http://127.0.0.1:11434" : value.trim();
         if (!text.startsWith("http://") && !text.startsWith("https://")) text = "http://" + text;
         return text.replaceAll("/$", "");
     }

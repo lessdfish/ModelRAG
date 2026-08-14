@@ -1,7 +1,7 @@
 import React,{Suspense,lazy,useEffect,useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {App,Button,Card,ConfigProvider,Form,Input,Layout,Menu,Modal,Space,Spin,Tag,Typography,message} from 'antd';
-import {ApiOutlined,AuditOutlined,BookOutlined,DashboardOutlined,ExperimentOutlined,MessageOutlined,SafetyCertificateOutlined} from '@ant-design/icons';
+import {App,Button,Card,ConfigProvider,Form,Input,Layout,Menu,Modal,Spin,Tag,Typography,message} from 'antd';
+import {ApiOutlined,AuditOutlined,BookOutlined,DashboardOutlined,DatabaseOutlined,ExperimentOutlined,MessageOutlined,SafetyCertificateOutlined} from '@ant-design/icons';
 import {authApi} from './api/api';
 import {AUTH_TOKEN_KEY} from './api/client';
 import type {AuthUser} from './types';
@@ -14,8 +14,10 @@ const MonitorPage=lazy(()=>import('./pages/MonitorPage').then(m=>({default:m.Mon
 const EvalPage=lazy(()=>import('./pages/EvalPage').then(m=>({default:m.EvalPage})));
 const ToolPage=lazy(()=>import('./pages/ToolPage').then(m=>({default:m.ToolPage})));
 const SecurityPage=lazy(()=>import('./pages/SecurityPage').then(m=>({default:m.SecurityPage})));
+const ModelSettingsPage=lazy(()=>import('./pages/ModelSettingsPage').then(m=>({default:m.ModelSettingsPage})));
+const MemoryPage=lazy(()=>import('./pages/MemoryPage').then(m=>({default:m.MemoryPage})));
 
-type ViewKey='chat'|'kb'|'tools'|'audit'|'security'|'monitor'|'eval';
+type ViewKey='chat'|'kb'|'tools'|'models'|'memory'|'audit'|'security'|'monitor'|'eval';
 
 function Shell(){
   const [view,setView]=useState<ViewKey>('chat');
@@ -41,12 +43,6 @@ function Shell(){
     setUser(result.user);
     message.success('注册成功，已按普通用户登录');
   };
-  const logout=()=>{
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-    setUser(undefined);
-    setView('chat');
-  };
-
   if(checking)return <Theme><Card><Spin/> 正在检查登录态...</Card></Theme>;
   if(!user)return <Theme><LoginPage onLogin={login} onRegister={register}/></Theme>;
   const admin=isAdmin(user.roles);
@@ -55,6 +51,8 @@ function Shell(){
     chat:<ChatPage currentUserId={user.id}/>,
     kb:<KnowledgeBasePage admin={admin}/>,
     tools:<ToolPage admin={admin}/>,
+    models:<ModelSettingsPage/>,
+    memory:<MemoryPage/>,
     audit:<AuditPage admin={admin} currentUserId={user.id} onOpenEval={datasetId=>{setEvalDatasetId(datasetId);setView('eval')}}/>,
     security:<SecurityPage/>,
     monitor:<MonitorPage/>,
@@ -69,6 +67,8 @@ function Shell(){
           {key:'chat',icon:<MessageOutlined/>,label:'对话工作台'},
           {key:'kb',icon:<BookOutlined/>,label:'知识库'},
           {key:'tools',icon:<ApiOutlined/>,label:admin?'工具':'可用工具'},
+          {key:'models',icon:<ApiOutlined/>,label:'我的模型'},
+          {key:'memory',icon:<DatabaseOutlined/>,label:'记忆治理'},
           ...(approver&&!admin?[{key:'audit',icon:<AuditOutlined/>,label:'审批待办'}]:[]),
           ...(admin?[
             {key:'audit',icon:<AuditOutlined/>,label:'审计与审批'},
@@ -81,12 +81,7 @@ function Shell(){
       </Layout.Sider>
       <Layout>
         <Layout.Header className="top">
-          <Typography.Text>企业知识 · 可溯源回答</Typography.Text>
-          <Space>
-            <Tag color="green">{user.id}</Tag>
-            <Typography.Text type="secondary">{roleText(user.roles)}</Typography.Text>
-            <Button type="text" onClick={logout}>退出</Button>
-          </Space>
+          <Tag color="green">{user.id}</Tag>
         </Layout.Header>
         <Layout.Content className="content"><Suspense fallback={<Card><Spin/> 页面加载中...</Card>}>{views[view]}</Suspense></Layout.Content>
       </Layout>
@@ -110,8 +105,8 @@ function LoginPage({onLogin,onRegister}:{onLogin:(values:{username:string;passwo
     <Card className="login-card">
       <div className="eyebrow">LOCAL AUTH / MODEL RAG</div>
       <h1>进入知识库控制台。</h1>
-      <Typography.Paragraph type="secondary">本地默认账号可通过环境变量修改：`MODELRAG_LOCAL_ADMIN_USERNAME` / `MODELRAG_LOCAL_ADMIN_PASSWORD`。</Typography.Paragraph>
-      <Form layout="vertical" onFinish={submit} initialValues={{username:'admin',password:'modelrag'}}>
+      <Typography.Paragraph type="secondary">请使用已配置的企业账号登录；系统不提供默认管理员账号。</Typography.Paragraph>
+      <Form layout="vertical" onFinish={submit}>
         <Form.Item name="username" label="账号" rules={[{required:true,message:'请输入账号'}]}><Input autoComplete="username"/></Form.Item>
         <Form.Item name="password" label="密码" rules={[{required:true,message:'请输入密码'}]}><Input.Password autoComplete="current-password"/></Form.Item>
         <Button type="primary" htmlType="submit" loading={loading} block>登录</Button>
@@ -121,9 +116,9 @@ function LoginPage({onLogin,onRegister}:{onLogin:(values:{username:string;passwo
         <Form layout="vertical" onFinish={submitRegister}>
           <Form.Item name="username" label="账号" rules={[{required:true,message:'请输入账号'}]}><Input placeholder="例如 lisi"/></Form.Item>
           <Form.Item name="displayName" label="显示名"><Input placeholder="例如 李四"/></Form.Item>
-          <Form.Item name="password" label="密码" rules={[{required:true,message:'请输入密码'},{min:4,message:'至少 4 位'}]}><Input.Password/></Form.Item>
+          <Form.Item name="password" label="密码" rules={[{required:true,message:'请输入密码'},{min:12,message:'至少 12 位'}]}><Input.Password/></Form.Item>
           <button id="register-submit" type="submit" style={{display:'none'}}/>
-          <Typography.Text type="secondary">注册后默认角色为 USER，只能访问管理员授权的知识库和可用工具。当前本地环境会自动授予已有知识库 READ 权限，管理员可在“权限”页调整。</Typography.Text>
+          <Typography.Text type="secondary">注册后默认角色为 USER，初始不具备知识库权限；管理员可在“权限”页授予 READ、WRITE 或 ADMIN 权限。</Typography.Text>
         </Form>
       </Modal>
     </Card>
@@ -132,10 +127,6 @@ function LoginPage({onLogin,onRegister}:{onLogin:(values:{username:string;passwo
 
 function Theme({children}:{children:React.ReactNode}){
   return <ConfigProvider theme={{token:{colorPrimary:'#e85d3f',fontFamily:'Noto Serif SC, serif',borderRadius:5}}}><App>{children}</App></ConfigProvider>;
-}
-
-function roleText(value:AuthUser['roles']){
-  return Array.from(value as Iterable<string>).join(' / ');
 }
 
 function isAdmin(value:AuthUser['roles']){

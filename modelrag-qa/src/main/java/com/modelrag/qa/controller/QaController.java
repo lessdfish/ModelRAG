@@ -8,11 +8,11 @@ import com.modelrag.common.sse.SseEmitterService;
 import com.modelrag.qa.dto.QaRequest;
 import com.modelrag.qa.dto.QaResult;
 import com.modelrag.qa.orchestrator.QaOrchestrator;
+import com.modelrag.qa.trace.QaTraceView;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executor;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -25,11 +25,11 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
-@RequestMapping("/api/v1/qa")
+@RequestMapping({"/api/v1/qa", "/api/v2/qa"})
 public class QaController {
     private final QaOrchestrator qa;
     private final AccessControlService access;
-    private final ObjectProvider<ConversationAccess> conversations;
+    private final ConversationAccess conversations;
     private final SseEmitterService sse;
     private final Executor streamExecutor;
     private final int contextMaxTokens;
@@ -37,9 +37,9 @@ public class QaController {
     public QaController(
             QaOrchestrator q,
             AccessControlService access,
-            ObjectProvider<ConversationAccess> conversations,
+            ConversationAccess conversations,
             SseEmitterService sse,
-            @Qualifier("indexingExecutor") Executor streamExecutor,
+            @Qualifier("answerExecutor") Executor streamExecutor,
             @Value("${modelrag.qa.context-max-tokens:1600}") int contextMaxTokens) {
         qa = q;
         this.access = access;
@@ -74,19 +74,15 @@ public class QaController {
     }
 
     @GetMapping("/traces")
-    public ApiResponse<List<Map<String, Object>>> traces() {
+    public ApiResponse<List<QaTraceView>> traces() {
         access.requireRole("ADMIN");
-        return ApiResponse.success(qa.traces());
+        return ApiResponse.success(qa.traces().stream().map(QaTraceView::from).toList());
     }
 
     @GetMapping("/context-policy")
-    public ApiResponse<Map<String, Object>> contextPolicy() {
+    public ApiResponse<ContextPolicyView> contextPolicy() {
         access.currentUser();
-        return ApiResponse.success(Map.of(
-                "maxEvidenceTokens", contextMaxTokens,
-                "topK", 3,
-                "summaryAfterMessages", 8,
-                "recentMessages", 4));
+        return ApiResponse.success(new ContextPolicyView(contextMaxTokens, 3, 12, 8));
     }
 
     private void answerOnStream(String streamKey, QaRequest request) {
@@ -102,14 +98,13 @@ public class QaController {
                     "refused", result.refused(),
                     "traceId", result.traceId() == null ? "" : result.traceId())));
         } catch (RuntimeException error) {
-            sse.publish(streamKey, new SseEvent("ERROR", error.getMessage(), Map.of()));
+            sse.publish(streamKey, new SseEvent("ERROR", "问答处理失败，请稍后重试", Map.of()));
         } finally {
             sse.complete(streamKey);
         }
     }
 
     private void requireConversationOwner(String userId, Long conversationId) {
-        ConversationAccess conversationAccess = conversations.getIfAvailable();
-        if (conversationAccess != null) conversationAccess.requireOwner(userId, conversationId);
+        conversations.requireOwner(userId, conversationId);
     }
 }

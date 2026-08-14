@@ -1,223 +1,194 @@
 package com.modelrag.qa.orchestrator;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.modelrag.common.cache.QaAnswerCache;
 import com.modelrag.common.event.QaAnsweredEvent;
 import com.modelrag.common.metrics.TokenUsageTracker;
-import com.modelrag.common.model.ModelGateway;
+import com.modelrag.api.ConversationContextBuilder;
+import com.modelrag.api.ConversationRepository;
 import com.modelrag.common.rate.DatasetRateLimiter;
 import com.modelrag.knowledge.model.Chunk;
 import com.modelrag.knowledge.model.Dataset;
 import com.modelrag.knowledge.service.KnowledgeStore;
-import com.modelrag.qa.ab.OnlineExperimentService;
 import com.modelrag.qa.dto.Citation;
 import com.modelrag.qa.dto.QaRequest;
 import com.modelrag.qa.dto.QaResult;
 import com.modelrag.qa.sanitizer.ContextSanitizer;
 import com.modelrag.qa.sanitizer.ContextWindowManager;
-import com.modelrag.qa.sanitizer.OutputGuard;
 import com.modelrag.qa.sanitizer.PromptSanitizer;
-import com.modelrag.qa.sanitizer.StructuredPromptBuilder;
-import com.modelrag.search.dto.HybridSearchRequest;
+import com.modelrag.qa.trace.QaTraceStore;
 import com.modelrag.search.dto.ScoredChunk;
 import com.modelrag.search.dto.SearchStages;
-import com.modelrag.search.facade.SearchFacade;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
 public class QaOrchestrator {
     private static final Pattern FAQ = Pattern.compile("问[:：]\\s*([^？?\\n]+)[？?]\\s*答[:：]\\s*([^。！？\\n]+)");
-    private static final double MMR_LAMBDA = 0.75;
 
-    private final SearchFacade search;
     private final KnowledgeStore store;
     private final PromptSanitizer sanitizer;
     private final ContextSanitizer contextSanitizer;
     private final ContextWindowManager contextWindow;
-    private final OutputGuard outputGuard;
-    private final StructuredPromptBuilder prompts;
-    private final QaAnswerCache cache;
     private final MeterRegistry metrics;
     private final TokenUsageTracker tokens;
     private final DatasetRateLimiter limiter;
-    private final ObjectProvider<JdbcTemplate> jdbc;
+    private final QaTraceStore traceStore;
     private final ApplicationEventPublisher events;
-    private final ObjectProvider<ModelGateway> models;
-    private final ObjectProvider<OnlineExperimentService> experiments;
-    private final boolean ollamaEnabled;
+    private final ConversationRepository conversationRepository;
+    private final ContextAssembler contextAssembler;
+    private final RetrievalPipeline retrievalPipeline;
+    private final AnswerApplicationService answerApplication;
+    private final AnswerTraceRepository answerTraceRepository;
     private final int contextMaxTokens;
-    private final boolean onlineAbEnabled;
-    private final int onlineAbTopK;
     private final ObjectMapper json = new ObjectMapper();
-    private final List<Map<String, Object>> traces = new CopyOnWriteArrayList<>();
-    private final List<Map<String, Object>> audits = new CopyOnWriteArrayList<>();
 
     public QaOrchestrator(
-            SearchFacade s,
             KnowledgeStore store,
             PromptSanitizer p,
             ContextSanitizer contextSanitizer,
             ContextWindowManager contextWindow,
-            OutputGuard outputGuard,
-            StructuredPromptBuilder prompts,
-            QaAnswerCache c,
             MeterRegistry m,
             TokenUsageTracker t,
             DatasetRateLimiter l,
-            ObjectProvider<JdbcTemplate> j,
+            QaTraceStore traceStore,
             ApplicationEventPublisher e,
-            ObjectProvider<ModelGateway> models,
-            ObjectProvider<OnlineExperimentService> experiments,
-            @Value("${modelrag.ollama.enabled:true}") boolean ollamaEnabled,
-            @Value("${modelrag.qa.context-max-tokens:1600}") int contextMaxTokens,
-            @Value("${modelrag.qa.online-ab-enabled:false}") boolean onlineAbEnabled,
-            @Value("${modelrag.qa.online-ab-top-k:8}") int onlineAbTopK) {
-        search = s;
+            ConversationRepository conversationRepository,
+            ContextAssembler contextAssembler,
+            RetrievalPipeline retrievalPipeline,
+            AnswerApplicationService answerApplication,
+            AnswerTraceRepository answerTraceRepository,
+            @Value("${modelrag.qa.context-max-tokens:1600}") int contextMaxTokens) {
         this.store = store;
         sanitizer = p;
         this.contextSanitizer = contextSanitizer;
         this.contextWindow = contextWindow;
-        this.outputGuard = outputGuard;
-        this.prompts = prompts;
-        cache = c;
         metrics = m;
         tokens = t;
         limiter = l;
-        jdbc = j;
+        this.traceStore = traceStore;
         events = e;
-        this.models = models;
-        this.experiments = experiments;
-        this.ollamaEnabled = ollamaEnabled;
+        this.conversationRepository = conversationRepository;
+        this.contextAssembler = contextAssembler;
+        this.retrievalPipeline = retrievalPipeline;
+        this.answerApplication = answerApplication;
+        this.answerTraceRepository = answerTraceRepository;
         this.contextMaxTokens = contextMaxTokens;
-        this.onlineAbEnabled = onlineAbEnabled;
-        this.onlineAbTopK = Math.max(1, Math.min(20, onlineAbTopK));
     }
 
     public QaResult answer(QaRequest request) {
+        return answer(request, null);
+    }
+
+    public QaResult answer(QaRequest request, Consumer<String> tokenConsumer) {
         if (request.query() == null || request.query().isBlank()) throw new IllegalArgumentException("问题不能为空");
         limiter.check(request.datasetId());
         Dataset dataset = store.dataset(request.datasetId());
-        QaAnswerCache.Lookup<QaResult> lookup = cache.getWithStatus(request.datasetId() + ":rev" + dataset.revision() + ":v8:" + request.query(), QaResult.class, ignored -> answerUncached(request));
-        QaResult result = lookup.hit() ? cacheHitTrace(request, lookup.value()) : lookup.value();
+        boolean userMessagePersisted = !request.persistConversationMessage() || persistUserMessage(request);
+        QaResult result = answerUncached(request, tokenConsumer);
         audit(request, result);
         metrics.counter("modelrag.qa.requests", "status", result.refused() ? "refused" : "success").increment();
         tokens.record(request.datasetId(), request.query(), result.answer());
         if (request.conversationId() != null) {
-            events.publishEvent(new QaAnsweredEvent(request.conversationId(), request.query(), result.answer(), citationsJson(result.citations()), request.userId(), result.traceId(), "rag", dataset.name()));
+            events.publishEvent(new QaAnsweredEvent(request.conversationId(), request.query(), result.answer(),
+                    citationsJson(result.citations()), request.userId(), result.traceId(), "rag", dataset.name(),
+                    userMessagePersisted, request.datasetId()));
         }
         return result;
     }
 
-    private QaResult cacheHitTrace(QaRequest request, QaResult cached) {
-        if (cached.traceId() == null || cached.traceId().isBlank()) return cached;
-        String traceId = UUID.randomUUID().toString();
-        Map<String, Object> original = replayTrace(cached.traceId());
-        Map<String, Object> trace = new LinkedHashMap<>();
-        trace.put("traceId", traceId);
-        trace.put("datasetId", request.datasetId());
-        trace.put("query", request.query());
-        trace.put("rewrittenQuery", original.getOrDefault("rewrittenQuery", request.query()));
-        trace.put("searchQueries", original.getOrDefault("searchQueries", List.of(request.query())));
-        trace.put("rerankQuery", original.getOrDefault("rerankQuery", request.query()));
-        trace.put("vectorResults", original.getOrDefault("vectorResults", List.of()));
-        trace.put("bm25Results", original.getOrDefault("bm25Results", List.of()));
-        trace.put("fusedResults", original.getOrDefault("fusedResults", List.of()));
-        trace.put("rerankResults", original.getOrDefault("rerankResults", List.of()));
-        trace.put("rerankApplied", original.getOrDefault("rerankApplied", false));
-        trace.put("mmrResults", original.getOrDefault("mmrResults", List.of()));
-        trace.put("smallToBigContext", original.getOrDefault("smallToBigContext", original.getOrDefault("contextChunks", List.of())));
-        trace.put("contextChunks", original.getOrDefault("contextChunks", List.of()));
-        trace.put("abVariants", original.getOrDefault("abVariants", List.of()));
-        trace.put("finalPrompt", original.getOrDefault("finalPrompt", ""));
-        trace.put("promptContext", original.getOrDefault("promptContext", ""));
-        trace.put("contextMaxTokens", original.getOrDefault("contextMaxTokens", contextMaxTokens));
-        trace.put("answerSource", original.getOrDefault("answerSource", "cache"));
-        trace.put("modelOutput", original.getOrDefault("modelOutput", ""));
-        trace.put("confidence", cached.confidence());
-        trace.put("refused", cached.refused());
-        trace.put("cacheHit", true);
-        traces.add(trace);
-        persistCachedTrace(traceId, request, original, cached.confidence(), cached.refused());
-        return new QaResult(cached.answer(), cached.citations(), cached.confidence(), cached.refused(), traceId);
+    private boolean persistUserMessage(QaRequest request) {
+        if (!request.persistConversationMessage() || request.conversationId() == null) return false;
+        conversationRepository.append(request.userId(), request.conversationId(), "user", request.query());
+        return true;
     }
 
-    private QaResult answerUncached(QaRequest request) {
+    private QaResult answerUncached(QaRequest request, Consumer<String> tokenConsumer) {
         long started = System.nanoTime();
         Dataset dataset = store.dataset(request.datasetId());
         String query = sanitizer.sanitize(request.query());
+        ContextAssembler.ContextBundle contextBundle = contextAssembler.build(request, query);
+        ConversationContextBuilder.ConversationContext conversationContext = contextBundle.conversation();
+        String retrievalQuery = contextBundle.standaloneQuestion();
         if (isDatasetOverviewQuery(query)) return datasetOverview(request, dataset, query, started);
         int topK = Math.max(1, dataset.topK());
-        int candidateTopK = Math.max(topK * 2, 6);
-        SearchStages stages = search.inspect(new HybridSearchRequest(request.datasetId(), query, candidateTopK, dataset.threshold()));
-        List<ScoredChunk> results = mmr(stages.finalResults(), topK);
-        List<ScoredChunk> contextChunks = expandContext(request.datasetId(), results);
-        List<Map<String, Object>> abVariants = abVariants(request.datasetId(), query, topK, stages.fusedResults(), results);
+        RetrievalPipeline.RetrievalResult retrievalResult = retrievalPipeline.retrieve(
+                request.datasetId(), retrievalQuery, topK, dataset.threshold());
+        SearchStages stages = retrievalResult.stages();
+        List<ScoredChunk> results = retrievalResult.selected();
+        List<ScoredChunk> contextChunks = retrievalResult.contextChunks();
         String traceId = UUID.randomUUID().toString();
         double rawVectorScore = stages.vectorResults().isEmpty() ? 0 : stages.vectorResults().get(0).score();
         double confidence = Math.max(0, Math.min(1, rawVectorScore));
         int evidenceScore = results.stream().mapToInt(result -> relevance(query, result.content())).max().orElse(0);
         boolean strongFactEvidence = evidenceScore >= 2
-                && asksQuantity(query)
-                && results.stream().anyMatch(result -> containsQuantity(result.content()));
+                && ((asksQuantity(query) && results.stream().anyMatch(result -> containsQuantity(result.content())))
+                || results.stream().anyMatch(result -> containsDecisionEvidence(query, result.content())));
+        boolean anchoredFactEvidence = evidenceScore >= 1 && hasFactAnchor(query, results);
         boolean thresholdFailed = !strongFactEvidence
                 && evidenceScore < 4
                 && !stages.vectorResults().isEmpty()
                 && rawVectorScore >= 0
                 && rawVectorScore <= 1
                 && confidence < dataset.threshold();
-        boolean refused = results.isEmpty() || thresholdFailed || evidenceScore < 2;
-        List<Citation> citations = refused ? List.of() : results.stream().limit(2)
-                .map(c -> new Citation(c.chunkId(), excerpt(c.content()), c.score()))
-                .toList();
-        AnswerDraft draft = answer(query, results, contextChunks, refused);
+        boolean refused = results.isEmpty() || thresholdFailed || (evidenceScore < 2 && !anchoredFactEvidence);
+        List<Citation> citations = refused ? List.of() : citations(request.datasetId(), results, 2);
+        AnswerApplicationService.AnswerDraft draft = answerApplication.answer(request.userId(), query,
+                compactEvidence(query, results), refused, conversationContext, contextChunks, tokenConsumer);
         Map<String, Object> trace = new LinkedHashMap<>();
         trace.put("traceId", traceId);
         trace.put("datasetId", request.datasetId());
         trace.put("query", request.query());
         trace.put("rewrittenQuery", stages.rewrittenQuery());
+        trace.put("standaloneQuestion", retrievalQuery);
         trace.put("searchQueries", stages.searchQueries());
         trace.put("rerankQuery", stages.rerankQuery());
-        trace.put("vectorResults", stages.vectorResults());
-        trace.put("bm25Results", stages.bm25Results());
-        trace.put("fusedResults", stages.fusedResults());
-        trace.put("rerankResults", stages.rerankResults());
+        trace.put("vectorResults", traceResults(stages.vectorResults()));
+        trace.put("bm25Results", traceResults(stages.bm25Results()));
+        trace.put("fusedResults", traceResults(stages.fusedResults()));
+        trace.put("rerankResults", traceResults(stages.rerankResults()));
         trace.put("rerankApplied", stages.rerankApplied());
-        trace.put("mmrResults", results);
-        trace.put("smallToBigContext", contextChunks);
-        trace.put("contextChunks", contextChunks);
-        trace.put("abVariants", abVariants);
-        trace.put("finalPrompt", draft.finalPrompt());
-        trace.put("promptContext", draft.promptContext());
+        List<String> degradedComponents = answerDegradation(stages.degradedComponents(), draft.answerSource());
+        trace.put("degradedComponents", degradedComponents);
+        trace.put("retrievalLatencyMs", stages.latencyMs());
+        trace.put("abVariants", "[]");
+        trace.put("mmrResults", traceResults(results));
+        trace.put("smallToBigContext", traceResults(contextChunks));
+        trace.put("contextChunks", traceResults(contextChunks));
+        trace.put("finalPrompt", traceDigest("prompt", draft.finalPrompt()));
+        trace.put("promptContext", traceDigest("context", draft.promptContext()));
         trace.put("contextMaxTokens", contextMaxTokens);
         trace.put("answerSource", draft.answerSource());
-        trace.put("modelOutput", draft.modelOutput());
+        trace.put("modelOutput", traceDigest("model-output", draft.modelOutput()));
         trace.put("confidence", confidence);
         trace.put("refused", refused);
-        traces.add(trace);
         long latencyMs = (System.nanoTime() - started) / 1_000_000;
-        persistTrace(traceId, request, stages, results, contextChunks, abVariants, draft, confidence, refused, latencyMs);
-        recordAbEvents(traceId, request.datasetId(), abVariants, refused, confidence, latencyMs);
+        trace.put("latencyMs", latencyMs);
+        persistTrace(trace);
         metrics.timer("modelrag.qa.latency", "phase", "total")
                 .record(System.nanoTime() - started, java.util.concurrent.TimeUnit.NANOSECONDS);
-        return new QaResult(draft.answer(), citations, confidence, refused, traceId);
+        return new QaResult(draft.answer(), citations, confidence, refused, traceId, degradedComponents);
+    }
+
+    private List<String> answerDegradation(List<String> retrieval, String answerSource) {
+        LinkedHashSet<String> values = new LinkedHashSet<>(retrieval == null ? List.of() : retrieval);
+        if (answerSource != null && answerSource.startsWith("local-fallback")) values.add("user-model-failed");
+        else if ("local-evidence-no-user-model".equals(answerSource)) values.add("user-model-not-configured");
+        else if ("local-evidence".equals(answerSource)) values.add("model-generation-skipped");
+        return List.copyOf(values);
     }
 
     private QaResult datasetOverview(QaRequest request, Dataset dataset, String query, long started) {
@@ -228,12 +199,12 @@ public class QaOrchestrator {
                 .map(chunk -> new ScoredChunk(chunk.id(), chunk.content(), 1, "dataset-overview", chunk.index() + 1))
                 .toList();
         String traceId = UUID.randomUUID().toString();
-        List<Citation> citations = contextChunks.stream().limit(2)
-                .map(chunk -> new Citation(chunk.chunkId(), excerpt(chunk.content()), chunk.score()))
-                .toList();
+        List<Citation> citations = citations(request.datasetId(), contextChunks, 2);
         String answer = overviewAnswer(dataset, documents, chunks);
         SearchStages emptyStages = new SearchStages(query, List.of(query), query, List.of(), List.of(), contextChunks, List.of(), false, contextChunks);
-        AnswerDraft draft = new AnswerDraft(answer, "", contextWindow.fit(contextChunks.stream().map(ScoredChunk::content).toList(), contextMaxTokens), "dataset-overview", "");
+        AnswerApplicationService.AnswerDraft draft = new AnswerApplicationService.AnswerDraft(answer, "",
+                contextWindow.fit(contextChunks.stream().map(ScoredChunk::content).toList(), contextMaxTokens),
+                "dataset-overview", "");
         Map<String, Object> trace = new LinkedHashMap<>();
         trace.put("traceId", traceId);
         trace.put("datasetId", request.datasetId());
@@ -243,24 +214,26 @@ public class QaOrchestrator {
         trace.put("rerankQuery", query);
         trace.put("vectorResults", List.of());
         trace.put("bm25Results", List.of());
-        trace.put("fusedResults", contextChunks);
+        trace.put("fusedResults", traceResults(contextChunks));
         trace.put("rerankResults", List.of());
         trace.put("rerankApplied", false);
-        trace.put("mmrResults", contextChunks);
-        trace.put("smallToBigContext", contextChunks);
-        trace.put("contextChunks", contextChunks);
-        trace.put("abVariants", List.of());
+        trace.put("degradedComponents", List.of());
+        trace.put("retrievalLatencyMs", Map.of());
+        trace.put("abVariants", "[]");
+        trace.put("mmrResults", traceResults(contextChunks));
+        trace.put("smallToBigContext", traceResults(contextChunks));
+        trace.put("contextChunks", traceResults(contextChunks));
         trace.put("finalPrompt", "");
-        trace.put("promptContext", draft.promptContext());
+        trace.put("promptContext", traceDigest("context", draft.promptContext()));
         trace.put("contextMaxTokens", contextMaxTokens);
         trace.put("answerSource", draft.answerSource());
         trace.put("modelOutput", "");
         trace.put("confidence", documents.isEmpty() ? .3 : .9);
         trace.put("refused", false);
-        traces.add(trace);
         long latencyMs = (System.nanoTime() - started) / 1_000_000;
-        persistTrace(traceId, request, emptyStages, contextChunks, contextChunks, List.of(), draft, documents.isEmpty() ? .3 : .9, false, latencyMs);
-        return new QaResult(answer, citations, documents.isEmpty() ? .3 : .9, false, traceId);
+        trace.put("latencyMs", latencyMs);
+        persistTrace(trace);
+        return new QaResult(answer, citations, documents.isEmpty() ? .3 : .9, false, traceId, List.of());
     }
 
     private boolean isDatasetOverviewQuery(String query) {
@@ -268,6 +241,31 @@ public class QaOrchestrator {
         return text.contains("当前知识库") || text.contains("这个知识库") || text.contains("知识库有什么")
                 || text.contains("知识库有哪些") || text.contains("有什么内容") || text.contains("有哪些内容")
                 || text.contains("文档类型") || text.contains("有哪些文件") || text.contains("有什么文件");
+    }
+
+    private List<Map<String, Object>> traceResults(List<ScoredChunk> values) {
+        if (values == null) return List.of();
+        return values.stream().filter(java.util.Objects::nonNull).limit(50).map(value -> Map.<String, Object>of(
+                "chunkId", value.chunkId(),
+                "score", value.score(),
+                "channel", value.channel() == null ? "" : value.channel(),
+                "rank", value.rank(),
+                "contentHash", sha256(value.content() == null ? "" : value.content()),
+                "contentChars", value.content() == null ? 0 : value.content().length())).toList();
+    }
+
+    private String traceDigest(String kind, String value) {
+        String text = value == null ? "" : value;
+        return kind + ":sha256=" + sha256(text) + ";chars=" + text.length() + ";redacted=true";
+    }
+
+    private String sha256(String value) {
+        try {
+            return java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 不可用", impossible);
+        }
     }
 
     private String overviewAnswer(Dataset dataset, List<com.modelrag.knowledge.model.Document> documents, List<Chunk> chunks) {
@@ -304,116 +302,13 @@ public class QaOrchestrator {
         return index >= 0 && index + 1 < value.length() ? value.substring(index + 1).toLowerCase() : "unknown";
     }
 
-    private record AnswerDraft(String answer, String finalPrompt, String promptContext, String answerSource, String modelOutput) {}
-
-    private AnswerDraft answer(String query, List<ScoredChunk> results, List<ScoredChunk> contextChunks, boolean refused) {
-        String fallback = refused
-                ? "当前知识库没有足够证据回答该问题。请补充文档或换一种表述。"
-                : compactEvidence(query, results);
-        String context = contextWindow.fit(contextChunks.stream()
-                .map(ScoredChunk::content)
-                .map(contextSanitizer::sanitize)
-                .toList(), contextMaxTokens);
-        String prompt = prompts.build(query, context);
-        if (refused) return new AnswerDraft(fallback, prompt, context, "refusal", "");
-        if (extractiveQuery(query)) return new AnswerDraft(fallback, prompt, context, "local-evidence", "");
-        if (!ollamaEnabled) return new AnswerDraft(fallback, prompt, context, "local-evidence", "");
-        try {
-            ModelGateway gateway = models.getIfAvailable();
-            if (gateway == null) return new AnswerDraft(fallback, prompt, context, "local-evidence", "");
-            String generated = gateway.generate(prompt).trim();
-            if (generated.isBlank() || generated.startsWith("[mock]") || generated.startsWith("[fallback]") || !outputGuard.safe(generated)) {
-                return new AnswerDraft(fallback, prompt, context, "local-evidence", generated);
-            }
-            return new AnswerDraft(compactGenerated(generated), prompt, context, "llm", generated);
-        } catch (RuntimeException ignored) {
-            return new AnswerDraft(fallback, prompt, context, "local-fallback", "");
-        }
-    }
-
     public List<Map<String, Object>> traces() {
-        JdbcTemplate db = jdbc.getIfAvailable();
-        if (db != null) try {
-            return db.query("SELECT trace_id,dataset_id,query_original,query_rewritten,search_queries::text,rerank_query,vector_results,bm25_results,fused_results,rerank_results,rerank_applied,mmr_results::text,small_to_big_context::text,context_chunks,ab_variants::text,final_prompt,prompt_context,context_max_tokens,answer_source,model_output,confidence,refused,latency_ms FROM kb_retrieval_trace WHERE trace_id IS NOT NULL ORDER BY id DESC LIMIT 100",
-                    (rs, n) -> traceMap(rs.getString("trace_id"), rs.getLong("dataset_id"), rs.getString("query_original"),
-                            rs.getString("query_rewritten"), rs.getString("search_queries"), rs.getString("rerank_query"),
-                            rs.getString("vector_results"), rs.getString("bm25_results"), rs.getString("fused_results"),
-                            rs.getString("rerank_results"), rs.getBoolean("rerank_applied"), rs.getString("mmr_results"),
-                            rs.getString("small_to_big_context"), rs.getString("context_chunks"),
-                            rs.getString("ab_variants"), rs.getString("final_prompt"), rs.getString("prompt_context"),
-                            rs.getInt("context_max_tokens"), rs.getString("answer_source"), rs.getString("model_output"),
-                            rs.getDouble("confidence"), rs.getBoolean("refused"), rs.getLong("latency_ms")));
-        } catch (Exception ignored) {
-        }
-        return List.copyOf(traces);
+        return answerTraceRepository.traces();
     }
 
     public Map<String, Object> replayTrace(String traceId) {
         if (traceId == null || traceId.isBlank()) throw new IllegalArgumentException("traceId 不能为空");
-        JdbcTemplate db = jdbc.getIfAvailable();
-        if (db != null) try {
-            List<Map<String, Object>> rows = db.query("""
-                    SELECT t.trace_id,t.dataset_id,t.query_original,t.query_rewritten,t.search_queries::text,t.rerank_query,
-                           t.vector_results::text,t.bm25_results::text,
-                           t.fused_results::text,t.rerank_results::text,t.rerank_applied,
-                           t.mmr_results::text,t.small_to_big_context::text,t.context_chunks::text,t.ab_variants::text,
-                           t.final_prompt,t.prompt_context,t.context_max_tokens,t.answer_source,t.model_output,
-                           t.confidence,t.refused,t.latency_ms,a.answer,a.citations::text
-                    FROM kb_retrieval_trace t
-                    LEFT JOIN kb_qa_audit a ON a.trace_id=t.trace_id
-                    WHERE t.trace_id=?
-                    ORDER BY a.id DESC NULLS LAST
-                    LIMIT 1
-                    """, (rs, n) -> replayMap(
-                            rs.getString("trace_id"), rs.getLong("dataset_id"), rs.getString("query_original"),
-                            rs.getString("query_rewritten"), rs.getString("search_queries"), rs.getString("rerank_query"),
-                            rs.getString("vector_results"), rs.getString("bm25_results"), rs.getString("fused_results"),
-                            rs.getString("rerank_results"), rs.getBoolean("rerank_applied"), rs.getString("mmr_results"),
-                            rs.getString("small_to_big_context"), rs.getString("context_chunks"),
-                            rs.getString("ab_variants"), rs.getString("final_prompt"), rs.getString("prompt_context"),
-                            rs.getInt("context_max_tokens"), rs.getString("answer_source"), rs.getString("model_output"),
-                            rs.getDouble("confidence"), rs.getBoolean("refused"), rs.getLong("latency_ms"),
-                            rs.getString("answer"), rs.getString("citations")), traceId);
-            if (!rows.isEmpty()) return rows.get(0);
-        } catch (Exception ignored) {
-        }
-        return traces.stream()
-                .filter(trace -> traceId.equals(trace.get("traceId")))
-                .findFirst()
-                .map(trace -> {
-                    Map<String, Object> result = new LinkedHashMap<>(trace);
-                    result.put("found", true);
-                    result.put("answer", audits.stream()
-                            .filter(audit -> traceId.equals(audit.get("traceId")))
-                            .map(audit -> audit.get("answer"))
-                            .findFirst()
-                            .orElse(null));
-                    Object vector = trace.getOrDefault("vectorResults", List.of());
-                    Object bm25 = trace.getOrDefault("bm25Results", List.of());
-                    Object fused = trace.getOrDefault("fusedResults", List.of());
-                    Object context = trace.getOrDefault("contextChunks", List.of());
-                    ReplayDiagnosis diagnosis = diagnose(
-                            vector,
-                            bm25,
-                            fused,
-                            context,
-                            Boolean.TRUE.equals(trace.get("refused")),
-                            String.valueOf(result.getOrDefault("answer", "")));
-                    result.put("stageCounts", Map.of(
-                            "vector", arrayCount(vector),
-                            "bm25", arrayCount(bm25),
-                            "fused", arrayCount(fused),
-                            "rerank", arrayCount(trace.getOrDefault("rerankResults", List.of())),
-                            "mmr", arrayCount(trace.getOrDefault("mmrResults", List.of())),
-                            "smallToBig", arrayCount(trace.getOrDefault("smallToBigContext", context)),
-                            "context", arrayCount(context)));
-                    result.put("diagnosis", diagnosis.messages());
-                    result.put("failureStage", diagnosis.failureStage());
-                    result.put("actionHints", diagnosis.actionHints());
-                    result.put("evidencePreview", evidencePreview(context));
-                    return result;
-                })
-                .orElseGet(() -> Map.of("traceId", traceId, "found", false));
+        return answerTraceRepository.replay(traceId);
     }
 
     private Map<String, Object> traceMap(
@@ -602,16 +497,7 @@ public class QaOrchestrator {
     }
 
     public List<Map<String, Object>> audits() {
-        JdbcTemplate db = jdbc.getIfAvailable();
-        if (db != null) try {
-            return db.query("SELECT a.trace_id,a.dataset_id,d.name AS dataset_name,a.conversation_id,a.user_id,a.mode,a.query,a.answer,a.citations,a.confidence,a.refused,a.create_time FROM kb_qa_audit a LEFT JOIN kb_dataset d ON d.id=a.dataset_id ORDER BY a.id DESC LIMIT 200",
-                    (rs, n) -> auditMap(rs.getString("trace_id"), rs.getLong("dataset_id"), rs.getString("dataset_name"),
-                            rs.getObject("conversation_id", Long.class), rs.getString("user_id"), rs.getString("mode"), rs.getString("query"), rs.getString("answer"),
-                            rs.getString("citations"), rs.getDouble("confidence"), rs.getBoolean("refused"),
-                            rs.getTimestamp("create_time").toInstant().toString()));
-        } catch (Exception ignored) {
-        }
-        return List.copyOf(audits);
+        return answerTraceRepository.audits();
     }
 
     private void audit(QaRequest request, QaResult result) {
@@ -622,14 +508,7 @@ public class QaOrchestrator {
         Map<String, Object> audit = auditMap(traceId, request.datasetId(), null, request.conversationId(), request.userId(), mode,
                 request.query(), answer, citations, confidence, refused,
                 java.time.Instant.now().toString());
-        audits.add(audit);
-        JdbcTemplate db = jdbc.getIfAvailable();
-        if (db != null) try {
-            db.update("INSERT INTO kb_qa_audit(trace_id,dataset_id,conversation_id,user_id,mode,query,answer,citations,confidence,refused) VALUES (?,?,?,?,?,?,?,CAST(? AS jsonb),?,?)",
-                    traceId, request.datasetId(), request.conversationId(), request.userId(), mode, request.query(), answer,
-                    citations, confidence, refused);
-        } catch (Exception ignored) {
-        }
+        answerTraceRepository.saveAudit(audit);
     }
 
     private Map<String, Object> auditMap(String traceId, long datasetId, String datasetName, Long conversationId, String userId, String mode,
@@ -650,44 +529,8 @@ public class QaOrchestrator {
         return result;
     }
 
-    private void persistTrace(String traceId, QaRequest request, SearchStages stages, List<ScoredChunk> mmrResults, List<ScoredChunk> contextChunks, List<Map<String, Object>> abVariants,
-            AnswerDraft draft, double confidence, boolean refused, long latency) {
-        JdbcTemplate db = jdbc.getIfAvailable();
-        if (db != null) try {
-            db.update("INSERT INTO kb_retrieval_trace(trace_id,dataset_id,query_original,query_rewritten,search_queries,rerank_query,vector_results,bm25_results,fused_results,rerank_results,rerank_applied,mmr_results,small_to_big_context,context_chunks,ab_variants,final_prompt,prompt_context,context_max_tokens,answer_source,model_output,confidence,refused,latency_ms) VALUES (?,?,?,?,CAST(? AS jsonb),?,CAST(? AS jsonb),CAST(? AS jsonb),CAST(? AS jsonb),CAST(? AS jsonb),?,CAST(? AS jsonb),CAST(? AS jsonb),CAST(? AS jsonb),CAST(? AS jsonb),?,?,?,?,?,?,?,?)",
-                    traceId, request.datasetId(), request.query(), stages.rewrittenQuery(), stringsJson(stages.searchQueries()), stages.rerankQuery(), resultsJson(stages.vectorResults()),
-                    resultsJson(stages.bm25Results()), resultsJson(stages.fusedResults()), resultsJson(stages.rerankResults()),
-                    stages.rerankApplied(), resultsJson(mmrResults), contextJson(contextChunks), contextJson(contextChunks), abVariantsJson(abVariants), draft.finalPrompt(), draft.promptContext(),
-                    contextMaxTokens, draft.answerSource(), draft.modelOutput(), confidence, refused, latency);
-        } catch (Exception ignored) {
-        }
-    }
-
-    private void persistCachedTrace(String traceId, QaRequest request, Map<String, Object> original, double confidence, boolean refused) {
-        JdbcTemplate db = jdbc.getIfAvailable();
-        if (db != null) try {
-            db.update("INSERT INTO kb_retrieval_trace(trace_id,dataset_id,query_original,query_rewritten,search_queries,rerank_query,vector_results,bm25_results,fused_results,rerank_results,rerank_applied,mmr_results,small_to_big_context,context_chunks,ab_variants,final_prompt,prompt_context,context_max_tokens,answer_source,model_output,confidence,refused,latency_ms) VALUES (?,?,?,?,CAST(? AS jsonb),?,CAST(? AS jsonb),CAST(? AS jsonb),CAST(? AS jsonb),CAST(? AS jsonb),?,CAST(? AS jsonb),CAST(? AS jsonb),CAST(? AS jsonb),CAST(? AS jsonb),?,?,?,?,?,?,?,?)",
-                    traceId, request.datasetId(), request.query(),
-                    stringValue(original.get("rewrittenQuery"), request.query()),
-                    jsonArray(original.get("searchQueries"), stringsJson(List.of(request.query()))),
-                    stringValue(original.get("rerankQuery"), request.query()),
-                    jsonArray(original.get("vectorResults"), "[]"),
-                    jsonArray(original.get("bm25Results"), "[]"),
-                    jsonArray(original.get("fusedResults"), "[]"),
-                    jsonArray(original.get("rerankResults"), "[]"),
-                    Boolean.TRUE.equals(original.get("rerankApplied")),
-                    jsonArray(original.get("mmrResults"), "[]"),
-                    jsonArray(original.get("smallToBigContext"), jsonArray(original.get("contextChunks"), "[]")),
-                    jsonArray(original.get("contextChunks"), "[]"),
-                    jsonArray(original.get("abVariants"), "[]"),
-                    stringValue(original.get("finalPrompt"), ""),
-                    stringValue(original.get("promptContext"), ""),
-                    intValue(original.get("contextMaxTokens"), contextMaxTokens),
-                    stringValue(original.get("answerSource"), "cache"),
-                    stringValue(original.get("modelOutput"), ""),
-                    confidence, refused, 0);
-        } catch (Exception ignored) {
-        }
+    private void persistTrace(Map<String, Object> trace) {
+        answerTraceRepository.saveTrace(trace);
     }
 
     private int intValue(Object value, int fallback) {
@@ -702,155 +545,6 @@ public class QaOrchestrator {
     private String stringValue(Object value, String fallback) {
         String text = value == null ? "" : String.valueOf(value);
         return text.isBlank() || "null".equalsIgnoreCase(text) ? fallback : text;
-    }
-
-    private String jsonArray(Object value, String fallback) {
-        if (value == null) return fallback;
-        if (value instanceof String text) return text.trim().startsWith("[") ? text : fallback;
-        if (value instanceof List<?> list && list.stream().allMatch(ScoredChunk.class::isInstance)) {
-            @SuppressWarnings("unchecked")
-            List<ScoredChunk> chunks = (List<ScoredChunk>) list;
-            return resultsJson(chunks);
-        }
-        if (value instanceof List<?> list && list.stream().allMatch(String.class::isInstance)) {
-            return stringsJson(list.stream().map(String.class::cast).toList());
-        }
-        return fallback;
-    }
-
-    private List<Map<String, Object>> abVariants(long datasetId, String query, int currentTopK, List<ScoredChunk> baselineFused, List<ScoredChunk> baselineFinal) {
-        OnlineExperimentService service = experiments == null ? null : experiments.getIfAvailable();
-        if (service != null) {
-            List<Map<String, Object>> configured = new ArrayList<>();
-            for (OnlineExperimentService.Experiment experiment : service.active(datasetId, query)) {
-                if (experiment.variantTopK() == currentTopK) continue;
-                configured.add(abVariant(datasetId, query, currentTopK, baselineFused, baselineFinal,
-                        experiment.id(), "online-ab-v1", "topK-" + experiment.variantTopK(), experiment.variantTopK()));
-            }
-            if (!configured.isEmpty()) return configured;
-        }
-        if (!onlineAbEnabled || onlineAbTopK == currentTopK) return List.of();
-        return List.of(abVariant(datasetId, query, currentTopK, baselineFused, baselineFinal,
-                "online-topk-shadow", "qa-online-ab-v1", "shadow-topK-" + onlineAbTopK, onlineAbTopK));
-    }
-
-    private Map<String, Object> abVariant(long datasetId, String query, int currentTopK, List<ScoredChunk> baselineFused,
-            List<ScoredChunk> baselineFinal, String experimentId, String policyVersion, String variantName, int topK) {
-        try {
-            Dataset dataset = store.dataset(datasetId);
-            SearchStages shadow = search.inspect(new HybridSearchRequest(datasetId, query, topK, dataset.threshold()));
-            Map<String, Object> variant = new LinkedHashMap<>();
-            variant.put("experimentId", experimentId);
-            variant.put("policyVersion", policyVersion);
-            variant.put("variant", variantName);
-            variant.put("baselineTopK", currentTopK);
-            variant.put("topK", topK);
-            variant.put("baselineFusedChunkIds", ids(baselineFused));
-            variant.put("baselineFinalChunkIds", ids(baselineFinal));
-            variant.put("fusedChunkIds", ids(shadow.fusedResults()));
-            variant.put("finalChunkIds", ids(shadow.finalResults()));
-            variant.put("deltaFinalChunkIds", difference(ids(shadow.finalResults()), ids(baselineFinal)));
-            variant.put("rerankApplied", shadow.rerankApplied());
-            return variant;
-        } catch (RuntimeException ignored) {
-            return Map.of("experimentId", experimentId, "policyVersion", policyVersion,
-                    "variant", variantName, "baselineTopK", currentTopK, "topK", topK,
-                    "baselineFinalChunkIds", ids(baselineFinal), "error", "shadow-search-failed");
-        }
-    }
-
-    private void recordAbEvents(String traceId, long datasetId, List<Map<String, Object>> variants, boolean refused, double confidence, long latencyMs) {
-        OnlineExperimentService service = experiments == null ? null : experiments.getIfAvailable();
-        if (service == null) return;
-        for (Map<String, Object> variant : variants) {
-            service.record(traceId, datasetId, variant, refused, confidence, latencyMs);
-        }
-    }
-
-    private List<Long> ids(List<ScoredChunk> chunks) {
-        return chunks.stream().map(ScoredChunk::chunkId).toList();
-    }
-
-    private List<Long> difference(List<Long> left, List<Long> right) {
-        Set<Long> seen = new HashSet<>(right);
-        return left.stream().filter(id -> !seen.contains(id)).toList();
-    }
-
-    private List<ScoredChunk> mmr(List<ScoredChunk> candidates, int limit) {
-        List<ScoredChunk> remaining = new ArrayList<>(candidates);
-        List<ScoredChunk> selected = new ArrayList<>();
-        double maxScore = remaining.stream().mapToDouble(ScoredChunk::score).max().orElse(1);
-        while (!remaining.isEmpty() && selected.size() < limit) {
-            ScoredChunk best = remaining.stream()
-                    .max(Comparator.comparingDouble(candidate -> mmrScore(candidate, selected, maxScore)))
-                    .orElseThrow();
-            selected.add(best);
-            remaining.remove(best);
-        }
-        return selected;
-    }
-
-    private double mmrScore(ScoredChunk candidate, List<ScoredChunk> selected, double maxScore) {
-        double relevance = maxScore <= 0 ? 0 : candidate.score() / maxScore;
-        double redundancy = selected.stream().mapToDouble(item -> jaccard(candidate.content(), item.content())).max().orElse(0);
-        return MMR_LAMBDA * relevance - (1 - MMR_LAMBDA) * redundancy;
-    }
-
-    private double jaccard(String left, String right) {
-        Set<String> a = pairs(left);
-        Set<String> b = pairs(right);
-        if (a.isEmpty() || b.isEmpty()) return 0;
-        Set<String> both = new HashSet<>(a);
-        both.retainAll(b);
-        Set<String> all = new HashSet<>(a);
-        all.addAll(b);
-        return (double) both.size() / all.size();
-    }
-
-    private Set<String> pairs(String value) {
-        String normalized = value.replaceAll("[\\s，。！？、：:；;（）()]+", "");
-        Set<String> result = new HashSet<>();
-        for (int i = 0; i + 1 < normalized.length(); i++) result.add(normalized.substring(i, i + 2));
-        return result;
-    }
-
-    private List<ScoredChunk> expandContext(long datasetId, List<ScoredChunk> selected) {
-        List<Chunk> all = store.chunks(datasetId);
-        Map<Long, Chunk> byId = all.stream().collect(Collectors.toMap(Chunk::id, chunk -> chunk, (a, b) -> a));
-        Map<String, Chunk> byPosition = all.stream().collect(Collectors.toMap(
-                chunk -> chunk.documentId() + ":" + chunk.index(), chunk -> chunk, (a, b) -> a));
-        List<ScoredChunk> expanded = new ArrayList<>();
-        for (ScoredChunk scored : selected) {
-            Chunk center = byId.get(scored.chunkId());
-            if (center == null) {
-                expanded.add(scored);
-                continue;
-            }
-            if (center.parentChunkId() != null) {
-                String parentContent = all.stream()
-                        .filter(chunk -> center.parentChunkId().equals(chunk.parentChunkId()))
-                        .filter(chunk -> chunk.documentId() == center.documentId())
-                        .sorted(Comparator.comparingInt(Chunk::index))
-                        .map(Chunk::content)
-                        .collect(Collectors.joining("\n"));
-                if (!parentContent.isBlank()) {
-                    expanded.add(new ScoredChunk(scored.chunkId(), parentContent, scored.score(), scored.channel(), scored.rank()));
-                    continue;
-                }
-            }
-            LinkedHashSet<Long> ids = new LinkedHashSet<>();
-            for (int offset = -1; offset <= 1; offset++) {
-                Chunk adjacent = byPosition.get(center.documentId() + ":" + (center.index() + offset));
-                if (adjacent != null) ids.add(adjacent.id());
-            }
-            String content = ids.stream()
-                    .map(byId::get)
-                    .filter(chunk -> chunk != null)
-                    .map(Chunk::content)
-                    .collect(Collectors.joining("\n"));
-            expanded.add(new ScoredChunk(scored.chunkId(), content, scored.score(), scored.channel(), scored.rank()));
-        }
-        return expanded;
     }
 
     private String excerpt(String value) {
@@ -871,7 +565,8 @@ public class QaOrchestrator {
             }
             Matcher matcher = FAQ.matcher(content);
             while (matcher.find()) {
-                int score = relevance(query, matcher.group(1));
+                int score = relevance(query, matcher.group(1)) * 2
+                        + answerSpecificity(query, matcher.group(2));
                 if (score > faqScore) {
                     faqScore = score;
                     bestFaq = matcher.group(2).trim();
@@ -880,19 +575,40 @@ public class QaOrchestrator {
             for (String sentence : content.split("(?<=[。！？])|\\n+")) {
                 String value = sentence.trim();
                 if (value.isBlank() || value.startsWith("问：") || value.startsWith("问:") || headingOnly(value)) continue;
-                int score = relevance(query, value);
+                int score = relevance(query, value) + answerSpecificity(query, value);
                 if (score > sentenceScore) {
                     sentenceScore = score;
                     bestSentence = value;
                 }
             }
         }
-        String answer = bestFaq != null && faqScore > 0 ? bestFaq : bestSentence;
+        // A related FAQ is useful only when it is at least as specific as the best policy sentence.
+        // Otherwise broad FAQs (for example "年假有几天") can incorrectly answer a focused question
+        // such as "年假应提前多久提交".
+        String answer = bestFaq != null && faqScore >= sentenceScore ? bestFaq : bestSentence;
         if (answer != null && answer.contains("答：")) answer = answer.substring(answer.indexOf("答：") + 2).trim();
         if (answer != null && answer.contains("答:")) answer = answer.substring(answer.indexOf("答:") + 2).trim();
         if (answer != null) answer = answer.replaceFirst("^答[:：]\\s*", "");
         if (answer == null || answer.isBlank()) answer = results.isEmpty() ? "当前知识库没有足够证据回答该问题。" : results.get(0).content();
         return "结论：" + limit(answer, 240);
+    }
+
+    private int answerSpecificity(String query, String answer) {
+        String question = query == null ? "" : query;
+        String value = answer == null ? "" : answer;
+        int score = 0;
+        if (question.contains("谁")) {
+            if (value.contains("只能由") || value.contains("仅由")) score += 10;
+            else if (value.contains("由") || value.contains("负责") || value.contains("审批") || value.contains("确认")) score += 4;
+            if (value.contains("不得") || value.contains("禁止") || value.contains("不可以")) score -= 6;
+        }
+        if (question.contains("首先") || question.contains("第一步")) {
+            if (value.contains("立即")) score += 4;
+            if (value.contains("停止") || value.contains("报告") || value.contains("保留")) score += 2;
+            if (value.contains("不得") && !value.contains("立即")) score -= 2;
+        }
+        if (question.contains("时段") && value.matches(".*\\d{1,2}:?\\d{0,2}\\s*至\\s*\\d{1,2}:?\\d{0,2}.*")) score += 10;
+        return score;
     }
 
     private String leadEvidence(String query, String content) {
@@ -957,78 +673,28 @@ public class QaOrchestrator {
         return text.matches(".*[0-9一二三四五六七八九十百千万]+\\s*(天|日|个工作日|小时|分钟|个月|年|次|元|%)?.*");
     }
 
-    private String compactGenerated(String answer) {
-        String clean = answer.replaceAll("(?m)^\\s*(问|问题)[:：].*$", "").trim();
-        StringBuilder result = new StringBuilder();
-        for (String sentence : clean.split("(?<=[。！？])|\\n+")) {
-            String value = sentence.trim();
-            if (value.isBlank() || value.startsWith("问：") || value.startsWith("问:")) continue;
-            if (result.length() + value.length() > 360) break;
-            result.append(value);
-            if (result.length() >= 220) break;
-        }
-        return result.isEmpty() ? limit(clean, 360) : result.toString();
+    /** A single distinctive term plus a directly matching time, number or decision is sufficient evidence. */
+    private boolean hasFactAnchor(String query, List<ScoredChunk> results) {
+        String question = query == null ? "" : query;
+        boolean temporal = asksQuantity(question) || question.contains("时段") || question.contains("时限")
+                || question.contains("多久") || question.contains("何时") || question.contains("几时");
+        if (temporal && results.stream().anyMatch(result -> containsQuantity(result.content()))) return true;
+        boolean decision = question.contains("谁") || question.contains("确认") || question.contains("审批")
+                || question.contains("负责人") || question.contains("主管");
+        return decision && results.stream().anyMatch(result -> containsDecisionEvidence(question, result.content()));
+    }
+
+    private boolean containsDecisionEvidence(String query, String value) {
+        String question = query == null ? "" : query;
+        if (!(question.contains("谁") || question.contains("确认") || question.contains("审批")
+                || question.contains("负责人") || question.contains("主管"))) return false;
+        String evidence = value == null ? "" : value;
+        return evidence.contains("确认") || evidence.contains("审批")
+                || evidence.contains("负责人") || evidence.contains("主管");
     }
 
     private String limit(String value, int max) {
         return value.length() <= max ? value : value.substring(0, max) + "…";
-    }
-
-    private String resultsJson(List<ScoredChunk> results) {
-        return results.stream()
-                .map(c -> "{\"chunkId\":" + c.chunkId()
-                        + ",\"rank\":" + c.rank()
-                        + ",\"score\":" + c.score()
-                        + ",\"channel\":\"" + json(c.channel()) + "\""
-                        + ",\"content\":\"" + json(c.content()) + "\"}")
-                .collect(Collectors.joining(",", "[", "]"));
-    }
-
-    private String stringsJson(List<String> values) {
-        return values.stream().map(value -> "\"" + json(value) + "\"").collect(Collectors.joining(",", "[", "]"));
-    }
-
-    @SuppressWarnings("unchecked")
-    private String abVariantsJson(List<Map<String, Object>> variants) {
-        return variants.stream().map(variant -> {
-            Object finalIds = variant.getOrDefault("finalChunkIds", List.of());
-            Object fusedIds = variant.getOrDefault("fusedChunkIds", List.of());
-            Object baselineFinalIds = variant.getOrDefault("baselineFinalChunkIds", List.of());
-            Object baselineFusedIds = variant.getOrDefault("baselineFusedChunkIds", List.of());
-            Object deltaFinalIds = variant.getOrDefault("deltaFinalChunkIds", List.of());
-            String error = String.valueOf(variant.getOrDefault("error", ""));
-            return "{\"experimentId\":\"" + json(String.valueOf(variant.getOrDefault("experimentId", ""))) + "\""
-                    + ",\"policyVersion\":\"" + json(String.valueOf(variant.getOrDefault("policyVersion", ""))) + "\""
-                    + ",\"variant\":\"" + json(String.valueOf(variant.getOrDefault("variant", ""))) + "\""
-                    + ",\"baselineTopK\":" + variant.getOrDefault("baselineTopK", 0)
-                    + ",\"topK\":" + variant.getOrDefault("topK", 0)
-                    + ",\"rerankApplied\":" + variant.getOrDefault("rerankApplied", false)
-                    + ",\"baselineFusedChunkIds\":" + longListJson(baselineFusedIds instanceof List<?> list ? (List<?>) list : List.of())
-                    + ",\"baselineFinalChunkIds\":" + longListJson(baselineFinalIds instanceof List<?> list ? (List<?>) list : List.of())
-                    + ",\"fusedChunkIds\":" + longListJson(fusedIds instanceof List<?> list ? (List<?>) list : List.of())
-                    + ",\"finalChunkIds\":" + longListJson(finalIds instanceof List<?> list ? (List<?>) list : List.of())
-                    + ",\"deltaFinalChunkIds\":" + longListJson(deltaFinalIds instanceof List<?> list ? (List<?>) list : List.of())
-                    + (error.isBlank() ? "" : ",\"error\":\"" + json(error) + "\"")
-                    + "}";
-        }).collect(Collectors.joining(",", "[", "]"));
-    }
-
-    private String longListJson(List<?> values) {
-        return values.stream()
-                .filter(Number.class::isInstance)
-                .map(Number.class::cast)
-                .map(number -> String.valueOf(number.longValue()))
-                .collect(Collectors.joining(",", "[", "]"));
-    }
-
-    private String contextJson(List<ScoredChunk> results) {
-        return results.stream()
-                .map(c -> "{\"chunkId\":" + c.chunkId()
-                        + ",\"rank\":" + c.rank()
-                        + ",\"score\":" + c.score()
-                        + ",\"channel\":\"" + json(c.channel()) + "\""
-                        + ",\"content\":\"" + json(c.content()) + "\"}")
-                .collect(Collectors.joining(",", "[", "]"));
     }
 
     private String json(String value) {
@@ -1037,7 +703,31 @@ public class QaOrchestrator {
 
     private String citationsJson(List<Citation> citations) {
         return citations.stream()
-                .map(c -> "{\"chunkId\":" + c.chunkId() + ",\"score\":" + c.score() + "}")
+                .map(c -> "{\"chunkId\":" + c.chunkId()
+                        + ",\"documentId\":" + c.documentId()
+                        + ",\"documentName\":\"" + json(c.documentName()) + "\""
+                        + ",\"location\":\"" + json(c.location()) + "\""
+                        + ",\"indexVersion\":" + c.indexVersion()
+                        + ",\"excerpt\":\"" + json(c.excerpt()) + "\""
+                        + ",\"score\":" + c.score() + "}")
                 .collect(Collectors.joining(",", "[", "]"));
+    }
+
+    private List<Citation> citations(long datasetId, List<ScoredChunk> scored, int limit) {
+        Map<Long, Chunk> chunks = store.chunks(datasetId).stream()
+                .collect(Collectors.toMap(Chunk::id, chunk -> chunk, (left, right) -> left));
+        return scored.stream().limit(limit).map(item -> {
+            Chunk chunk = chunks.get(item.chunkId());
+            if (chunk == null) return new Citation(item.chunkId(), excerpt(item.content()), item.score());
+            com.modelrag.knowledge.model.Document document = store.document(chunk.documentId());
+            String page = chunk.metadata().get("page");
+            String title = chunk.metadata().get("titlePath");
+            String location = page == null || page.isBlank()
+                    ? (title == null ? "" : title)
+                    : "第 " + page + " 页" + (title == null || title.isBlank() ? "" : " · " + title);
+            long version = intValue(chunk.metadata().get("version"), 1);
+            return new Citation(chunk.id(), chunk.documentId(), document.fileName(), location, version,
+                    excerpt(item.content()), item.score());
+        }).toList();
     }
 }

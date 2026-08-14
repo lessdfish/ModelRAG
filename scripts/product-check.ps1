@@ -1,12 +1,15 @@
 param(
   [string]$BackendUrl = "http://localhost:8091",
-  [string]$AdminUser = "admin",
-  [string]$AdminPassword = "modelrag"
+  [string]$AdminUser = $env:MODELRAG_BOOTSTRAP_ADMIN_USER,
+  [string]$AdminPassword = $env:MODELRAG_BOOTSTRAP_ADMIN_PASSWORD
 )
 
 $ErrorActionPreference = "Stop"
 
 $Root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
+if ([string]::IsNullOrWhiteSpace($AdminUser) -or [string]::IsNullOrWhiteSpace($AdminPassword)) {
+  throw "Supply AdminUser/AdminPassword or MODELRAG_BOOTSTRAP_ADMIN_USER/MODELRAG_BOOTSTRAP_ADMIN_PASSWORD."
+}
 
 function Invoke-Json {
   param([string]$Method,[string]$Uri,[object]$Body=$null,[hashtable]$Headers=@{})
@@ -44,7 +47,7 @@ $checks += Check "backend.not-8080" {
 
 $token = $null
 $checks += Check "auth.admin-login" {
-  $login = Invoke-Json Post "$BackendUrl/api/v1/auth/login" @{ username = $AdminUser; password = $AdminPassword }
+  $login = Invoke-Json Post "$BackendUrl/api/v2/auth/login" @{ username = $AdminUser; password = $AdminPassword }
   if ([string]::IsNullOrWhiteSpace($login.data.token)) { throw "missing token" }
   $script:token = $login.data.token
   "user=$($login.data.user.id)"
@@ -56,18 +59,18 @@ if (-not [string]::IsNullOrWhiteSpace($token)) {
 }
 
 $checks += Check "qa.context-policy" {
-  $policy = Invoke-Json Get "$BackendUrl/api/v1/qa/context-policy" $null $adminHeaders
+  $policy = Invoke-Json Get "$BackendUrl/api/v2/qa/context-policy" $null $adminHeaders
   if ($policy.data.maxEvidenceTokens -le 0) { throw "invalid context policy" }
   "maxEvidenceTokens=$($policy.data.maxEvidenceTokens)"
 }
 
 $checks += Check "knowledge-bases.list" {
-  $items = (Invoke-Json Get "$BackendUrl/api/v1/knowledge-bases" $null $adminHeaders).data
+  $items = (Invoke-Json Get "$BackendUrl/api/v2/datasets" $null $adminHeaders).data
   "count=$(@($items).Count)"
 }
 
 $checks += Check "security.users" {
-  $users = (Invoke-Json Get "$BackendUrl/api/v1/admin/security/users" $null $adminHeaders).data
+  $users = (Invoke-Json Get "$BackendUrl/api/v2/admin/security/users" $null $adminHeaders).data
   "count=$(@($users).Count)"
 }
 

@@ -3,6 +3,7 @@ package com.modelrag.server.model;
 import com.modelrag.common.model.ModelGateway;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,16 @@ public class ModelRouter implements ModelGateway {
         this.canaryPercent = Math.max(0, Math.min(100, canaryPercent));
     }
     @Override public String generate(String prompt) { return execute(ModelType.CHAT, prompt); }
+    @Override public void stream(String prompt, Consumer<String> consumer) {
+        for (ModelClient client : orderedCandidates(ModelType.CHAT, prompt)) if (health.available(ModelType.CHAT, client.name())) try {
+            client.stream(prompt, consumer);
+            health.success(ModelType.CHAT, client.name());
+            return;
+        } catch (RuntimeException error) {
+            health.failure(ModelType.CHAT, client.name());
+        }
+        throw new IllegalStateException("没有可用的 CHAT 模型客户端");
+    }
     public String selectedClientName(ModelType type) {
         return orderedCandidates(type, "").stream()
                 .filter(client -> health.available(type, client.name()))

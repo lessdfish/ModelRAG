@@ -4,41 +4,237 @@ import com.modelrag.common.exception.BusinessException;
 import com.modelrag.common.exception.ErrorCode;
 import com.modelrag.common.security.ConversationAccess;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicLong;
-import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-@Service public class ConversationMemory implements ConversationAccess {
-    private static final int SUMMARY_INTERVAL=8, RECENT_MESSAGES=4, SUMMARY_LIMIT=1200;
-    private static final Pattern LEGACY_CITATION=Pattern.compile("\\[(\\d+)]");
-    public record Entry(String role,String content,String citations,long createdAt,String traceId,String mode,String datasetName){
-        public Entry(String role,String content,String citations,long createdAt){this(role,content,citations,createdAt,null,null,null);}
+/** PostgreSQL-backed conversation and summary store. */
+@Service
+@Profile("!test")
+public class ConversationMemory implements ConversationAccess {
+    private static final int SUMMARY_INTERVAL = 12;
+    private static final int RECENT_MESSAGES = 8;
+    private static final Pattern LEGACY_CITATION = Pattern.compile("\\[(\\d+)]");
+    private final JdbcTemplate jdbc;
+
+    public record Entry(String role, String content, String citations, long createdAt, String traceId,
+            String mode, String datasetName, long messageId) {
+        public Entry(String role, String content, String citations, long createdAt, String traceId,
+                String mode, String datasetName) {
+            this(role, content, citations, createdAt, traceId, mode, datasetName, 0);
+        }
+
+        public Entry(String role, String content, String citations, long createdAt) {
+            this(role, content, citations, createdAt, null, null, null, 0);
+        }
     }
-    public record Conversation(long id,Long datasetId,String title,int messageCount,Instant updateTime,String userId){}
-    private final Map<Long,Deque<Entry>> messages=new ConcurrentHashMap<>(); private final Map<Long,String> summaries=new ConcurrentHashMap<>(); private final Map<Long,Conversation> conversations=new ConcurrentHashMap<>(); private final Set<Long> archived=ConcurrentHashMap.newKeySet(); private final AtomicLong ids=new AtomicLong(); private final ObjectProvider<JdbcTemplate> jdbc;
-    public ConversationMemory(ObjectProvider<JdbcTemplate> jdbc){this.jdbc=jdbc;}
-    public long create(Long datasetId,String title){return create("global",datasetId,title);}
-    public long create(String userId,Long datasetId,String title){String owner=owner(userId);JdbcTemplate db=jdbc.getIfAvailable();if(db!=null)try{return db.queryForObject("INSERT INTO kb_conversation(user_id,dataset_id,title,model) VALUES (?,?,?,?) RETURNING id",Long.class,owner,datasetId,title,"mock-chat");}catch(Exception ignored){}long id=ids.incrementAndGet();conversations.put(id,new Conversation(id,datasetId,title,0,Instant.now(),owner));return id;}
-    public List<Conversation> conversations(boolean includeArchived){return conversations("global",includeArchived);}
-    public List<Conversation> conversations(String userId,boolean includeArchived){String owner=owner(userId);JdbcTemplate db=jdbc.getIfAvailable();if(db!=null)try{return db.query("SELECT id,dataset_id,title,message_count,update_time,user_id FROM kb_conversation WHERE user_id=? AND (? OR archive_time IS NULL) ORDER BY update_time DESC,id DESC LIMIT 100",(rs,n)->new Conversation(rs.getLong("id"),rs.getObject("dataset_id",Long.class),rs.getString("title"),rs.getInt("message_count"),rs.getTimestamp("update_time").toInstant(),rs.getString("user_id")),owner,includeArchived);}catch(Exception ignored){}return conversations.values().stream().filter(value->owner.equals(value.userId())).filter(value->includeArchived||!archived.contains(value.id())).sorted(Comparator.comparing(Conversation::updateTime).reversed()).toList();}
-    public void archive(long conversationId){archive("global",conversationId);}
-    public void archive(String userId,long conversationId){String owner=owner(userId);JdbcTemplate db=jdbc.getIfAvailable();if(db!=null)try{db.update("UPDATE kb_conversation SET archive_time=NOW(),update_time=NOW() WHERE id=? AND user_id=?",conversationId,owner);return;}catch(Exception ignored){}Conversation conversation=conversations.get(conversationId);if(conversation!=null&&owner.equals(conversation.userId()))archived.add(conversationId);}
-    public void append(long conversationId,String role,String content){append(conversationId,role,content,"[]",null,null,null);}
-    public void append(long conversationId,String role,String content,String citations){append(conversationId,role,content,citations,null,null,null);}
-    public void append(long conversationId,String role,String content,String citations,String traceId,String mode,String datasetName){String saved=citations==null||citations.isBlank()?"[]":citations;Entry entry=new Entry(role,content,saved,System.currentTimeMillis(),traceId,mode,datasetName);messages.computeIfAbsent(conversationId,ignored->new ConcurrentLinkedDeque<>()).addLast(entry);JdbcTemplate db=jdbc.getIfAvailable();if(db!=null)try{db.update("INSERT INTO kb_message(conversation_id,role,content,citations,trace_id,mode,dataset_name) VALUES (?,?,?,CAST(? AS jsonb),?,?,?)",conversationId,role,content,saved,traceId,mode,datasetName);db.update("UPDATE kb_conversation SET message_count=message_count+1,update_time=NOW() WHERE id=?",conversationId);}catch(Exception ignored){try{db.update("INSERT INTO kb_message(conversation_id,role,content,citations) VALUES (?,?,?,CAST(? AS jsonb))",conversationId,role,content,saved);db.update("UPDATE kb_conversation SET message_count=message_count+1,update_time=NOW() WHERE id=?",conversationId);}catch(Exception ignoredAgain){}}Conversation current=conversations.get(conversationId);if(current!=null)conversations.put(conversationId,new Conversation(current.id(),current.datasetId(),current.title(),current.messageCount()+1,Instant.now(),current.userId()));summarizeIfNeeded(conversationId);}
-    public String contextualQuery(long conversationId,String query){String summary=summary(conversationId).orElse(null);return summary==null||summary.isBlank()?query:query+"\n\n会话摘要（仅作上下文）："+summary;}
-    public Optional<String> summary(long conversationId){String cached=summaries.get(conversationId);if(cached!=null)return Optional.of(cached);JdbcTemplate db=jdbc.getIfAvailable();if(db!=null)try{String value=db.query("SELECT summary FROM kb_context_summary WHERE conversation_id=? ORDER BY create_time DESC LIMIT 1",rs->rs.next()?rs.getString(1):null,conversationId);if(value!=null){summaries.put(conversationId,value);return Optional.of(value);}}catch(Exception ignored){}return Optional.empty();}
-    public List<Entry> history(long conversationId,int page,int size){return history("global",conversationId,page,size);}
-    public List<Entry> history(String userId,long conversationId,int page,int size){String owner=owner(userId);JdbcTemplate db=jdbc.getIfAvailable();if(db!=null)try{return db.query("SELECT m.role,m.content,m.citations,m.create_time,m.trace_id,m.mode,m.dataset_name FROM kb_message m JOIN kb_conversation c ON c.id=m.conversation_id WHERE m.conversation_id=? AND c.user_id=? ORDER BY m.create_time,m.id OFFSET ? LIMIT ?",(rs,n)->{String content=rs.getString("content");return new Entry(rs.getString("role"),content,citationsForHistory(rs.getString("citations"),content),rs.getTimestamp("create_time").getTime(),rs.getString("trace_id"),rs.getString("mode"),rs.getString("dataset_name"));},conversationId,owner,(long)(Math.max(1,page)-1)*size,size);}catch(Exception ignored){try{return db.query("SELECT m.role,m.content,m.citations,m.create_time FROM kb_message m JOIN kb_conversation c ON c.id=m.conversation_id WHERE m.conversation_id=? AND c.user_id=? ORDER BY m.create_time,m.id OFFSET ? LIMIT ?",(rs,n)->{String content=rs.getString("content");return new Entry(rs.getString("role"),content,citationsForHistory(rs.getString("citations"),content),rs.getTimestamp("create_time").getTime());},conversationId,owner,(long)(Math.max(1,page)-1)*size,size);}catch(Exception ignoredAgain){}}Conversation conversation=conversations.get(conversationId);if(conversation==null||!owner.equals(conversation.userId()))return List.of();return messages.getOrDefault(conversationId,new ConcurrentLinkedDeque<>()).stream().skip((long)(Math.max(1,page)-1)*size).limit(size).toList();}
-    @Override public void requireOwner(String userId,Long conversationId){if(conversationId==null)return;if(!belongsTo(userId,conversationId))throw new BusinessException(ErrorCode.FORBIDDEN,"无权访问会话: "+conversationId);}
-    public boolean belongsTo(String userId,long conversationId){String owner=owner(userId);JdbcTemplate db=jdbc.getIfAvailable();if(db!=null)try{Integer count=db.queryForObject("SELECT COUNT(*) FROM kb_conversation WHERE id=? AND user_id=?",Integer.class,conversationId,owner);return count!=null&&count>0;}catch(Exception ignored){}Conversation conversation=conversations.get(conversationId);return conversation!=null&&owner.equals(conversation.userId());}
-    private String owner(String userId){return userId==null||userId.isBlank()?"global":userId;}
-    private String citationsForHistory(String stored,String content){if(stored!=null&&!stored.isBlank()&&!stored.equals("[]"))return stored;Matcher matcher=LEGACY_CITATION.matcher(content);LinkedHashSet<Long> ids=new LinkedHashSet<>();while(matcher.find()&&ids.size()<1)ids.add(Long.parseLong(matcher.group(1)));if(ids.isEmpty())return "[]";JdbcTemplate db=jdbc.getIfAvailable();if(db==null)return "[]";String placeholders=String.join(",",Collections.nCopies(ids.size(),"?"));try{return db.query("SELECT id,content FROM kb_chunk WHERE id IN ("+placeholders+")",rs->{List<String> values=new ArrayList<>();while(rs.next()){String excerpt=rs.getString("content").replace("\\","\\\\").replace("\"","\\\"").replace("\n"," ");values.add("{\"chunkId\":"+rs.getLong("id")+",\"excerpt\":\""+excerpt.substring(0,Math.min(160,excerpt.length()))+"\",\"score\":0}");}return "["+String.join(",",values)+"]";},ids.toArray());}catch(Exception ignored){return "[]";}}
-    private List<Entry> entriesForSummary(long conversationId){JdbcTemplate db=jdbc.getIfAvailable();if(db!=null)try{return db.query("SELECT role,content,citations,create_time FROM kb_message WHERE conversation_id=? ORDER BY create_time,id",(rs,n)->new Entry(rs.getString("role"),rs.getString("content"),rs.getString("citations"),rs.getTimestamp("create_time").getTime()),conversationId);}catch(Exception ignored){}return new ArrayList<>(messages.getOrDefault(conversationId,new ConcurrentLinkedDeque<>()));}
-    private void summarizeIfNeeded(long conversationId){List<Entry> all=entriesForSummary(conversationId);if(all.size()<SUMMARY_INTERVAL||all.size()%RECENT_MESSAGES!=0)return;int end=Math.max(0,all.size()-RECENT_MESSAGES);StringBuilder text=new StringBuilder();for(Entry entry:all.subList(0,end)){if(text.length()>=SUMMARY_LIMIT)break;text.append(entry.role()).append(':').append(entry.content()).append('\n');}String summary=text.substring(0,Math.min(text.length(),SUMMARY_LIMIT));if(summary.isBlank())return;summaries.put(conversationId,summary);JdbcTemplate db=jdbc.getIfAvailable();if(db!=null)try{db.update("INSERT INTO kb_context_summary(conversation_id,summary_type,from_message_id,to_message_id,summary,token_count) VALUES (?,'HISTORY',0,0,?,?)",conversationId,summary,Math.max(1,summary.length()/4));}catch(Exception ignored){}}
+
+    public record Conversation(long id, Long datasetId, String title, int messageCount,
+            Instant updateTime, String userId) {}
+
+    public ConversationMemory(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+
+    public long create(Long datasetId, String title) { return create("global", datasetId, title); }
+
+    public long create(String userId, Long datasetId, String title) {
+        String owner = owner(userId);
+        Long id = jdbc.queryForObject("""
+                INSERT INTO kb_conversation(user_id,dataset_id,title,model)
+                VALUES (?,?,?,?) RETURNING id
+                """, Long.class, owner, datasetId, title == null ? "新会话" : title.trim(), "spring-ai");
+        return id;
+    }
+
+    public List<Conversation> conversations(boolean includeArchived) {
+        return conversations("global", includeArchived);
+    }
+
+    public List<Conversation> conversations(String userId, boolean includeArchived) {
+        return jdbc.query("""
+                SELECT id,dataset_id,title,message_count,update_time,user_id
+                FROM kb_conversation
+                WHERE user_id=? AND (? OR archive_time IS NULL)
+                ORDER BY update_time DESC,id DESC LIMIT 100
+                """, (rs, n) -> new Conversation(rs.getLong("id"), rs.getObject("dataset_id", Long.class),
+                rs.getString("title"), rs.getInt("message_count"), rs.getTimestamp("update_time").toInstant(),
+                rs.getString("user_id")), owner(userId), includeArchived);
+    }
+
+    public Optional<Conversation> conversation(String userId, long conversationId, boolean includeArchived) {
+        return jdbc.query("""
+                SELECT id,dataset_id,title,message_count,update_time,user_id
+                FROM kb_conversation
+                WHERE id=? AND user_id=? AND (? OR archive_time IS NULL)
+                """, (rs, n) -> new Conversation(rs.getLong("id"), rs.getObject("dataset_id", Long.class),
+                rs.getString("title"), rs.getInt("message_count"), rs.getTimestamp("update_time").toInstant(),
+                rs.getString("user_id")), conversationId, owner(userId), includeArchived).stream().findFirst();
+    }
+
+    public void archive(long conversationId) { archive("global", conversationId); }
+
+    public void archive(String userId, long conversationId) {
+        int updated = jdbc.update("UPDATE kb_conversation SET archive_time=NOW(),update_time=NOW() WHERE id=? AND user_id=?",
+                conversationId, owner(userId));
+        if (updated == 0) throw notFound(conversationId);
+    }
+
+    @Transactional
+    public void delete(String userId, long conversationId) {
+        String owner = owner(userId);
+        Long locked = jdbc.query("SELECT id FROM kb_conversation WHERE id=? AND user_id=? FOR UPDATE",
+                (rs, n) -> rs.getLong(1), conversationId, owner).stream().findFirst().orElse(null);
+        if (locked == null) throw notFound(conversationId);
+        jdbc.update("DELETE FROM kb_context_summary_task WHERE conversation_id=?", conversationId);
+        jdbc.update("DELETE FROM kb_context_summary WHERE conversation_id=?", conversationId);
+        jdbc.update("DELETE FROM kb_message WHERE conversation_id=?", conversationId);
+        jdbc.update("DELETE FROM kb_conversation WHERE id=? AND user_id=?", conversationId, owner);
+    }
+
+    public void append(long conversationId, String role, String content) {
+        append("global", conversationId, role, content, "[]", null, null, null);
+    }
+
+    public void append(long conversationId, String role, String content, String citations) {
+        append("global", conversationId, role, content, citations, null, null, null);
+    }
+
+    public void append(long conversationId, String role, String content, String citations,
+            String traceId, String mode, String datasetName) {
+        append("global", conversationId, role, content, citations, traceId, mode, datasetName);
+    }
+
+    @Transactional
+    public void append(String userId, long conversationId, String role, String content, String citations,
+            String traceId, String mode, String datasetName) {
+        if (content == null || content.isBlank()) throw new IllegalArgumentException("消息内容不能为空");
+        String saved = citations == null || citations.isBlank() ? "[]" : citations;
+        int updated = jdbc.update("""
+                INSERT INTO kb_message(conversation_id,role,content,citations,trace_id,mode,dataset_name)
+                SELECT id,?,?,CAST(? AS jsonb),?,?,? FROM kb_conversation
+                WHERE id=? AND user_id=? AND archive_time IS NULL
+                """, role, content, saved, traceId, mode, datasetName, conversationId, owner(userId));
+        if (updated == 0) throw notFound(conversationId);
+        jdbc.update("UPDATE kb_conversation SET message_count=message_count+1,update_time=NOW() WHERE id=? AND user_id=?",
+                conversationId, owner(userId));
+        enqueueSummaryIfNeeded(owner(userId), conversationId);
+    }
+
+    public String contextualQuery(long conversationId, String query) {
+        return contextualQuery("global", conversationId, query);
+    }
+
+    public String contextualQuery(String userId, long conversationId, String query) {
+        String summary = summary(userId, conversationId).orElse("");
+        List<Entry> recent = history(userId, conversationId, 1, RECENT_MESSAGES);
+        String recentText = recent.stream().map(entry -> entry.role() + ":" + entry.content())
+                .collect(java.util.stream.Collectors.joining("\n"));
+        String context = (summary.isBlank() ? "" : "会话摘要（仅作上下文）：" + summary + "\n")
+                + (recentText.isBlank() ? "" : "最近消息（仅作上下文）：\n" + recentText);
+        return context.isBlank() ? query : query + "\n\n" + context;
+    }
+
+    public Optional<String> summary(long conversationId) { return summary("global", conversationId); }
+
+    public Optional<String> summary(String userId, long conversationId) {
+        return jdbc.query("""
+                SELECT s.summary FROM kb_context_summary s
+                JOIN kb_conversation c ON c.id=s.conversation_id
+                WHERE s.conversation_id=? AND c.user_id=? AND s.status='READY'
+                ORDER BY s.create_time DESC LIMIT 1
+                """, (rs, n) -> rs.getString(1), conversationId, owner(userId)).stream().findFirst();
+    }
+
+    public List<Entry> history(long conversationId, int page, int size) {
+        return history("global", conversationId, page, size);
+    }
+
+    public List<Entry> history(String userId, long conversationId, int page, int size) {
+        int safePage = Math.max(1, page);
+        int safeSize = Math.max(1, Math.min(10_000, size));
+        return jdbc.query("""
+                SELECT m.id,m.role,m.content,m.citations,m.create_time,m.trace_id,m.mode,m.dataset_name
+                FROM kb_message m JOIN kb_conversation c ON c.id=m.conversation_id
+                WHERE m.conversation_id=? AND c.user_id=?
+                ORDER BY m.create_time,m.id OFFSET ? LIMIT ?
+                """, (rs, n) -> {
+                    String content = rs.getString("content");
+                    return new Entry(rs.getString("role"), content,
+                            citationsForHistory(rs.getString("citations"), content),
+                            rs.getTimestamp("create_time").getTime(), rs.getString("trace_id"),
+                            rs.getString("mode"), rs.getString("dataset_name"), rs.getLong("id"));
+                }, conversationId, owner(userId), (long) (safePage - 1) * safeSize, safeSize);
+    }
+
+    public List<Entry> recent(String userId, long conversationId, int limit) {
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        List<Entry> entries = jdbc.query("""
+                SELECT m.id,m.role,m.content,m.citations,m.create_time,m.trace_id,m.mode,m.dataset_name
+                FROM kb_message m JOIN kb_conversation c ON c.id=m.conversation_id
+                WHERE m.conversation_id=? AND c.user_id=?
+                ORDER BY m.id DESC LIMIT ?
+                """, (rs, n) -> {
+                    String content = rs.getString("content");
+                    return new Entry(rs.getString("role"), content,
+                            citationsForHistory(rs.getString("citations"), content),
+                            rs.getTimestamp("create_time").getTime(), rs.getString("trace_id"),
+                            rs.getString("mode"), rs.getString("dataset_name"), rs.getLong("id"));
+                }, conversationId, owner(userId), safeLimit);
+        return entries.stream().sorted(java.util.Comparator.comparingLong(Entry::messageId)).toList();
+    }
+
+    @Override
+    public void requireOwner(String userId, Long conversationId) {
+        if (conversationId != null && !belongsTo(userId, conversationId)) throw notFound(conversationId);
+    }
+
+    public boolean belongsTo(String userId, long conversationId) {
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM kb_conversation WHERE id=? AND user_id=?",
+                Integer.class, conversationId, owner(userId));
+        return count != null && count > 0;
+    }
+
+    private void enqueueSummaryIfNeeded(String userId, long conversationId) {
+        Integer count = jdbc.queryForObject("SELECT message_count FROM kb_conversation WHERE id=? AND user_id=?",
+                Integer.class, conversationId, userId);
+        if (count == null || count < SUMMARY_INTERVAL || count % SUMMARY_INTERVAL != 0) return;
+        List<Long> coveredIds = jdbc.query("""
+                SELECT m.id FROM kb_message m JOIN kb_conversation c ON c.id=m.conversation_id
+                WHERE m.conversation_id=? AND c.user_id=? ORDER BY m.id LIMIT ?
+                """, (rs, n) -> rs.getLong(1), conversationId, userId, Math.max(0, count - RECENT_MESSAGES));
+        if (coveredIds.isEmpty()) return;
+        jdbc.update("""
+                INSERT INTO kb_context_summary_task(conversation_id,user_id,from_message_id,to_message_id,status,next_retry_at)
+                VALUES (?,?,?,?, 'PENDING', NOW())
+                ON CONFLICT (conversation_id,to_message_id) DO NOTHING
+                """, conversationId, userId, coveredIds.get(0), coveredIds.get(coveredIds.size() - 1));
+    }
+
+    private String citationsForHistory(String stored, String content) {
+        if (stored != null && !stored.isBlank() && !stored.equals("[]")) return stored;
+        Matcher matcher = LEGACY_CITATION.matcher(content == null ? "" : content);
+        LinkedHashSet<Long> ids = new LinkedHashSet<>();
+        while (matcher.find() && ids.size() < 1) ids.add(Long.parseLong(matcher.group(1)));
+        if (ids.isEmpty()) return "[]";
+        String placeholders = String.join(",", java.util.Collections.nCopies(ids.size(), "?"));
+        return jdbc.query("SELECT id,content FROM kb_chunk WHERE id IN (" + placeholders + ")", rs -> {
+            List<String> values = new ArrayList<>();
+            while (rs.next()) {
+                String excerpt = rs.getString("content").replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", " ");
+                values.add("{\"chunkId\":" + rs.getLong("id") + ",\"excerpt\":\""
+                        + excerpt.substring(0, Math.min(160, excerpt.length())) + "\",\"score\":0}");
+            }
+            return "[" + String.join(",", values) + "]";
+        }, ids.toArray());
+    }
+
+    private String owner(String userId) { return userId == null || userId.isBlank() ? "global" : userId; }
+    private BusinessException notFound(long id) { return new BusinessException(ErrorCode.NOT_FOUND, "会话不存在: " + id); }
 }

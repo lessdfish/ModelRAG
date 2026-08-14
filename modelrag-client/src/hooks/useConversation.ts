@@ -1,1 +1,7 @@
-import {useState} from 'react'; import type {Message} from '../types'; export function useConversation(){const [messages,setMessages]=useState<Message[]>([]);return{messages,append:(m:Message)=>setMessages(s=>[...s,m]),clear:()=>setMessages([])}}
+import {useState} from 'react';
+import type {Message} from '../types';
+
+export function useConversation() {
+    const [messages, setMessages] = useState<Message[]>([]);
+    return {messages, append: (m: Message) => setMessages(s => [...s, m]), clear: () => setMessages([])}
+}

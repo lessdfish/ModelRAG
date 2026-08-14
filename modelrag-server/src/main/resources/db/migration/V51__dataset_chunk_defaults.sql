@@ -1,0 +1,2 @@
+ALTER TABLE kb_dataset ALTER COLUMN chunk_size SET DEFAULT 600;
+ALTER TABLE kb_dataset ALTER COLUMN chunk_overlap SET DEFAULT 80;

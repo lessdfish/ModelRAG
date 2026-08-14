@@ -75,6 +75,6 @@ public class ToolController {
     private ToolDefinition redact(ToolDefinition tool) {
         return new ToolDefinition(tool.name(), tool.description(), tool.riskLevel(), tool.enabled(), tool.type(),
                 tool.endpoint(), tool.authHeaderName(), tool.authHeaderValue() == null ? null : "******",
-                tool.jsonSchema(), tool.allowedRoles(), tool.allowedDatasetIds());
+                tool.jsonSchema(), tool.allowedRoles(), tool.allowedDatasetIds(), tool.idempotent());
     }
 }

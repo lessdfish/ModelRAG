@@ -1,44 +1,82 @@
 spring:
+  http:
+    converters:
+      preferred-json-mapper: jackson2
   application.name: modelrag
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
-      - org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration
-      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
-  threads.virtual.enabled: false # Java 17 默认关闭虚拟线程
-  servlet.multipart.max-file-size: 20MB
-  servlet.multipart.max-request-size: 20MB
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:${MODELRAG_JDBC_URL:jdbc:postgresql://localhost:15432/modelrag}}
+    username: ${SPRING_DATASOURCE_USERNAME:${MODELRAG_DB_USER}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${MODELRAG_DB_PASSWORD}}
+    hikari:
+      maximum-pool-size: ${MODELRAG_DB_POOL_MAX:20}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  data.redis:
+    host: ${SPRING_DATA_REDIS_HOST:${MODELRAG_REDIS_HOST:localhost}}
+    port: ${SPRING_DATA_REDIS_PORT:${MODELRAG_REDIS_PORT:16379}}
+    connect-timeout: ${MODELRAG_REDIS_CONNECT_TIMEOUT:1s}
+    timeout: ${MODELRAG_REDIS_TIMEOUT:1s}
+  threads.virtual.enabled: true
+  servlet.multipart.max-file-size: ${MODELRAG_MAX_FILE_SIZE:50MB}
+  servlet.multipart.max-request-size: ${MODELRAG_MAX_REQUEST_SIZE:50MB}
 server:
   port: ${SERVER_PORT:8091}
 management.endpoints.web.exposure.include: health,info,metrics,prometheus
+management.endpoint.health.probes.enabled: true
+management.endpoint.health.group.readiness.include: readinessState,db,pgvector
 modelrag:
   indexing.async: true
-  chunk-size: 512
-  chunk-overlap: 64
+  chunk-size: 600
+  chunk-overlap: 80
   qa:
     context-max-tokens: 1600
-    online-ab-enabled: ${MODELRAG_QA_ONLINE_AB_ENABLED:false}
-    online-ab-top-k: ${MODELRAG_QA_ONLINE_AB_TOP_K:8}
+    online-ab-enabled: false
   search:
     rrf-vector-weight: 0.7
     rrf-bm25-weight: 0.3
+    channel-timeout-ms: ${MODELRAG_SEARCH_CHANNEL_TIMEOUT_MS:800}
+    rerank-timeout-ms: ${MODELRAG_SEARCH_RERANK_TIMEOUT_MS:500}
+  agent:
+    max-steps: ${MODELRAG_AGENT_MAX_STEPS:6}
+    deadline-ms: ${MODELRAG_AGENT_DEADLINE_MS:10000}
   ollama:
-    enabled: ${MODELRAG_OLLAMA_ENABLED:true}
+    enabled: ${MODELRAG_OLLAMA_ENABLED:false}
     url: ${MODELRAG_OLLAMA_URL:${OLLAMA_HOST:127.0.0.1:11434}}
     chat-model: ${MODELRAG_OLLAMA_CHAT_MODEL:deepseek-r1:1.5b}
     canary-model: ${MODELRAG_OLLAMA_CANARY_MODEL:}
-    embedding-model: ${MODELRAG_OLLAMA_EMBEDDING_MODEL:quentinz/bge-large-zh-v1.5}
+    embedding-model: ${MODELRAG_OLLAMA_EMBEDDING_MODEL:Qwen3-Embedding-0.6B}
+    embedding-dimensions: 1024
   model:
-    canary-percent: ${MODELRAG_MODEL_CANARY_PERCENT:0}
+    canary-percent: 0
+  models:
+    allowed-hosts: ${MODELRAG_MODEL_ALLOWED_HOSTS:}
   reranker:
     enabled: ${MODELRAG_RERANKER_ENABLED:false}
     url: ${MODELRAG_RERANKER_URL:http://127.0.0.1:18080}
+  storage:
+    endpoint: ${MODELRAG_S3_ENDPOINT:http://localhost:19000}
+    bucket: ${MODELRAG_S3_BUCKET:modelrag}
+    region: ${MODELRAG_S3_REGION:us-east-1}
+  elasticsearch:
+    endpoint: ${MODELRAG_ELASTICSEARCH_ENDPOINT:http://localhost:19200}
+    retired-index-retention-hours: ${MODELRAG_ES_RETIRED_INDEX_RETENTION_HOURS:24}
   intent:
     enabled: ${MODELRAG_INTENT_ENABLED:false}
     url: ${MODELRAG_INTENT_URL:http://127.0.0.1:18080}
   eval:
     llm-judge-enabled: ${MODELRAG_EVAL_LLM_JUDGE_ENABLED:false}
   security:
-    default-admin-enabled: ${MODELRAG_DEFAULT_ADMIN_ENABLED:false}
-    header-auth-enabled: ${MODELRAG_HEADER_AUTH_ENABLED:true}
-    tool-secret-key: ${MODELRAG_TOOL_SECRET_KEY:modelrag-local-tool-secret-change-me}
+    token-secret: ${MODELRAG_TOKEN_SECRET}
+    secret-root-key: ${MODELRAG_SECRET_ROOT_KEY}
+    tool-secret-key: ${MODELRAG_TOOL_SECRET_KEY}
+    bootstrap-admin-user: ${MODELRAG_BOOTSTRAP_ADMIN_USER:}
+    bootstrap-admin-password: ${MODELRAG_BOOTSTRAP_ADMIN_PASSWORD:}
+  ingestion:
+    max-file-size-bytes: ${MODELRAG_MAX_FILE_SIZE_BYTES:52428800}
+    max-pages: ${MODELRAG_MAX_PAGES:1000}
+    max-extracted-chars: ${MODELRAG_MAX_EXTRACTED_CHARS:5000000}
+    parse-timeout-seconds: ${MODELRAG_PARSE_TIMEOUT_SECONDS:120}
+  tools:
+    allowed-hosts: ${MODELRAG_TOOL_ALLOWED_HOSTS:}
+    allow-http-localhost: false

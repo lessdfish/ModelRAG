@@ -1,32 +1,201 @@
 package com.modelrag.server;
 
-import com.modelrag.common.cache.QaAnswerCache; import com.modelrag.common.outbox.IndexOutbox; import com.modelrag.indexing.pipeline.IndexingPipeline; import com.modelrag.knowledge.controller.DocumentController; import com.modelrag.knowledge.controller.KnowledgeBaseController; import com.modelrag.knowledge.model.*; import com.modelrag.knowledge.parser.TextDocumentParsers; import com.modelrag.knowledge.service.KnowledgeStore; import com.modelrag.qa.ab.OnlineExperimentService; import com.modelrag.qa.dto.*; import com.modelrag.qa.feedback.QaFeedbackController; import com.modelrag.qa.orchestrator.QaOrchestrator; import com.modelrag.server.ab.ExperimentController; import com.modelrag.server.eval.*; import java.io.*; import java.util.List; import java.util.Map; import java.util.stream.IntStream; import org.apache.pdfbox.pdmodel.*; import org.apache.pdfbox.pdmodel.common.PDRectangle; import org.apache.pdfbox.pdmodel.font.*; import org.apache.pdfbox.pdmodel.PDPageContentStream; import org.apache.poi.xwpf.usermodel.XWPFDocument; import org.junit.jupiter.api.Test; import org.springframework.beans.factory.annotation.Autowired; import org.springframework.boot.test.context.SpringBootTest; import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@SpringBootTest(properties = {"modelrag.security.default-admin-enabled=true","modelrag.qa.online-ab-enabled=true","modelrag.qa.online-ab-top-k=8","modelrag.ollama.enabled=false"}) class M0AcceptanceTest {
-    @Autowired KnowledgeStore store; @Autowired IndexingPipeline indexing; @Autowired QaOrchestrator qa; @Autowired IndexOutbox outbox; @Autowired QaAnswerCache answers; @Autowired EvalController eval; @Autowired DocumentController documents; @Autowired KnowledgeBaseController knowledgeBases; @Autowired QaFeedbackController feedback; @Autowired OnlineExperimentService experiments; @Autowired ExperimentController experimentController; @Autowired io.micrometer.core.instrument.MeterRegistry meterRegistry; @Autowired com.modelrag.search.rewrite.QueryRewriter rewriter; @Autowired com.modelrag.search.facade.SearchFacade search;
-    @Test void uploadIndexHybridSearchAndCitationClosure(){Dataset ds=store.createDataset("验收库","",512,64);Document doc=store.addDocument(ds.id(),"policy.md","MD","acceptance-hash","# 年假制度\n\n员工年假为五天。年假申请需要直属主管审批。 ");indexing.index(doc.id());assertEquals("READY",store.document(doc.id()).status());assertFalse(store.chunks(ds.id()).isEmpty());Map<String,String> metadata=store.chunks(ds.id()).get(0).metadata();assertTrue(metadata.keySet().containsAll(List.of("parser","titlePath","version","charset","titleCount","paragraphCount","charCount","tokenEstimate")));assertEquals("markdown",metadata.get("parser"));assertEquals("UTF-8",metadata.get("charset"));assertTrue(Integer.parseInt(metadata.get("titleCount"))>=1);assertTrue(Integer.parseInt(metadata.get("paragraphCount"))>=2);QaRequest request=new QaRequest(ds.id(),"年假申请需要谁审批",null);QaResult result=qa.answer(request);assertFalse(result.refused());assertFalse(result.citations().isEmpty());assertTrue(qa.traces().stream().anyMatch(t->t.get("traceId").equals(result.traceId())));qa.answer(request);assertTrue(answers.hits()>0);}
-    @Test void emptyResultIsRefused(){Dataset ds=store.createDataset("空库","",512,64);assertTrue(qa.answer(new QaRequest(ds.id(),"不存在的问题",null)).refused());}
-    @Test void indexingInvalidatesCachedAnswer(){Dataset ds=store.createDataset("缓存失效库","",512,64);QaRequest request=new QaRequest(ds.id(),"缓存失效专题",null);assertTrue(qa.answer(request).refused());Document doc=store.addDocument(ds.id(),"cache.md","MD","cache-invalidate","缓存失效专题的正式答案。");indexing.index(doc.id());assertFalse(qa.answer(request).refused());}
-    @Test void datasetRevisionSeparatesQaCacheKeys(){Dataset ds=store.createDataset("版本缓存库","",512,64);long createdRevision=ds.revision();Document doc=store.addDocument(ds.id(),"revision.md","MD","revision-cache","版本缓存专题的正式答案。");assertTrue(store.dataset(ds.id()).revision()>createdRevision);indexing.index(doc.id());QaRequest request=new QaRequest(ds.id(),"版本缓存专题",null);qa.answer(request);qa.answer(request);assertTrue(answers.hits()>0);long misses=answers.misses();store.addDocument(ds.id(),"revision-new.md","MD","revision-cache-new","新增文档会提升知识库版本。");qa.answer(request);assertTrue(answers.misses()>misses);}
-    @Test void datasetUpdateInvalidatesAnswerCache(){Dataset ds=store.createDataset("编辑缓存失效库","",512,64);Document doc=store.addDocument(ds.id(),"update.md","MD","update-cache","编辑后仍须重新检索的正式内容。");indexing.index(doc.id());QaRequest request=new QaRequest(ds.id(),"编辑后仍须重新检索",null);qa.answer(request);qa.answer(request);long misses=answers.misses();knowledgeBases.update(ds.id(),Map.of("name","编辑缓存失效库","description","已更新说明"));qa.answer(request);assertTrue(answers.misses()>misses);}
-    @Test void knowledgeBaseConfigControlsQaAndRebuildsChunks(){Dataset ds=knowledgeBases.create(Map.of("name","参数运营库","description","验收配置","chunkSize",256,"chunkOverlap",0,"topK",1,"threshold",0.25)).data();assertEquals(1,ds.topK());assertEquals(0.25,ds.threshold());String content="参数运营专题A要求保留完整审计链路。".repeat(20)+"参数运营专题B要求修改切分参数后重建索引。".repeat(20);Document doc=store.addDocument(ds.id(),"config.md","MD","config-operable",content);indexing.index(doc.id());int before=store.chunks(ds.id()).size();Dataset updated=knowledgeBases.update(ds.id(),Map.of("name","参数运营库","description","已调整","chunkSize",128,"chunkOverlap",0,"topK",3,"threshold",0.15)).data();assertEquals(3,updated.topK());assertEquals(0.15,updated.threshold());indexing.rebuildDataset(ds.id());assertTrue(store.chunks(ds.id()).size()>before);assertTrue(outbox.due().stream().anyMatch(e->"DELETE_CHUNK".equals(e.eventType())&&e.datasetId()==ds.id()));QaResult result=qa.answer(new QaRequest(ds.id(),"修改切分参数后要做什么",null));assertFalse(result.refused());assertTrue(result.answer().contains("重建索引"));}
-    @Test void smallToBigUsesPersistedParentChunkGroup(){Dataset ds=store.createDataset("父块扩展库","",128,0,3,0.1);String first="第一父块内容说明。"+"甲".repeat(90);String middle="父块扩展锚点说明。"+"乙".repeat(90);String last="第三父块补充说明。"+"丙".repeat(90);Document doc=store.addDocument(ds.id(),"parent.md","MD","parent-small-big",first+middle+last);indexing.index(doc.id());List<Chunk> chunks=store.chunks(ds.id());assertTrue(chunks.size()>=3);assertTrue(chunks.stream().allMatch(chunk->chunk.parentChunkId()!=null));assertEquals(chunks.get(0).parentChunkId(),chunks.get(1).parentChunkId());assertEquals(chunks.get(0).parentChunkId(),chunks.get(2).parentChunkId());QaResult result=qa.answer(new QaRequest(ds.id(),"父块扩展锚点说明",null));Map<String,Object> replay=qa.replayTrace(result.traceId());String context=String.valueOf(replay.get("contextChunks"));assertTrue(context.contains("第一父块内容说明"));assertTrue(context.contains("第三父块补充说明"));}
-    @Test void smallToBigParentGroupsFollowDocumentHeadings(){Dataset ds=store.createDataset("标题父块库","",128,0,3,0.1);String leave="# 年假制度\n"+"年假父块内容。".repeat(24)+"\n# 信息安全\n"+"安全父块内容。".repeat(24);Document doc=store.addDocument(ds.id(),"headed.md","MD","headed-parent",leave);indexing.index(doc.id());List<Chunk> chunks=store.chunks(ds.id());assertTrue(chunks.stream().anyMatch(chunk->"年假制度".equals(chunk.metadata().get("titlePath"))));assertTrue(chunks.stream().anyMatch(chunk->"信息安全".equals(chunk.metadata().get("titlePath"))));long parentCount=chunks.stream().map(Chunk::parentChunkId).distinct().count();assertTrue(parentCount>=2);}
-    @Test void localRerankAppliesKnowledgeBaseThreshold(){Dataset ds=store.createDataset("本地阈值库","",512,64,10,.99);Document relevant=store.addDocument(ds.id(),"relevant.md","MD","threshold-relevant","临时访问机密级数据最长可以申请30天，到期自动回收。");Document weak=store.addDocument(ds.id(),"weak.md","MD","threshold-weak","采购归档和办公用品领用流程。");indexing.index(relevant.id());indexing.index(weak.id());long relevantChunk=store.chunks(ds.id()).stream().filter(chunk->chunk.documentId()==relevant.id()).findFirst().orElseThrow().id();long weakChunk=store.chunks(ds.id()).stream().filter(chunk->chunk.documentId()==weak.id()).findFirst().orElseThrow().id();var stages=search.inspect(new com.modelrag.search.dto.HybridSearchRequest(ds.id(),"临时访问机密级数据最长可以申请多少天",10,ds.threshold()));List<Long> finalIds=stages.finalResults().stream().map(com.modelrag.search.dto.ScoredChunk::chunkId).toList();assertTrue(finalIds.contains(relevantChunk));assertFalse(finalIds.contains(weakChunk));}
-    @Test void everyQuestionCreatesIndependentAuditRecord(){Dataset ds=store.createDataset("审计留痕库","",512,64);Document doc=store.addDocument(ds.id(),"audit.md","MD","audit-record","审计记录必须保留问题和回答。");indexing.index(doc.id());int before=qa.audits().size();QaRequest request=new QaRequest(ds.id(),"审计记录保留什么",null,"audit-user");qa.answer(request);qa.answer(request);List<Map<String,Object>> created=qa.audits().subList(before,qa.audits().size());assertEquals(2,created.size());assertTrue(created.stream().allMatch(row->request.query().equals(row.get("query"))&&row.get("answer")!=null&&"audit-user".equals(row.get("userId"))&&"rag".equals(row.get("mode"))));}
-    @Test void cachedQuestionStillCreatesIndependentRetrievalTrace(){Dataset ds=store.createDataset("缓存独立Trace库","",512,64);Document doc=store.addDocument(ds.id(),"cached-trace.md","MD","cached-trace","缓存命中也必须保留独立检索回放。");indexing.index(doc.id());QaRequest request=new QaRequest(ds.id(),"缓存命中保留什么",null);QaResult first=qa.answer(request);QaResult second=qa.answer(request);assertNotEquals(first.traceId(),second.traceId());assertTrue(answers.hits()>0);Map<String,Object> replay=qa.replayTrace(second.traceId());assertEquals(true,replay.get("found"));assertEquals(true,replay.get("cacheHit"));assertTrue(String.valueOf(replay.get("contextChunks")).contains("缓存命中"));}
-    @Test void retrievalTraceCanBeReplayedAndImportedIntoEvalSet(){Dataset ds=store.createDataset("回放诊断库","",512,64);Document doc=store.addDocument(ds.id(),"replay.md","MD","replay-trace","检索回放必须展示向量召回、BM25、RRF 和最终上下文。");indexing.index(doc.id());QaResult result=qa.answer(new QaRequest(ds.id(),"检索回放展示什么",null));Map<String,Object> replay=qa.replayTrace(result.traceId());assertEquals(true,replay.get("found"));assertEquals(result.traceId(),replay.get("traceId"));assertNotNull(replay.get("diagnosis"));assertNotNull(replay.get("searchQueries"));assertNotNull(replay.get("rerankQuery"));assertTrue(String.valueOf(replay.get("finalPrompt")).contains("检索回放展示什么"));assertTrue(String.valueOf(replay.get("promptContext")).contains("检索回放"));assertEquals(1600,((Number)replay.get("contextMaxTokens")).intValue());assertEquals("local-evidence",replay.get("answerSource"));assertNotNull(replay.get("modelOutput"));assertTrue(String.valueOf(replay.get("contextChunks")).contains("检索回放"));assertTrue(String.valueOf(replay.get("vectorResults")).contains("content"));assertTrue(String.valueOf(replay.get("fusedResults")).contains("channel"));assertTrue(String.valueOf(replay.get("contextChunks")).contains("rank"));assertTrue(String.valueOf(replay.get("abVariants")).contains("shadow-topK-8"));assertTrue(String.valueOf(replay.get("abVariants")).contains("finalChunkIds"));assertTrue(String.valueOf(replay.get("abVariants")).contains("baselineFinalChunkIds"));assertTrue(String.valueOf(replay.get("abVariants")).contains("policyVersion"));assertTrue(String.valueOf(replay.get("abVariants")).contains("qa-online-ab-v1"));Map<String,Object> feedbackRow=feedback.submit(Map.of("traceId",result.traceId(),"rating","DISLIKE","comment","排序需要复查")).data();assertEquals("DISLIKE",feedbackRow.get("rating"));assertTrue(feedback.list().data().stream().anyMatch(row->result.traceId().equals(row.get("traceId"))&&"排序需要复查".equals(row.get("comment"))));long id=eval.createFromTrace(result.traceId(),"bad-case").data();assertTrue(id>0);EvalItem imported=eval.datasets(ds.id()).data().stream().filter(item->item.id().equals(id)).findFirst().orElseThrow();assertTrue(imported.question().contains("检索回放展示什么"));assertFalse(imported.expectedChunkIds().isEmpty());assertEquals(result.traceId(),imported.sourceTraceId());assertEquals(replay.get("failureStage"),imported.failureStage());}
-    @Test void retrievalMetricsRecordEverySearchStage(){Dataset ds=store.createDataset("检索指标库","",512,64);Document doc=store.addDocument(ds.id(),"metrics.md","MD","metrics-retrieval","检索指标必须记录向量、BM25、RRF 和最终上下文阶段。");indexing.index(doc.id());double beforeVector=meterRegistry.counter("modelrag.retrieval.candidates","stage","vector").count();double beforeContext=meterRegistry.counter("modelrag.retrieval.candidates","stage","context").count();qa.answer(new QaRequest(ds.id(),"检索指标记录什么",null));assertTrue(meterRegistry.counter("modelrag.retrieval.candidates","stage","vector").count()>beforeVector);assertTrue(meterRegistry.counter("modelrag.retrieval.candidates","stage","context").count()>beforeContext);assertNotNull(meterRegistry.find("modelrag.retrieval.latency").tag("stage","inspect").timer());}
-    @Test void queryRewriteAddsGeneralIntentTerms(){var expanded=rewriter.expand("供应商准入有效期多久，需要谁确认？");String joined=String.join(" ",expanded.searchQueries());assertTrue(joined.contains("供应商"));assertTrue(joined.contains("有效期"));assertTrue(joined.contains("期限"));assertTrue(joined.contains("确认"));assertTrue(expanded.searchQueries().size()>=3);}
-    @Test void bm25OutboxPayloadContainsWeightedFields(){Dataset ds=store.createDataset("BM25结构库","",512,64);Document doc=store.addDocument(ds.id(),"security-policy.md","MD","bm25-payload","# 信息安全\n\n临时访问机密级数据最长 30 天。");indexing.index(doc.id());String payload=outbox.due().stream().filter(e->"UPSERT_CHUNK".equals(e.eventType())&&e.datasetId()==ds.id()).findFirst().orElseThrow().payload();assertTrue(payload.contains("\"titlePath\""));assertTrue(payload.contains("\"documentName\""));assertTrue(payload.contains("\"indexType\":\"default\""));assertTrue(payload.contains("\"version\""));assertTrue(payload.contains("\"metadata\""));}
-    @Test void deletingDocumentEnqueuesElasticsearchDeletion(){Dataset ds=store.createDataset("删除索引库","",512,64);Document doc=store.addDocument(ds.id(),"delete.md","MD","delete-index","仅用于删除索引的唯一内容。");indexing.index(doc.id());List<Long> chunkIds=store.chunks(ds.id()).stream().filter(c->c.documentId()==doc.id()).map(Chunk::id).toList();documents.delete(ds.id(),doc.id());outbox.requeueDataset(ds.id());assertTrue(outbox.due().stream().anyMatch(e->"DELETE_CHUNK".equals(e.eventType())&&chunkIds.contains(e.chunkId())));assertTrue(qa.answer(new QaRequest(ds.id(),"仅用于删除索引的唯一内容",null)).refused());}
-    @Test void evaluatesTwentyQuestionsAndReportsMetrics(){Dataset ds=store.createDataset("评测库","",512,64);Document doc=store.addDocument(ds.id(),"eval.md","MD","eval-20","评测条款：所有评测问题都应召回本条知识。 ");indexing.index(doc.id());long expected=store.chunks(ds.id()).get(0).id();List<EvalItem> items=IntStream.range(0,20).mapToObj(i->new EvalItem("评测条款问题 "+i,List.of(expected))).toList();EvalReport report=eval.run(ds.id(),items).data();assertEquals(20,report.total());assertTrue(report.recallAt5()>0);assertTrue(report.recallAt20()>0);assertTrue(report.mrr()>0);assertTrue(report.contextPrecision()>0);assertTrue(report.contextRecall()>0);assertTrue(report.ndcg()>0);assertTrue(report.answerRelevance()>=0);assertTrue(report.faithfulness()>=0);assertEquals(ds.id(),((Number)report.parameters().get("datasetId")).longValue());assertEquals(store.dataset(ds.id()).revision(),((Number)report.parameters().get("revision")).longValue());assertEquals("HEURISTIC",report.parameters().get("judgeMode"));assertEquals(20,report.caseResults().size());assertTrue(report.caseResults().stream().allMatch(row->row.containsKey("finalChunkIds")&&row.containsKey("fusedChunkIds")&&row.containsKey("failureStage")&&row.containsKey("diagnosis")&&row.containsKey("actionHints")&&row.containsKey("faithfulness")&&row.containsKey("answerRelevance")&&row.containsKey("judgeMode")));assertNotNull(report.badCases());}
-    @Test void evalReportSummarizesJudgeModes(){Dataset ds=store.createDataset("评测Judge汇总库","",512,64);Document doc=store.addDocument(ds.id(),"eval-judge.md","MD","eval-judge","Judge 汇总条款：评测报告必须说明使用了什么评估模式。");indexing.index(doc.id());long expected=store.chunks(ds.id()).get(0).id();EvalReport report=eval.run(ds.id(),List.of(new EvalItem("评测报告说明什么",List.of(expected)),new EvalItem(null,"不应回答的问题",List.of(),"",true,"拒答"))).data();assertEquals("HEURISTIC",report.parameters().get("judgeRequestedMode"));assertEquals(1,((Number)report.parameters().get("judgeEvaluatedCases")).intValue());assertEquals(0,((Number)report.parameters().get("judgeFallbacks")).intValue());assertTrue(String.valueOf(report.parameters().get("judgeModeCounts")).contains("HEURISTIC"));assertTrue(report.caseResults().stream().anyMatch(row->"NOT_JUDGED".equals(row.get("judgeMode"))));}
-    @Test void evalCaseHintsExplainFailureStage(){Dataset ds=store.createDataset("评测建议库","",512,64);Document doc=store.addDocument(ds.id(),"hint.md","MD","hint-stage","建议条款：正常问题应当命中文档。");indexing.index(doc.id());EvalReport report=eval.run(ds.id(),List.of(new EvalItem("完全无关的问题",List.of(999999L)))).data();Map<String,Object> row=report.caseResults().get(0);assertEquals("RECALL",row.get("failureStage"));assertTrue(String.valueOf(row.get("diagnosis")).contains("召回"));assertTrue(String.valueOf(row.get("actionHints")).contains("Query 改写"));}
-    @Test void comparesRetrievalTopKVariantsForOfflineAb(){Dataset ds=store.createDataset("AB评测库","",512,64);Document doc=store.addDocument(ds.id(),"ab.md","MD","ab-eval","AB 对照条款：检索参数变更必须先离线对比召回率。");indexing.index(doc.id());long expected=store.chunks(ds.id()).get(0).id();List<EvalItem> items=List.of(new EvalItem("检索参数变更前要对比什么",List.of(expected)));List<Map<String,Object>> rows=eval.compare(ds.id(),Map.of("items",items,"topKs",List.of(1,5))).data();assertEquals(2,rows.size());assertTrue(rows.stream().allMatch(row->row.containsKey("variant")&&row.containsKey("recallAtFinal")&&row.containsKey("mrr")&&row.containsKey("caseResults")));assertEquals(1,((Number)rows.get(0).get("topK")).intValue());}
-    @Test void onlineAbExperimentBucketsQuestionAndReportsOutcome(){Dataset ds=store.createDataset("在线AB实验库","",512,64,5,0.1);Document doc=store.addDocument(ds.id(),"online-ab.md","MD","online-ab","在线实验条款：问题会稳定进入 TopK 变体并保留实验报告。");indexing.index(doc.id());experiments.save(Map.of("id","exp-online-"+ds.id(),"datasetId",ds.id(),"name","TopK 在线实验","enabled",true,"trafficPercent",100,"variantTopK",9));QaResult result=qa.answer(new QaRequest(ds.id(),"在线实验保留什么",null));Map<String,Object> replay=qa.replayTrace(result.traceId());assertTrue(String.valueOf(replay.get("abVariants")).contains("exp-online-"+ds.id()));List<Map<String,Object>> report=experiments.report(ds.id());assertTrue(report.stream().anyMatch(row->String.valueOf(row.get("experimentId")).equals("exp-online-"+ds.id())&&((Number)row.get("samples")).longValue()>=1));}
-    @Test void experimentControllerManagesOnlineAbExperiment(){Dataset ds=store.createDataset("实验API库","",512,64,5,0.1);String id="exp-api-"+ds.id();var saved=experimentController.save(Map.of("id",id,"datasetId",ds.id(),"name","API实验","enabled",false,"trafficPercent",25,"variantTopK",7)).data();assertEquals(id,saved.id());assertFalse(saved.enabled());assertTrue(experimentController.list(ds.id()).data().stream().anyMatch(item->id.equals(item.id())));assertTrue(experimentController.enabled(id,true).data().enabled());experimentController.delete(id);assertTrue(experimentController.list(ds.id()).data().stream().noneMatch(item->id.equals(item.id())));}
-    @Test void savedEvalTaskReportCanBeOpenedLater(){Dataset ds=store.createDataset("历史报告库","",512,64);Document doc=store.addDocument(ds.id(),"history-report.md","MD","history-report","历史报告必须能回看完整评测结果。");indexing.index(doc.id());long expected=store.chunks(ds.id()).get(0).id();eval.create(ds.id(),new EvalItem("历史报告回看什么",List.of(expected)));Map<String,Object> task=eval.runSaved(ds.id()).data();long taskId=((Number)task.get("taskId")).longValue();EvalReport opened=eval.report(taskId).data();assertEquals(1,opened.total());assertFalse(opened.caseResults().isEmpty());assertEquals(ds.id(),((Number)opened.parameters().get("datasetId")).longValue());}
-    @Test void bootstrapEvalSetFromIndexedDocuments(){Dataset ds=store.createDataset("自动评测集库","",128,0);Document doc=store.addDocument(ds.id(),"bootstrap.md","MD","bootstrap-eval","# 临时访问\n\n"+"临时访问机密级数据最长可以申请30天，到期自动回收。".repeat(8)+"\n\n# 年假制度\n\n"+"正式员工每年有5天带薪年假，连续休假超过3个工作日需要部门确认。".repeat(8));indexing.index(doc.id());Map<String,Object> generated=eval.bootstrap(ds.id(),20).data();assertEquals(2,((Number)generated.get("created")).intValue());List<EvalItem> items=eval.datasets(ds.id()).data();assertEquals(2,items.size());assertTrue(items.stream().allMatch(item->"bootstrap".equals(item.category())&&!item.expectedChunkIds().isEmpty()&&item.expectedAnswer()!=null&&!item.expectedAnswer().isBlank()));EvalReport report=eval.run(ds.id(),items).data();assertEquals(2,report.total());assertFalse(report.caseResults().isEmpty());}
-    @Test void parsesPdfDocxMarkdownAndTxt() throws Exception {assertEquals("markdown",TextDocumentParsers.forFile("sample.md").parse("# Markdown 内容".getBytes()).startsWith("# Markdown")?"markdown":"");assertTrue(TextDocumentParsers.forFile("sample.txt").parse("TXT 内容".getBytes()).contains("TXT"));try(XWPFDocument docx=new XWPFDocument();ByteArrayOutputStream bytes=new ByteArrayOutputStream()){docx.createParagraph().createRun().setText("DOCX 内容");docx.write(bytes);assertTrue(TextDocumentParsers.forFile("sample.docx").parse(bytes.toByteArray()).contains("DOCX 内容"));}try(PDDocument pdf=new PDDocument();ByteArrayOutputStream bytes=new ByteArrayOutputStream()){PDPage page=new PDPage(PDRectangle.A4);pdf.addPage(page);try(PDPageContentStream stream=new PDPageContentStream(pdf,page)){stream.beginText();stream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA),12);stream.newLineAtOffset(72,720);stream.showText("PDF content");stream.endText();}pdf.save(bytes);assertTrue(TextDocumentParsers.forFile("sample.pdf").parse(bytes.toByteArray()).contains("PDF content"));}}
+import com.modelrag.indexing.pipeline.IndexingPipeline;
+import com.modelrag.knowledge.model.Dataset;
+import com.modelrag.knowledge.model.Document;
+import com.modelrag.knowledge.service.DocumentService;
+import com.modelrag.knowledge.service.DocumentDeletionService;
+import com.modelrag.knowledge.service.KnowledgeStore;
+import com.modelrag.knowledge.service.ObjectStorageService;
+import com.modelrag.common.outbox.IndexOutbox;
+import com.modelrag.qa.dto.QaRequest;
+import com.modelrag.qa.dto.QaResult;
+import com.modelrag.qa.orchestrator.QaOrchestrator;
+import java.nio.charset.StandardCharsets;
+import java.util.Set;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.ActiveProfiles;
+
+@SpringBootTest(properties = {
+        "modelrag.ollama.enabled=false",
+        "modelrag.reranker.enabled=false"
+})
+@ActiveProfiles("test")
+class M0AcceptanceTest {
+    @Autowired KnowledgeStore store;
+    @Autowired IndexingPipeline indexing;
+    @Autowired QaOrchestrator qa;
+    @Autowired DocumentService documents;
+    @Autowired DocumentDeletionService deletion;
+    @Autowired ObjectStorageService storage;
+    @Autowired IndexOutbox outbox;
+
+    @Test
+    void uploadUsesObjectStorageAndClosesTheIndexToCitationLoop() throws Exception {
+        Dataset dataset = store.createDataset("M0 知识库", "", 512, 64);
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "leave.md", "text/markdown",
+                "# 年假制度\n\n员工每年有五天年假，申请需要直属主管审批。".getBytes(StandardCharsets.UTF_8));
+
+        Document document = documents.upload(dataset.id(), file);
+
+        assertNull(document.content());
+        assertFalse(document.sourceObjectKey().isBlank());
+        assertFalse(document.artifactObjectKey().isBlank());
+        assertNotNull(storage.open(document.artifactObjectKey()));
+
+        indexing.index(document.id());
+
+        assertTrue(Set.of("SEARCH_SYNCING", "READY").contains(store.document(document.id()).status()));
+        assertFalse(store.chunks(dataset.id()).isEmpty());
+        QaResult result = qa.answer(new QaRequest(dataset.id(), "年假申请需要谁审批", null));
+        assertFalse(result.refused());
+        assertFalse(result.citations().isEmpty());
+        assertEquals(document.id(), result.citations().get(0).documentId());
+        assertEquals("leave.md", result.citations().get(0).documentName());
+        assertTrue(result.citations().get(0).indexVersion() > 0);
+    }
+
+    @Test
+    void everyQuestionGetsAnIndependentTraceWithoutAnOnlineAnswerCache() {
+        Dataset dataset = store.createDataset("M0 Trace 知识库", "", 512, 64);
+        Document document = store.addDocument(dataset.id(), "trace.md", "MD", "m0-trace",
+                "审计记录必须保留问题、答案和证据引用。 ");
+        indexing.index(document.id());
+
+        QaRequest request = new QaRequest(dataset.id(), "审计记录保留什么", null);
+        QaResult first = qa.answer(request);
+        QaResult second = qa.answer(request);
+
+        assertFalse(first.refused());
+        assertFalse(second.refused());
+        assertNotEquals(first.traceId(), second.traceId());
+        assertTrue(String.valueOf(qa.replayTrace(second.traceId()).get("abVariants")).isBlank()
+                || "[]".equals(String.valueOf(qa.replayTrace(second.traceId()).get("abVariants"))));
+    }
+
+    @Test
+    void emptyKnowledgeBaseRefusesInsteadOfInventingEvidence() {
+        Dataset dataset = store.createDataset("M0 空知识库", "", 512, 64);
+        QaResult result = qa.answer(new QaRequest(dataset.id(), "不存在的制度是什么", null));
+        assertTrue(result.refused());
+        assertTrue(result.citations().isEmpty());
+        assertEquals("当前知识库没有足够证据回答该问题。", result.answer());
+    }
+
+    @Test
+    void decisionEvidenceAnswersWithCitationWhileUnrelatedQuestionRefusesCleanly() {
+        Dataset dataset = store.createDataset("M0 拒答边界", "", 512, 64);
+        Document document = store.addDocument(dataset.id(), "leave-faq.md", "MD", "m0-refusal-boundary",
+                "问：谁审批年假？答：直属主管审批，连续超过 3 个工作日时部门负责人同步确认。");
+        indexing.index(document.id());
+
+        QaResult decision = qa.answer(new QaRequest(dataset.id(), "连续请 4 天还需要谁确认？", null));
+        assertFalse(decision.refused());
+        assertFalse(decision.citations().isEmpty());
+        assertTrue(decision.answer().contains("部门负责人"));
+
+        QaResult unrelated = qa.answer(new QaRequest(dataset.id(), "公司的新加坡办公室地址是什么？", null));
+        assertTrue(unrelated.refused());
+        assertTrue(unrelated.citations().isEmpty());
+        assertEquals("当前知识库没有足够证据回答该问题。", unrelated.answer());
+    }
+
+    @Test
+    void focusedPolicySentenceBeatsWeaklyRelatedFaq() {
+        Dataset dataset = store.createDataset("M0 证据优先级", "", 512, 64);
+        Document document = store.addDocument(dataset.id(), "leave-policy.md", "MD", "m0-evidence-priority",
+                "员工每自然年度享有 5 个工作日带薪年假。年假应至少提前 3 个工作日提交。\n\n"
+                        + "问：年假有几天？答：正式员工每自然年度有 5 个工作日带薪年假。");
+        indexing.index(document.id());
+
+        QaResult result = qa.answer(new QaRequest(dataset.id(), "年假应提前多久提交？", null));
+
+        assertFalse(result.refused());
+        assertTrue(result.answer().contains("提前 3 个工作日"));
+    }
+
+    @Test
+    void faqAnswerMustMatchTheQuestionIntentInsteadOfARelevantRestriction() {
+        Dataset dataset = store.createDataset("M0 回答意图", "", 512, 64);
+        Document document = store.addDocument(dataset.id(), "incident.md", "MD", "m0-answer-intent",
+                "任何员工发现可疑事件后，应立即停止可能扩大影响的操作，并保留证据。"
+                        + "任何员工不得未经授权向客户或媒体披露安全事件细节。"
+                        + "披露信息只能由法务、合规和指定发言人执行。\n\n"
+                        + "问：发现账号可能泄露时第一步是什么？答：停止可疑操作并立即报告，同时保留证据。"
+                        + "问：谁可以对外说明事件？答：法务、合规和指定发言人。");
+        indexing.index(document.id());
+
+        QaResult firstStep = qa.answer(new QaRequest(dataset.id(), "发生疑似数据泄露时第一发现人首先应如何处理？", null));
+        QaResult disclosure = qa.answer(new QaRequest(dataset.id(), "谁可以向客户或媒体披露安全事件信息？", null));
+
+        assertTrue(firstStep.answer().contains("停止"));
+        assertTrue(disclosure.answer().contains("法务"), disclosure.answer());
+    }
+
+    @Test
+    void requestedTimeRangeBeatsAWeaklyRelatedFaq() {
+        Dataset dataset = store.createDataset("M0 时段证据", "", 512, 64);
+        Document document = store.addDocument(dataset.id(), "remote.md", "MD", "m0-time-range",
+                "远程期间，员工应在核心协作时段 10:00 至 16:00 保持可联系状态。\n\n"
+                        + "问：远程办公是否自动批准？答：不是；需要根据岗位、交付、安全条件和团队覆盖情况审批。");
+        indexing.index(document.id());
+
+        QaResult result = qa.answer(new QaRequest(dataset.id(), "远程办公的核心协作时段是什么？", null));
+
+        assertTrue(result.answer().contains("10:00 至 16:00"), result.answer());
+    }
+
+    @Test
+    void rejectsMimeSpoofedUploadBeforeStorage() {
+        Dataset dataset = store.createDataset("M0 上传安全", "", 512, 64);
+        MockMultipartFile spoofedPdf = new MockMultipartFile(
+                "file", "spoof.pdf", "application/pdf", "这不是 PDF".getBytes(StandardCharsets.UTF_8));
+
+        assertThrows(IllegalArgumentException.class, () -> documents.upload(dataset.id(), spoofedPdf));
+    }
+
+    @Test
+    void documentDeletionSoftDeletesBeforeDeferredExternalCleanup() {
+        Dataset dataset = store.createDataset("M0 删除一致性", "", 512, 64);
+        Document document = store.addDocument(dataset.id(), "delete.md", "MD", "delete-consistency",
+                "删除必须先阻断检索，再异步清理外部副本。", "source/delete", "artifact/delete", "normalized");
+        indexing.index(document.id());
+
+        deletion.deleteDocument(dataset.id(), document.id());
+
+        assertThrows(RuntimeException.class, () -> store.document(document.id()));
+        assertTrue(outbox.due().stream().anyMatch(event -> "DELETE_DOCUMENT".equals(event.eventType())
+                && event.documentId() == document.id()
+                && event.payload().contains("source/delete")
+                && event.payload().contains("artifact/delete")));
+        assertTrue(qa.answer(new QaRequest(dataset.id(), "删除必须如何清理", null)).refused());
+    }
+
+    @Test
+    void parentChunkGroupsStayNearTheEighteenHundredTokenBudget() {
+        Dataset dataset = store.createDataset("M0 父块预算", "", 600, 0);
+        Document document = store.addDocument(dataset.id(), "parent.md", "MD", "parent-budget",
+                "父块预算内容。".repeat(900));
+
+        indexing.index(document.id());
+
+        var chunks = store.chunks(dataset.id());
+        assertTrue(chunks.size() >= 4);
+        assertTrue(chunks.stream().map(com.modelrag.knowledge.model.Chunk::parentChunkId).distinct().count() >= 2);
+        assertTrue(chunks.stream().collect(java.util.stream.Collectors.groupingBy(
+                        com.modelrag.knowledge.model.Chunk::parentChunkId))
+                .values().stream().allMatch(group -> group.size() <= 3));
+    }
 }

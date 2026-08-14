@@ -19,8 +19,11 @@ public class ToolSecretCipher {
     private final SecureRandom random = new SecureRandom();
     private final SecretKeySpec key;
 
-    public ToolSecretCipher(@Value("${modelrag.security.tool-secret-key:modelrag-local-tool-secret-change-me}") String secret) {
-        this.key = new SecretKeySpec(sha256(secret == null || secret.isBlank() ? "modelrag-local-tool-secret-change-me" : secret), "AES");
+    public ToolSecretCipher(@Value("${modelrag.security.tool-secret-key}") String secret) {
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException("modelrag.security.tool-secret-key must be supplied explicitly");
+        }
+        this.key = new SecretKeySpec(sha256(secret), "AES");
     }
 
     public String encrypt(String value) {
@@ -40,9 +43,11 @@ public class ToolSecretCipher {
     }
 
     public String decrypt(String value) {
-        if (value == null || value.isBlank() || !value.startsWith(PREFIX)) return value;
+        if (value == null || value.isBlank()) return value;
+        if (!value.startsWith(PREFIX)) throw new IllegalStateException("工具密钥不是受支持的加密格式");
         try {
             byte[] payload = Base64.getDecoder().decode(value.substring(PREFIX.length()));
+            if (payload.length <= IV_BYTES) throw new IllegalArgumentException("密文长度不合法");
             byte[] iv = Arrays.copyOfRange(payload, 0, IV_BYTES);
             byte[] encrypted = Arrays.copyOfRange(payload, IV_BYTES, payload.length);
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");

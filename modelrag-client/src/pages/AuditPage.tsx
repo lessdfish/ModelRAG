@@ -158,7 +158,7 @@ export function AuditPage({admin,currentUserId,onOpenEval}:{admin:boolean;curren
         {title:'输出 / 错误',render:(_,record:ToolTrace)=><Typography.Paragraph copyable={{text:record.success?record.output:record.error||''}} ellipsis={{rows:2,expandable:true,symbol:'展开详情'}}>{record.success?record.output:record.error}</Typography.Paragraph>},
         {title:'Trace',dataIndex:'traceId',width:160,render:value=><Typography.Text copyable={{text:value}} ellipsis style={{maxWidth:110}}>{value}</Typography.Text>}
       ]}/>
-      <Typography.Paragraph type="secondary">工具 trace 用于定位 Agent 阶段问题：成功时看 output_result，失败时看 error_msg；可与问答 Trace ID 关联回放检索链路。</Typography.Paragraph>
+      <Typography.Paragraph type="secondary">工具 trace 仅保存输入/输出长度和 SHA-256 摘要，避免记录正文、个人数据或密钥；可用 Trace ID 关联检索回放。</Typography.Paragraph>
     </Card>
     <Card size="small" title={`Agent 执行步骤留痕（${agentSteps.length}）`} className="monitor">
       <Table size="small" rowKey={(item:AgentStepTrace,index)=>`${item.executionId}-${item.stepIndex}-${index}`} dataSource={agentSteps} pagination={{pageSize:8,size:'small'}} scroll={{y:360}} columns={[
@@ -202,14 +202,13 @@ export function AuditPage({admin,currentUserId,onOpenEval}:{admin:boolean;curren
       <Card size="small" title="最终证据摘要" className="monitor">
         {(replay?.evidencePreview||[]).length===0?<Typography.Text type="secondary">无最终上下文证据</Typography.Text>:(replay?.evidencePreview||[]).map(item=><Card key={`${item.chunkId}-${item.rank}`} size="small" style={{marginBottom:8}}><Space wrap><Tag>#{item.chunkId}</Tag><Tag>rank {item.rank}</Tag><Tag>{item.channel||'context'}</Tag><Tag>{Number(item.score||0).toFixed(3)}</Tag></Space><Typography.Paragraph style={{marginBottom:0,whiteSpace:'pre-wrap'}}>{item.excerpt}</Typography.Paragraph></Card>)}
       </Card>
-      <Card size="small" title="向量 Top-N / BM25 Top-N / RRF / Rerank / MMR / Small-to-Big / A/B / 最终上下文" className="monitor">
+      <Card size="small" title="向量 Top-N / BM25 Top-N / RRF / Rerank / MMR / Small-to-Big / 最终上下文" className="monitor">
         <Typography.Paragraph copyable={{text:jsonText(replay?.vectorResults)}} ellipsis={{rows:2,expandable:true,symbol:'展开向量召回'}}>向量：{jsonText(replay?.vectorResults)}</Typography.Paragraph>
         <Typography.Paragraph copyable={{text:jsonText(replay?.bm25Results)}} ellipsis={{rows:2,expandable:true,symbol:'展开 BM25'}}>BM25：{jsonText(replay?.bm25Results)}</Typography.Paragraph>
         <Typography.Paragraph copyable={{text:jsonText(replay?.fusedResults)}} ellipsis={{rows:2,expandable:true,symbol:'展开 RRF'}}>RRF：{jsonText(replay?.fusedResults)}</Typography.Paragraph>
         <Typography.Paragraph copyable={{text:jsonText(replay?.rerankResults)}} ellipsis={{rows:2,expandable:true,symbol:'展开 Rerank'}}>Rerank：{jsonText(replay?.rerankResults)}</Typography.Paragraph>
         <Typography.Paragraph copyable={{text:jsonText(replay?.mmrResults)}} ellipsis={{rows:2,expandable:true,symbol:'展开 MMR'}}>MMR：{jsonText(replay?.mmrResults)}</Typography.Paragraph>
         <Typography.Paragraph copyable={{text:jsonText(replay?.smallToBigContext)}} ellipsis={{rows:3,expandable:true,symbol:'展开 Small-to-Big'}}>Small-to-Big：{jsonText(replay?.smallToBigContext)}</Typography.Paragraph>
-        <Typography.Paragraph copyable={{text:jsonText(replay?.abVariants)}} ellipsis={{rows:2,expandable:true,symbol:'展开 A/B 影子变体'}}>A/B 影子变体：{jsonText(replay?.abVariants)}</Typography.Paragraph>
         <Typography.Paragraph copyable={{text:jsonText(replay?.contextChunks)}} ellipsis={{rows:4,expandable:true,symbol:'展开上下文'}}>上下文：{jsonText(replay?.contextChunks)}</Typography.Paragraph>
       </Card>
     </Modal>

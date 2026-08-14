@@ -2,6 +2,8 @@ package com.modelrag.search.channel;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.modelrag.search.dto.HybridSearchRequest;
 import com.modelrag.search.dto.ScoredChunk;
 import java.net.URI;
@@ -14,26 +16,74 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
+/** Elasticsearch BM25 channel. Active document versions are applied as a server-side filter. */
 @Service
-@Profile("postgres")
+@Profile("!test")
 public class ElasticsearchBm25Search implements Bm25Search {
     private final String endpoint;
-    private final HttpClient http=HttpClient.newHttpClient();
-    private final ObjectMapper json=new ObjectMapper();
-    public ElasticsearchBm25Search(@Value("${modelrag.elasticsearch.endpoint:http://localhost:9200}")String endpoint){this.endpoint=endpoint.replaceAll("/$","");}
-    public List<ScoredChunk> search(HybridSearchRequest request,int recall){try{String query=json.writeValueAsString(request.query());String body="""
-            {"size":%d,
-             "query":{"bool":{
-               "filter":[
-                 {"term":{"datasetId":%d}},
-                 {"term":{"indexType":"default"}}
-               ],
-               "must":[{"multi_match":{
-                 "query":%s,
-                 "type":"best_fields",
-                 "fields":["titlePath^4","documentName^2","content"],
-                 "operator":"or"
-               }}]
-             }}}
-            """.formatted(recall,request.datasetId(),query);HttpRequest call=HttpRequest.newBuilder(URI.create(endpoint+"/modelrag-chunks/_search")).header("Content-Type","application/json").POST(HttpRequest.BodyPublishers.ofString(body)).build();JsonNode hits=json.readTree(http.send(call,HttpResponse.BodyHandlers.ofString()).body()).path("hits").path("hits");List<ScoredChunk> result=new ArrayList<>();for(JsonNode hit:hits){JsonNode source=hit.path("_source");result.add(new ScoredChunk(source.path("chunkId").asLong(),source.path("content").asText(),hit.path("_score").asDouble(),"bm25",result.size()+1));}return result;}catch(Exception e){return List.of();}}
+    private final HttpClient http = HttpClient.newHttpClient();
+    private final ObjectMapper json = new ObjectMapper();
+
+    public ElasticsearchBm25Search(
+            @Value("${modelrag.elasticsearch.endpoint:http://localhost:9200}") String endpoint) {
+        this.endpoint = endpoint.replaceAll("/$", "");
+    }
+
+    @Override
+    public List<ScoredChunk> search(HybridSearchRequest request, int recall) {
+        if (request.activeIndexVersions().isEmpty()) return List.of();
+        try {
+            ObjectNode root = json.createObjectNode();
+            root.put("size", recall);
+            ObjectNode bool = root.putObject("query").putObject("bool");
+            ArrayNode filters = bool.putArray("filter");
+            term(filters, "datasetId", request.datasetId());
+            term(filters, "indexType", "default");
+
+            ArrayNode versions = bool.putArray("should");
+            request.activeIndexVersions().forEach((documentId, version) -> {
+                ObjectNode clause = versions.addObject().putObject("bool");
+                ArrayNode versionFilters = clause.putArray("filter");
+                term(versionFilters, "documentId", documentId);
+                term(versionFilters, "version", version);
+            });
+            bool.put("minimum_should_match", 1);
+
+            ObjectNode multiMatch = bool.putArray("must").addObject().putObject("multi_match");
+            multiMatch.put("query", request.query());
+            multiMatch.put("type", "best_fields");
+            ArrayNode fields = multiMatch.putArray("fields");
+            fields.add("titlePath^4");
+            fields.add("documentName^2");
+            fields.add("content");
+            multiMatch.put("operator", "or");
+
+            HttpRequest call = HttpRequest.newBuilder(URI.create(endpoint + "/modelrag-chunks-active/_search"))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(root)))
+                    .build();
+            HttpResponse<String> response = http.send(call, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() / 100 != 2) {
+                throw new IllegalStateException("Elasticsearch 返回 HTTP " + response.statusCode());
+            }
+            JsonNode hits = json.readTree(response.body()).path("hits").path("hits");
+            List<ScoredChunk> result = new ArrayList<>();
+            for (JsonNode hit : hits) {
+                JsonNode source = hit.path("_source");
+                result.add(new ScoredChunk(source.path("chunkId").asLong(), source.path("content").asText(),
+                        hit.path("_score").asDouble(), "bm25", result.size() + 1));
+            }
+            return result;
+        } catch (Exception error) {
+            throw new IllegalStateException("Elasticsearch BM25 检索不可用", error);
+        }
+    }
+
+    private void term(ArrayNode filters, String field, long value) {
+        filters.addObject().putObject("term").put(field, value);
+    }
+
+    private void term(ArrayNode filters, String field, String value) {
+        filters.addObject().putObject("term").put(field, value);
+    }
 }

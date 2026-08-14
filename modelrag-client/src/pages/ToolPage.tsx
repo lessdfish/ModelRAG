@@ -45,7 +45,7 @@ export function ToolPage({admin}:{admin:boolean}){
     }catch(error){message.error(error instanceof Error?error.message:'意图绑定失败')}
     finally{setSaving(false)}
   };
-  const toggle=async(item:ToolDefinition,value:boolean)=>{await toolApi.setEnabled(item.name,value);await load();message.success(value?'工具已启用':'工具已停用')};
+  const toggle=async(item:ToolDefinition,value:boolean)=>{await toolApi.setEnabled(item.name,value,item);await load();message.success(value?'工具已启用':'工具已停用')};
   const remove=async(item:ToolDefinition)=>{await toolApi.remove(item.name);await load();message.success('工具已删除')};
   const removeIntent=async(item:IntentNode)=>{if(!datasetId||!item.id)return;await intentApi.remove(datasetId,item.id);setIntents(await intentApi.list(datasetId));message.success('意图已删除')};
   return <section className="tools-page">

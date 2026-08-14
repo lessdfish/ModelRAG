@@ -2,174 +2,116 @@ package com.modelrag.server.auth;
 
 import com.modelrag.common.dto.ApiResponse;
 import com.modelrag.common.security.AccessControlService;
-import com.modelrag.common.security.LocalSecurityStore;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/admin/security")
+@Profile("!test")
+@RequestMapping({"/api/v1/admin/security", "/api/v2/admin/security"})
 public class AdminSecurityController {
-    private final ObjectProvider<JdbcTemplate> jdbc;
+    private final JdbcTemplate jdbc;
+    private final PasswordEncoder passwords;
     private final AccessControlService access;
-    private final ObjectProvider<LocalSecurityStore> localSecurity;
 
-    @Autowired
-    public AdminSecurityController(ObjectProvider<JdbcTemplate> jdbc, AccessControlService access,
-            ObjectProvider<LocalSecurityStore> localSecurity) {
+    public AdminSecurityController(JdbcTemplate jdbc, PasswordEncoder passwords, AccessControlService access) {
         this.jdbc = jdbc;
+        this.passwords = passwords;
         this.access = access;
-        this.localSecurity = localSecurity;
-    }
-
-    public AdminSecurityController(ObjectProvider<JdbcTemplate> jdbc, AccessControlService access) {
-        this(jdbc, access, null);
     }
 
     @GetMapping("/users")
-    public ApiResponse<List<Map<String, Object>>> users() {
+    public ApiResponse<List<UserView>> users() {
         access.requireRole("ADMIN");
-        JdbcTemplate db = database();
-        if (db == null) return ApiResponse.success(local().users());
-        List<Map<String, Object>> users = db.queryForList("""
+        return ApiResponse.success(jdbc.query("""
                 SELECT user_id,display_name,enabled,create_time,update_time
-                FROM kb_user_account
-                ORDER BY user_id
-                """);
-        return ApiResponse.success(users.stream().map(row -> enrich(db, row)).toList());
+                FROM kb_user_account ORDER BY user_id
+                """, (rs, n) -> user(rs.getString("user_id"), rs.getString("display_name"),
+                rs.getBoolean("enabled"), rs.getTimestamp("create_time").toInstant().toString(),
+                rs.getTimestamp("update_time").toInstant().toString())));
     }
 
     @PostMapping("/users")
-    public ApiResponse<Map<String, Object>> upsertUser(@RequestBody Map<String, Object> body) {
+    public ApiResponse<UserView> upsertUser(@RequestBody UserRequest request) {
         access.requireRole("ADMIN");
-        JdbcTemplate db = database();
-        String userId = required(body, "userId");
-        String displayName = Objects.toString(body.getOrDefault("displayName", userId), userId);
-        boolean enabled = !Boolean.FALSE.equals(body.get("enabled"));
-        String password = Objects.toString(body.getOrDefault("password", ""), "");
-        Set<String> roles = roles(body.get("roles"));
-        if (db == null) {
-            return ApiResponse.success(local().upsert(userId, displayName,
-                    password.isBlank() ? null : "{sha256}" + sha256(password), enabled, roles));
-        }
-        if (password.isBlank()) {
-            Integer existing = db.queryForObject("SELECT COUNT(*) FROM kb_user_account WHERE user_id=?", Integer.class, userId);
-            if (existing == null || existing == 0) throw new IllegalArgumentException("新用户密码不能为空");
-            db.update("""
-                    UPDATE kb_user_account
-                    SET display_name=?,enabled=?,update_time=NOW()
-                    WHERE user_id=?
-                    """, displayName, enabled, userId);
+        if (request == null || blank(request.userId())) throw new IllegalArgumentException("userId 不能为空");
+        Set<String> roles = normalizeRoles(request.roles());
+        String userId = request.userId().trim();
+        String displayName = blank(request.displayName()) ? userId : request.displayName().trim();
+        if (blank(request.password())) {
+            Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM kb_user_account WHERE user_id=?", Integer.class, userId);
+            if (count == null || count == 0) throw new IllegalArgumentException("新用户密码不能为空");
+            jdbc.update("UPDATE kb_user_account SET display_name=?,enabled=?,update_time=NOW() WHERE user_id=?",
+                    displayName, request.enabled(), userId);
         } else {
-            db.update("""
+            if (request.password().length() < 12) throw new IllegalArgumentException("密码至少 12 位");
+            jdbc.update("""
                     INSERT INTO kb_user_account(user_id,display_name,password_hash,enabled,update_time)
                     VALUES (?,?,?,?,NOW())
-                    ON CONFLICT(user_id) DO UPDATE SET display_name=EXCLUDED.display_name,password_hash=EXCLUDED.password_hash,enabled=EXCLUDED.enabled,update_time=NOW()
-                    """, userId, displayName, "{sha256}" + sha256(password), enabled);
+                    ON CONFLICT(user_id) DO UPDATE SET display_name=EXCLUDED.display_name,
+                    password_hash=EXCLUDED.password_hash,enabled=EXCLUDED.enabled,update_time=NOW()
+                    """, userId, displayName, passwords.encode(request.password()), request.enabled());
         }
-        replaceRoles(db, userId, roles);
-        return ApiResponse.success(enrich(db, Map.of("user_id", userId, "display_name", displayName, "enabled", enabled)));
+        jdbc.update("DELETE FROM kb_user_role WHERE user_id=?", userId);
+        for (String role : roles) jdbc.update("INSERT INTO kb_user_role(user_id,role_name) VALUES (?,?)", userId, role);
+        return ApiResponse.success(user(userId, displayName, request.enabled(), null, null));
     }
 
     @PostMapping("/users/{userId}/datasets/{datasetId}")
-    public ApiResponse<Map<String, Object>> grantDataset(@PathVariable String userId, @PathVariable long datasetId,
-            @RequestBody(required = false) Map<String, Object> body) {
+    public ApiResponse<DatasetGrant> grantDataset(@PathVariable String userId, @PathVariable long datasetId,
+            @RequestBody(required = false) DatasetGrantRequest request) {
         access.requireRole("ADMIN");
-        JdbcTemplate db = database();
-        if (db == null) return ApiResponse.success(local().grant(userId, datasetId));
-        String permission = permission(body == null ? null : body.get("permission"));
-        db.update("""
-                INSERT INTO kb_dataset_acl(dataset_id,user_id,permission)
-                VALUES (?,?,?)
+        String permission = normalizePermission(request == null ? null : request.permission());
+        jdbc.update("""
+                INSERT INTO kb_dataset_acl(dataset_id,user_id,permission) VALUES (?,?,?)
                 ON CONFLICT(dataset_id,user_id) DO UPDATE SET permission=EXCLUDED.permission
                 """, datasetId, userId, permission);
-        return ApiResponse.success(Map.of("userId", userId, "datasetId", datasetId, "permission", permission));
+        return ApiResponse.success(new DatasetGrant(userId, datasetId, permission));
     }
 
     @DeleteMapping("/users/{userId}/datasets/{datasetId}")
     public ApiResponse<Void> revokeDataset(@PathVariable String userId, @PathVariable long datasetId) {
         access.requireRole("ADMIN");
-        JdbcTemplate db = database();
-        if (db == null) local().revoke(userId, datasetId);
-        else db.update("DELETE FROM kb_dataset_acl WHERE user_id=? AND dataset_id=?", userId, datasetId);
+        jdbc.update("DELETE FROM kb_dataset_acl WHERE user_id=? AND dataset_id=?", userId, datasetId);
         return ApiResponse.success(null);
     }
 
-    private Map<String, Object> enrich(JdbcTemplate db, Map<String, Object> row) {
-        String userId = Objects.toString(row.get("user_id"), Objects.toString(row.get("userId"), ""));
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("userId", userId);
-        result.put("displayName", row.getOrDefault("display_name", row.get("displayName")));
-        result.put("enabled", row.get("enabled"));
-        result.put("roles", db.queryForList("SELECT role_name FROM kb_user_role WHERE user_id=? ORDER BY role_name", String.class, userId));
-        result.put("datasetIds", db.queryForList("SELECT dataset_id FROM kb_dataset_acl WHERE user_id=? ORDER BY dataset_id", Long.class, userId));
-        result.put("createdAt", row.get("create_time"));
-        result.put("updatedAt", row.get("update_time"));
-        return result;
+    public record UserRequest(String userId, String displayName, String password, boolean enabled, Set<String> roles) {}
+    public record DatasetGrantRequest(String permission) {}
+    public record DatasetGrant(String userId, long datasetId, String permission) {}
+    public record UserView(String userId, String displayName, boolean enabled, Set<String> roles,
+            Set<Long> datasetIds, String createdAt, String updatedAt) {}
+
+    private UserView user(String userId, String displayName, boolean enabled, String createdAt, String updatedAt) {
+        Set<String> roles = jdbc.queryForList("SELECT role_name FROM kb_user_role WHERE user_id=? ORDER BY role_name", String.class, userId)
+                .stream().map(value -> value.toUpperCase(Locale.ROOT)).collect(Collectors.toSet());
+        Set<Long> datasets = jdbc.queryForList("SELECT dataset_id FROM kb_dataset_acl WHERE user_id=? ORDER BY dataset_id", Long.class, userId)
+                .stream().collect(Collectors.toSet());
+        return new UserView(userId, displayName, enabled, roles, datasets, createdAt, updatedAt);
     }
 
-    private void replaceRoles(JdbcTemplate db, String userId, Set<String> roles) {
-        db.update("DELETE FROM kb_user_role WHERE user_id=?", userId);
-        for (String role : roles.isEmpty() ? Set.of("USER") : roles) {
-            db.update("INSERT INTO kb_user_role(user_id,role_name) VALUES (?,?) ON CONFLICT(user_id,role_name) DO NOTHING", userId, role);
-        }
+    private Set<String> normalizeRoles(Set<String> values) {
+        Set<String> result = values == null ? Set.of("USER") : values.stream().map(value -> value == null ? "" : value.trim().toUpperCase(Locale.ROOT))
+                .filter(value -> !value.isBlank()).collect(Collectors.toSet());
+        return result.isEmpty() ? Set.of("USER") : result;
     }
 
-    private Set<String> roles(Object value) {
-        if (value instanceof Iterable<?> items) {
-            return toRoles(items);
-        }
-        return toRoles(Arrays.asList(Objects.toString(value == null ? "USER" : value, "USER").split(",")));
+    private String normalizePermission(String value) {
+        String normalized = value == null ? "READ" : value.trim().toUpperCase(Locale.ROOT);
+        if (!Set.of("READ", "WRITE", "ADMIN").contains(normalized)) throw new IllegalArgumentException("权限只能是 READ、WRITE 或 ADMIN");
+        return normalized;
     }
 
-    private Set<String> toRoles(Iterable<?> items) {
-        return java.util.stream.StreamSupport.stream(items.spliterator(), false)
-                .map(item -> Objects.toString(item, "").trim().toUpperCase(Locale.ROOT))
-                .filter(role -> !role.isBlank())
-                .collect(Collectors.toSet());
-    }
-
-    private String permission(Object value) {
-        String permission = Objects.toString(value == null ? "READ" : value, "READ").trim().toUpperCase(Locale.ROOT);
-        if (!Set.of("READ", "WRITE", "ADMIN").contains(permission)) throw new IllegalArgumentException("知识库权限只能是 READ、WRITE 或 ADMIN");
-        return permission;
-    }
-
-    private String required(Map<String, Object> body, String key) {
-        String value = Objects.toString(body == null ? null : body.get(key), "").trim();
-        if (value.isBlank()) throw new IllegalArgumentException(key + " 不能为空");
-        return value;
-    }
-
-    private JdbcTemplate database() {
-        return jdbc == null ? null : jdbc.getIfAvailable();
-    }
-
-    private LocalSecurityStore local() {
-        LocalSecurityStore store = localSecurity == null ? null : localSecurity.getIfAvailable();
-        if (store == null) throw new IllegalStateException("本地用户权限存储不可用");
-        return store;
-    }
-
-    private String sha256(String value) {
-        try {
-            byte[] bytes = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
-            StringBuilder out = new StringBuilder();
-            for (byte b : bytes) out.append(String.format("%02x", b));
-            return out.toString();
-        } catch (Exception e) {
-            throw new IllegalStateException("无法生成密码哈希", e);
-        }
-    }
+    private boolean blank(String value) { return value == null || value.isBlank(); }
 }

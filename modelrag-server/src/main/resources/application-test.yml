@@ -1,0 +1,22 @@
+spring:
+  http:
+    converters:
+      preferred-json-mapper: jackson2
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
+  datasource:
+    url: jdbc:h2:mem:modelrag-test
+modelrag:
+  security:
+    token-secret: test-only-token-secret
+    secret-root-key: test-only-secret-root-key
+    tool-secret-key: test-only-tool-secret-key
+  ollama:
+    enabled: false
+  reranker:
+    enabled: false
+  tools:
+    allow-http-localhost: true
