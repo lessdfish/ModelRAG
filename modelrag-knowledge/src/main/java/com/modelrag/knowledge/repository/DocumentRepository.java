@@ -14,6 +14,11 @@ public interface DocumentRepository {
 
     void activateVersion(long documentId, long documentVersionId);
 
+    /** Locks the logical document row for an atomic V2 build cutover. */
+    default void lockForIndexBuildActivation(long documentId) { }
+
+    void activateIndexBuild(long documentId, long indexBuildId);
+
     List<Document> findByDatasetId(long datasetId);
 
     void updateStatus(long documentId, String status, String error, int chunkCount);

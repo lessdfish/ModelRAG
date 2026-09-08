@@ -72,6 +72,30 @@ public class JdbcDocumentRepository implements DocumentRepository {
     }
 
     @Override
+    public void lockForIndexBuildActivation(long documentId) {
+        List<Long> rows = jdbc.query("SELECT id FROM kb_document WHERE id=? AND delete_time IS NULL FOR UPDATE",
+                (rs, n) -> rs.getLong(1), documentId);
+        if (rows.isEmpty()) throw new BusinessException(ErrorCode.NOT_FOUND, "文档不存在");
+    }
+
+    @Override
+    public void activateIndexBuild(long documentId, long indexBuildId) {
+        if (indexBuildId <= 0) throw new BusinessException(ErrorCode.VALIDATION, "IndexBuild ID 无效");
+        lockForIndexBuildActivation(documentId);
+        if (jdbc.query("SELECT id FROM kb_index_build WHERE id=? AND document_id=?",
+                (rs, n) -> rs.getLong(1), indexBuildId, documentId).isEmpty()) {
+            throw new BusinessException(ErrorCode.VALIDATION, "IndexBuild 不属于该文档");
+        }
+        int updated = jdbc.update("""
+                UPDATE kb_document SET active_index_build_id=?,update_time=NOW()
+                WHERE id=? AND delete_time IS NULL
+                AND EXISTS (SELECT 1 FROM kb_index_build b
+                    WHERE b.id=? AND b.document_id=kb_document.id)
+                """, indexBuildId, documentId, indexBuildId);
+        if (updated != 1) throw new BusinessException(ErrorCode.INTERNAL, "IndexBuild 激活失败");
+    }
+
+    @Override
     public List<Document> findByDatasetId(long datasetId) {
         return jdbc.query("SELECT * FROM kb_document WHERE dataset_id=? AND delete_time IS NULL ORDER BY id",
                 (rs, n) -> document(rs), datasetId);
@@ -105,6 +129,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
         return new Document(rs.getLong("id"), rs.getLong("dataset_id"), rs.getString("file_name"), rs.getString("file_type"),
                 rs.getString("file_hash"), null, rs.getString("index_status"), rs.getString("error_msg"), rs.getInt("chunk_count"),
                 rs.getString("source_object_key"), rs.getString("artifact_object_key"), rs.getString("content_hash"),
-                rs.getObject("active_version_id", Long.class));
+                rs.getObject("active_version_id", Long.class),
+                rs.getObject("active_index_build_id", Long.class));
     }
 }

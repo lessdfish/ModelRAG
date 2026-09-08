@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 final class TestDocumentRepository implements DocumentRepository {
     private final InMemoryKnowledgeStore store;
     private final Map<Long, Long> activeVersions = new ConcurrentHashMap<>();
+    private final Map<Long, Long> activeBuilds = new ConcurrentHashMap<>();
 
     TestDocumentRepository(InMemoryKnowledgeStore store) { this.store = store; }
 
@@ -24,7 +25,7 @@ final class TestDocumentRepository implements DocumentRepository {
     }
     @Override public Document findById(long id) {
         Document document = store.document(id);
-        return document.withActiveVersionId(activeVersions.get(id));
+        return document.withActiveVersionId(activeVersions.get(id)).withActiveIndexBuildId(activeBuilds.get(id));
     }
     @Override public void activateVersion(long documentId, long documentVersionId) {
         store.document(documentId);
@@ -32,7 +33,12 @@ final class TestDocumentRepository implements DocumentRepository {
     }
     @Override public List<Document> findByDatasetId(long datasetId) {
         return store.documents(datasetId).stream()
-                .map(document -> document.withActiveVersionId(activeVersions.get(document.id()))).toList();
+                .map(document -> document.withActiveVersionId(activeVersions.get(document.id()))
+                        .withActiveIndexBuildId(activeBuilds.get(document.id()))).toList();
+    }
+    @Override public void activateIndexBuild(long documentId, long indexBuildId) {
+        store.document(documentId);
+        activeBuilds.put(documentId, indexBuildId);
     }
     @Override public void updateStatus(long documentId, String status, String error, int chunkCount) {
         store.status(documentId, status, error, chunkCount);

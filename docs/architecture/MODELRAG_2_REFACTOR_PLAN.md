@@ -341,9 +341,20 @@ titlePath
 content
 tokenCount
 metadata
-active
 createTime
 ```
+
+V2 retrieval-unit activity is derived from the owning document pointers rather
+than stored on each unit:
+
+```text
+u.index_build_id = d.active_index_build_id
+AND
+u.document_version_id = d.active_version_id
+```
+
+Build activation must therefore update build/document state and pointers only;
+it must not mass-update retrieval units.
 
 This separates:
 
@@ -495,11 +506,11 @@ kb_retrieval_unit
 Recommended indexes:
 
 ```text
-(index_build_id, active)
+(index_build_id, id)
 
 (document_version_id, node_id)
 
-(dataset_id, document_id, active)
+(dataset_id, document_id, index_build_id)
 
 (unit_type)
 ```

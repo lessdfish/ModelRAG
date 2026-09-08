@@ -30,6 +30,7 @@ import com.modelrag.knowledge.repository.DocumentRepository;
 import com.modelrag.knowledge.repository.DocumentVersionRepository;
 import com.modelrag.knowledge.repository.DocumentStructureRepository;
 import com.modelrag.knowledge.repository.IndexVersionRepository;
+import com.modelrag.knowledge.repository.IndexBuildRepository;
 import com.modelrag.knowledge.service.InMemoryKnowledgeStore;
 import com.modelrag.knowledge.service.DocumentLifecycleService;
 import com.modelrag.qa.orchestrator.QaOrchestrator;
@@ -70,6 +71,9 @@ class TestPersistenceConfiguration {
 
     @Bean
     DocumentStructureRepository documentStructureRepository() { return new TestDocumentStructureRepository(); }
+
+    @Bean
+    IndexBuildRepository indexBuildRepository() { return new TestIndexBuildRepository(); }
 
     @Bean
     DocumentLifecycleService documentLifecycleService(DatasetRepository datasets, DocumentRepository documents,
