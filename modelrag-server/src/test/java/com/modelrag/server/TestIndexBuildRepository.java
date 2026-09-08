@@ -4,6 +4,7 @@ import com.modelrag.common.exception.BusinessException;
 import com.modelrag.common.exception.ErrorCode;
 import com.modelrag.knowledge.model.IndexBuild;
 import com.modelrag.knowledge.model.IndexBuildState;
+import com.modelrag.knowledge.model.ActiveBuildRef;
 import com.modelrag.knowledge.repository.IndexBuildRepository;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -17,6 +18,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /** In-memory V2 build fixture with compare-and-set state transitions. */
 final class TestIndexBuildRepository implements IndexBuildRepository {
     private static final int MAX_LIMIT = 500;
+    private static final int MAX_ACTIVE_SCOPE_LIMIT = 10_001;
     private final AtomicLong ids = new AtomicLong();
     private final Map<Long, IndexBuild> builds = new LinkedHashMap<>();
 
@@ -48,6 +50,19 @@ final class TestIndexBuildRepository implements IndexBuildRepository {
         return builds.values().stream().filter(build -> build.documentId() == documentId)
                 .sorted(Comparator.comparingLong(IndexBuild::buildNo).reversed())
                 .skip(Math.max(0, offset)).limit(boundedLimit).toList();
+    }
+
+    @Override
+    public synchronized List<ActiveBuildRef> findActiveByDataset(long datasetId, int limit) {
+        int boundedLimit = Math.min(MAX_ACTIVE_SCOPE_LIMIT, Math.max(0, limit));
+        if (boundedLimit == 0) return List.of();
+        return builds.values().stream()
+                .filter(build -> build.datasetId() == datasetId && build.state() == IndexBuildState.ACTIVE)
+                .sorted(Comparator.comparingLong(IndexBuild::documentId))
+                .limit(boundedLimit)
+                .map(build -> new ActiveBuildRef(build.documentId(), build.documentVersionId(), build.id(),
+                        build.embeddingProfile()))
+                .toList();
     }
 
     @Override

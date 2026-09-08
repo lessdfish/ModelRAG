@@ -131,6 +131,8 @@ public class JdbcRetrievalUnitRepository implements RetrievalUnitRepository {
                 JOIN kb_document d ON d.id=u.document_id
                     AND d.active_version_id=u.document_version_id
                     AND d.active_index_build_id=u.index_build_id
+                JOIN kb_index_build b ON b.id=u.index_build_id
+                    AND b.state='ACTIVE'
                 JOIN kb_dataset ds ON ds.id=u.dataset_id AND ds.id=d.dataset_id
                 WHERE u.dataset_id=? AND u.id IN (%s)
                     AND d.delete_time IS NULL AND ds.delete_time IS NULL

@@ -26,6 +26,23 @@ public class SearchExecutorConfig {
         return executor("modelrag-rerank-");
     }
 
+    @Bean("retrievalShadowExecutor")
+    public Executor retrievalShadowExecutor() {
+        return new ThreadPoolExecutor(
+                1,
+                1,
+                60,
+                TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(8),
+                task -> {
+                    Thread thread = new Thread(task);
+                    thread.setName("modelrag-retrieval-shadow-" + thread.threadId());
+                    thread.setDaemon(true);
+                    return thread;
+                },
+                new ThreadPoolExecutor.AbortPolicy());
+    }
+
     private Executor executor(String prefix) {
         ThreadPoolExecutor executor = new ThreadPoolExecutor(
                 1,

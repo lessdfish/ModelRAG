@@ -1449,6 +1449,30 @@ not:
 SearchResult(chunkId,...)
 ```
 
+G5 implementation details:
+
+```text
+kb_vector_embedding
+    JOIN kb_retrieval_unit
+    JOIN kb_document
+    JOIN kb_dataset
+    JOIN kb_index_build
+```
+
+The semantic adapter executes this as a bounded, read-only pgvector query. It
+requires the requested embedding profile, excludes soft-deleted datasets and
+documents, requires `d.active_version_id = u.document_version_id`, requires
+`d.active_index_build_id = u.index_build_id`, and requires
+`kb_index_build.state = 'ACTIVE'`. It also sets
+`hnsw.iterative_scan = 'relaxed_order'` locally for the transaction. The
+legacy `PostgresVectorStore` continues to read `kb_chunk` and remains the V1
+production channel.
+
+Authorization scope is still a cutover requirement. G5's internal shadow
+adapter preserves the existing dataset/active-version visibility rules but
+does not replace the established authorization policy or expose a V2 user
+endpoint.
+
 Suggested candidate:
 
 ```text
@@ -1495,6 +1519,18 @@ content
 ```
 
 This improves section headings, policy numbers, and exact terminology.
+
+G5 queries the shared index `modelrag-retrieval-units-v2` without changing the
+legacy `ElasticsearchBm25Search` / `modelrag-chunks-active` path. Before the
+query, `ActiveBuildScopeResolver` obtains active build IDs from PostgreSQL by
+joining document active pointers with `kb_index_build.state = 'ACTIVE'` and
+matching the active document version. The scope is bounded by
+`modelrag.retrieval.v2.max-active-build-filter` (default `10000`) and is
+resolved with `cap + 1`. An overflow never sends a silently truncated terms
+filter: lexical V2 returns an empty degraded channel while semantic V2 may
+continue. Returned Elasticsearch hits are batch-validated with
+`RetrievalUnitRepository.findActiveByIds`; stale projection hits are dropped
+and counted.
 
 ---
 
@@ -2834,6 +2870,24 @@ Local GPU model serving
 ```
 
 Do not combine this with the earlier deep Java refactor.
+
+G5 keeps the two retrieval engines separate during migration:
+
+```text
+V1: SearchOrchestrator -> ScoredChunk -> current QA
+V2: HybridRetrievalService -> RetrievalCandidate -> RetrievalV2Stages
+```
+
+V2 reuses `QueryRewriter`, runs semantic and lexical channels in parallel,
+deduplicates within each channel by `retrievalUnitId`, and applies weighted
+RRF with `retrievalUnitId` as the only fusion key. The existing reranker is
+reached only through a private compatibility adapter that maps unit IDs to
+temporary `ScoredChunk` IDs and maps the result back to `RetrievalCandidate`.
+V2 retrieval is shadow-only in G5. When
+`modelrag.retrieval.v2.shadow-enabled` is enabled, a bounded asynchronous
+shadow job compares V1 and V2 at document-ID level; queue saturation or V2
+failure is recorded and cannot change the V1 response. Evidence construction,
+document navigation, and QA cutover remain later tasks.
 
 ---
 

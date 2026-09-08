@@ -6,6 +6,7 @@ import com.modelrag.common.exception.BusinessException;
 import com.modelrag.common.exception.ErrorCode;
 import com.modelrag.knowledge.model.IndexBuild;
 import com.modelrag.knowledge.model.IndexBuildState;
+import com.modelrag.knowledge.model.ActiveBuildRef;
 import com.modelrag.knowledge.repository.IndexBuildRepository;
 import java.sql.ResultSet;
 import java.sql.Timestamp;
@@ -24,6 +25,7 @@ import org.springframework.transaction.support.TransactionOperations;
 @Profile("!test")
 public class JdbcIndexBuildRepository implements IndexBuildRepository {
     private static final int MAX_QUERY_LIMIT = 500;
+    private static final int MAX_ACTIVE_SCOPE_LIMIT = 10_001;
     private static final String BUILD_COLUMNS = "id,dataset_id,document_id,document_version_id,build_no,state,"
             + "embedding_profile,rerank_profile,node_count,unit_count,vector_count,lexical_count,error_msg,metadata,"
             + "create_time,start_time,ready_time,active_time,failed_time";
@@ -88,6 +90,32 @@ public class JdbcIndexBuildRepository implements IndexBuildRepository {
         return query("SELECT " + BUILD_COLUMNS + " FROM kb_index_build "
                 + "WHERE document_id=? ORDER BY build_no DESC LIMIT ? OFFSET ?",
                 documentId, boundedLimit, Math.max(0, offset));
+    }
+
+    @Override
+    public List<ActiveBuildRef> findActiveByDataset(long datasetId, int limit) {
+        if (datasetId <= 0) return List.of();
+        int boundedLimit = Math.min(MAX_ACTIVE_SCOPE_LIMIT, Math.max(0, limit));
+        if (boundedLimit == 0) return List.of();
+        return jdbc.query("""
+                SELECT d.id AS document_id,
+                       d.active_version_id AS document_version_id,
+                       d.active_index_build_id AS index_build_id,
+                       b.embedding_profile
+                FROM kb_document d
+                JOIN kb_dataset ds ON ds.id=d.dataset_id
+                JOIN kb_index_build b ON b.id=d.active_index_build_id
+                    AND b.document_id=d.id
+                WHERE d.dataset_id=?
+                  AND d.delete_time IS NULL
+                  AND ds.delete_time IS NULL
+                  AND d.active_version_id=b.document_version_id
+                  AND b.state='ACTIVE'
+                ORDER BY d.id
+                LIMIT ?
+                """, (rs, row) -> new ActiveBuildRef(rs.getLong("document_id"),
+                rs.getLong("document_version_id"), rs.getLong("index_build_id"),
+                rs.getString("embedding_profile")), datasetId, boundedLimit);
     }
 
     @Override

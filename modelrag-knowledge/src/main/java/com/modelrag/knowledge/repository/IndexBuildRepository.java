@@ -2,6 +2,7 @@ package com.modelrag.knowledge.repository;
 
 import com.modelrag.knowledge.model.IndexBuild;
 import com.modelrag.knowledge.model.IndexBuildState;
+import com.modelrag.knowledge.model.ActiveBuildRef;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -16,6 +17,9 @@ public interface IndexBuildRepository {
     Optional<IndexBuild> findActiveByDocumentId(long documentId);
 
     List<IndexBuild> findByDocumentId(long documentId, int offset, int limit);
+
+    /** Bounded PostgreSQL source-of-truth scope for V2 lexical filtering. */
+    default List<ActiveBuildRef> findActiveByDataset(long datasetId, int limit) { return List.of(); }
 
     /** Bounded worker query; there is intentionally no dataset-wide findAll operation. */
     default List<IndexBuild> findByState(IndexBuildState state, int limit) { return List.of(); }

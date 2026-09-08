@@ -19,4 +19,3 @@ docker-compose.local.yml
 2026-08-12-modelrag-spring-ai-refactor-plan.md
 scripts/
 modelrag-server/tmp/
-docs/

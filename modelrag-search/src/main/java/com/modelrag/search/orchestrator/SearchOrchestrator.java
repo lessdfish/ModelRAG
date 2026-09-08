@@ -23,8 +23,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.Queue;
 import java.util.concurrent.TimeUnit;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -44,6 +47,9 @@ public class SearchOrchestrator implements SearchFacade {
     private final Executor vectorExecutor;
     private final Executor bm25Executor;
     private final Executor rerankExecutor;
+    private final Executor shadowExecutor;
+    private final ObjectProvider<com.modelrag.search.shadow.RetrievalShadowComparator> shadowComparator;
+    private final boolean shadowEnabled;
     private final long channelTimeoutMs;
     private final long rerankTimeoutMs;
 
@@ -72,6 +78,43 @@ public class SearchOrchestrator implements SearchFacade {
         this.vectorExecutor = vectorExecutor;
         this.bm25Executor = bm25Executor;
         this.rerankExecutor = rerankExecutor;
+        this.shadowExecutor = Runnable::run;
+        this.shadowComparator = null;
+        this.shadowEnabled = false;
+    }
+
+    @Autowired
+    public SearchOrchestrator(VectorStore vectors, EmbeddingService embeddings, Bm25Search bm25,
+            Reranker reranker, QueryRewriter rewriter,
+            IndexVersionRepository versions,
+            @Value("${modelrag.search.rrf-vector-weight:.7}") double vectorWeight,
+            @Value("${modelrag.search.rrf-bm25-weight:.3}") double bm25Weight,
+            @Value("${modelrag.search.channel-timeout-ms:800}") long channelTimeoutMs,
+            @Value("${modelrag.search.rerank-timeout-ms:500}") long rerankTimeoutMs,
+            MeterRegistry metrics,
+            @Qualifier("vectorSearchExecutor") Executor vectorExecutor,
+            @Qualifier("bm25SearchExecutor") Executor bm25Executor,
+            @Qualifier("rerankExecutor") Executor rerankExecutor,
+            @Qualifier("retrievalShadowExecutor") Executor shadowExecutor,
+            ObjectProvider<com.modelrag.search.shadow.RetrievalShadowComparator> shadowComparator,
+            @Value("${modelrag.retrieval.v2.shadow-enabled:false}") boolean shadowEnabled) {
+        this.vectors = vectors;
+        this.embeddings = embeddings;
+        this.bm25 = bm25;
+        this.reranker = reranker;
+        this.rewriter = rewriter;
+        this.versions = versions;
+        this.vectorWeight = vectorWeight;
+        this.bm25Weight = bm25Weight;
+        this.channelTimeoutMs = Math.max(50, channelTimeoutMs);
+        this.rerankTimeoutMs = Math.max(50, rerankTimeoutMs);
+        this.metrics = metrics;
+        this.vectorExecutor = vectorExecutor;
+        this.bm25Executor = bm25Executor;
+        this.rerankExecutor = rerankExecutor;
+        this.shadowExecutor = shadowExecutor;
+        this.shadowComparator = shadowComparator;
+        this.shadowEnabled = shadowEnabled;
     }
 
     @Override
@@ -136,6 +179,7 @@ public class SearchOrchestrator implements SearchFacade {
         record("threshold", thresholded.size());
         record("context", finalResults.size());
         latency.putIfAbsent("total", (System.nanoTime() - started) / 1_000_000);
+        submitShadow(request, finalResults, latency.getOrDefault("total", 0L));
         return new SearchStages(expanded.rewrittenQuery(), expanded.searchQueries(), expanded.rerankQuery(),
                 vector, lexical, fused, rerankApplied ? reranked : List.of(), rerankApplied, finalResults,
                 degraded.stream().distinct().toList(), latency);
@@ -250,4 +294,27 @@ public class SearchOrchestrator implements SearchFacade {
 
     private record ChannelResult(List<ScoredChunk> results) {}
     @FunctionalInterface private interface ChannelSupplier { List<ScoredChunk> get(); }
+
+    private void submitShadow(HybridSearchRequest request, List<ScoredChunk> v1Results, long v1LatencyMs) {
+        if (!shadowEnabled || shadowComparator == null) return;
+        try {
+            shadowExecutor.execute(() -> {
+                com.modelrag.search.shadow.RetrievalShadowComparator comparator;
+                try {
+                    comparator = shadowComparator.getIfAvailable();
+                } catch (RuntimeException error) {
+                    metrics.counter("modelrag.retrieval.shadow.v2.failure").increment();
+                    return;
+                }
+                if (comparator == null) return;
+                try {
+                    comparator.compare(request, v1Results, v1LatencyMs);
+                } catch (RuntimeException ignored) {
+                    // RetrievalShadowComparator records its own failure; shadow work is non-critical.
+                }
+            });
+        } catch (RejectedExecutionException rejected) {
+            metrics.counter("modelrag.retrieval.shadow.v2.dropped").increment();
+        }
+    }
 }

@@ -49,6 +49,10 @@ modelrag:
     rrf-bm25-weight: 0.3
     channel-timeout-ms: ${MODELRAG_SEARCH_CHANNEL_TIMEOUT_MS:800}
     rerank-timeout-ms: ${MODELRAG_SEARCH_RERANK_TIMEOUT_MS:500}
+  retrieval:
+    v2:
+      shadow-enabled: ${MODELRAG_RETRIEVAL_V2_SHADOW_ENABLED:false}
+      max-active-build-filter: ${MODELRAG_RETRIEVAL_V2_MAX_ACTIVE_BUILD_FILTER:10000}
   agent:
     max-steps: ${MODELRAG_AGENT_MAX_STEPS:6}
     deadline-ms: ${MODELRAG_AGENT_DEADLINE_MS:10000}
