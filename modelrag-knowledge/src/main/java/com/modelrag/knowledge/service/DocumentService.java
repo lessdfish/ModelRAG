@@ -34,8 +34,9 @@ import org.slf4j.LoggerFactory;
 @Service
 public class DocumentService {
     private static final Logger LOG = LoggerFactory.getLogger(DocumentService.class);
-    private final DatasetRepository datasets;
-    private final DocumentRepository documents;
+    private final DocumentLifecycleService lifecycle;
+    private final DatasetRepository legacyDatasets;
+    private final DocumentRepository legacyDocuments;
     private final ObjectStorageService storage;
     private final ApplicationEventPublisher events;
     private final ParseLimits parseLimits;
@@ -47,20 +48,35 @@ public class DocumentService {
     public DocumentService(DatasetRepository datasets, DocumentRepository documents, ObjectStorageService storage,
             ApplicationEventPublisher events,
             long maxPages, int maxExtractedChars, long maxFileSize) {
-        this(datasets, documents, storage, events, maxPages, maxExtractedChars, maxFileSize, 120,
+        this(null, datasets, documents, storage, events, maxPages, maxExtractedChars, maxFileSize, 120,
+                new DocumentParserRegistry(), java.util.List.of(new BasicDocumentSafetyScanner()));
+    }
+
+    public DocumentService(DocumentLifecycleService lifecycle, ObjectStorageService storage,
+            ApplicationEventPublisher events, long maxPages, int maxExtractedChars, long maxFileSize) {
+        this(lifecycle, null, null, storage, events, maxPages, maxExtractedChars, maxFileSize, 120,
                 new DocumentParserRegistry(), java.util.List.of(new BasicDocumentSafetyScanner()));
     }
 
     @org.springframework.beans.factory.annotation.Autowired
-    public DocumentService(DatasetRepository datasets, DocumentRepository documents, ObjectStorageService storage,
+    public DocumentService(DocumentLifecycleService lifecycle, ObjectStorageService storage,
             ApplicationEventPublisher events,
             @Value("${modelrag.ingestion.max-pages:1000}") long maxPages,
             @Value("${modelrag.ingestion.max-extracted-chars:5000000}") int maxExtractedChars,
             @Value("${modelrag.ingestion.max-file-size-bytes:52428800}") long maxFileSize,
             @Value("${modelrag.ingestion.parse-timeout-seconds:120}") long parseTimeoutSeconds,
             DocumentParserRegistry parsers, java.util.List<DocumentSafetyScanner> scanners) {
-        this.datasets = datasets;
-        this.documents = documents;
+        this(lifecycle, null, null, storage, events, maxPages, maxExtractedChars, maxFileSize, parseTimeoutSeconds,
+                parsers, scanners);
+    }
+
+    private DocumentService(DocumentLifecycleService lifecycle, DatasetRepository legacyDatasets,
+            DocumentRepository legacyDocuments, ObjectStorageService storage, ApplicationEventPublisher events,
+            long maxPages, int maxExtractedChars, long maxFileSize, long parseTimeoutSeconds,
+            DocumentParserRegistry parsers, java.util.List<DocumentSafetyScanner> scanners) {
+        this.lifecycle = lifecycle;
+        this.legacyDatasets = legacyDatasets;
+        this.legacyDocuments = legacyDocuments;
         this.storage = storage;
         this.events = events;
         this.parseLimits = new ParseLimits(maxPages, maxExtractedChars);
@@ -118,10 +134,18 @@ public class DocumentService {
                 try (InputStream artifactInput = Files.newInputStream(artifact)) {
                     storage.put(artifactKey, artifactInput, Files.size(artifact), "text/plain; charset=utf-8");
                 }
-                datasets.findById(datasetId);
-                Document document = documents.create(datasetId, fileName, type(fileName), hash, null,
-                        sourceKey, artifactKey, normalizedContentHash);
-                datasets.bumpRevision(datasetId);
+                Document document;
+                if (lifecycle != null) {
+                    document = lifecycle.createInitialVersion(datasetId, fileName, type(fileName), hash,
+                            sourceKey, artifactKey, normalizedContentHash, parser.name(), null);
+                } else {
+                    // Kept only for source compatibility with direct legacy test callers. Spring production
+                    // construction uses the lifecycle coordinator above.
+                    legacyDatasets.findById(datasetId);
+                    document = legacyDocuments.create(datasetId, fileName, type(fileName), hash, null,
+                            sourceKey, artifactKey, normalizedContentHash);
+                    legacyDatasets.bumpRevision(datasetId);
+                }
                 metadataSaved = true;
                 events.publishEvent(new DocumentUploadedEvent(this, document.id(), datasetId));
                 return document;

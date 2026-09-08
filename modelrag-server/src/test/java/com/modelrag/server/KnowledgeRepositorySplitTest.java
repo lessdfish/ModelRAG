@@ -115,6 +115,7 @@ class KnowledgeRepositorySplitTest {
         verify(jdbc, org.mockito.Mockito.times(2)).update(sql.capture(), any(Object[].class));
         assertTrue(sql.getAllValues().stream().anyMatch(value -> value.contains("UPDATE kb_chunk")));
         assertTrue(sql.getAllValues().stream().anyMatch(value -> value.contains("active_index_version")));
+        assertFalse(sql.getAllValues().stream().anyMatch(value -> value.contains("active_version_id")));
     }
 
     @Test

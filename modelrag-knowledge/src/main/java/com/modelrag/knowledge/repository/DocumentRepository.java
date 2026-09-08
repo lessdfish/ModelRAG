@@ -12,6 +12,8 @@ public interface DocumentRepository {
 
     Document findById(long id);
 
+    void activateVersion(long documentId, long documentVersionId);
+
     List<Document> findByDatasetId(long datasetId);
 
     void updateStatus(long documentId, String status, String error, int chunkCount);

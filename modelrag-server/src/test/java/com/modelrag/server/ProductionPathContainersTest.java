@@ -21,9 +21,12 @@ import com.modelrag.agent.memory.ConversationMemory;
 import com.modelrag.knowledge.service.DocumentDeletionService;
 import com.modelrag.knowledge.service.PostgresKnowledgeStore;
 import com.modelrag.knowledge.service.DocumentService;
+import com.modelrag.knowledge.service.DocumentLifecycleService;
 import com.modelrag.knowledge.service.ObjectStorageService;
 import com.modelrag.knowledge.repository.jdbc.JdbcDatasetRepository;
 import com.modelrag.knowledge.repository.jdbc.JdbcDocumentRepository;
+import com.modelrag.knowledge.repository.jdbc.JdbcDocumentVersionRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.modelrag.common.exception.BusinessException;
 import com.modelrag.common.exception.ErrorCode;
 import com.modelrag.common.operation.RedisOperationGuard;
@@ -45,6 +48,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.support.TransactionOperations;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.BucketVersioningStatus;
@@ -97,6 +101,9 @@ class ProductionPathContainersTest {
 
     @Autowired
     private DocumentDeletionService deletions;
+
+    @Autowired
+    private TransactionOperations transactions;
 
     @Autowired
     private ObjectStorageService objectStorage;
@@ -377,8 +384,9 @@ class ProductionPathContainersTest {
             embedding[0] = 1;
             return embedding;
         };
-        DocumentService documents = new DocumentService(new JdbcDatasetRepository(database, embeddings),
-                new JdbcDocumentRepository(database), objectStorage, event -> { },
+        DocumentService documents = new DocumentService(new DocumentLifecycleService(
+                new JdbcDatasetRepository(database, embeddings), new JdbcDocumentRepository(database),
+                new JdbcDocumentVersionRepository(database, new ObjectMapper()), transactions), objectStorage, event -> { },
                 1_000, 5_000_000, 50L * 1024 * 1024);
         byte[] content = "concurrent upload must retain exactly one database fact and one object pair"
                 .getBytes(java.nio.charset.StandardCharsets.UTF_8);

@@ -4,10 +4,13 @@ import com.modelrag.knowledge.model.Document;
 import com.modelrag.knowledge.repository.DocumentRepository;
 import com.modelrag.knowledge.service.InMemoryKnowledgeStore;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /** Test adapter exposing the in-memory fixture through the narrow document contract. */
 final class TestDocumentRepository implements DocumentRepository {
     private final InMemoryKnowledgeStore store;
+    private final Map<Long, Long> activeVersions = new ConcurrentHashMap<>();
 
     TestDocumentRepository(InMemoryKnowledgeStore store) { this.store = store; }
 
@@ -19,8 +22,18 @@ final class TestDocumentRepository implements DocumentRepository {
         return store.createDocumentOnly(datasetId, name, type, hash, content,
                 sourceObjectKey, artifactObjectKey, contentHash);
     }
-    @Override public Document findById(long id) { return store.document(id); }
-    @Override public List<Document> findByDatasetId(long datasetId) { return store.documents(datasetId); }
+    @Override public Document findById(long id) {
+        Document document = store.document(id);
+        return document.withActiveVersionId(activeVersions.get(id));
+    }
+    @Override public void activateVersion(long documentId, long documentVersionId) {
+        store.document(documentId);
+        activeVersions.put(documentId, documentVersionId);
+    }
+    @Override public List<Document> findByDatasetId(long datasetId) {
+        return store.documents(datasetId).stream()
+                .map(document -> document.withActiveVersionId(activeVersions.get(document.id()))).toList();
+    }
     @Override public void updateStatus(long documentId, String status, String error, int chunkCount) {
         store.status(documentId, status, error, chunkCount);
     }

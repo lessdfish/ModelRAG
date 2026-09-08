@@ -27,8 +27,11 @@ import com.modelrag.search.facade.SearchFacade;
 import com.modelrag.knowledge.repository.ChunkRepository;
 import com.modelrag.knowledge.repository.DatasetRepository;
 import com.modelrag.knowledge.repository.DocumentRepository;
+import com.modelrag.knowledge.repository.DocumentVersionRepository;
+import com.modelrag.knowledge.repository.DocumentStructureRepository;
 import com.modelrag.knowledge.repository.IndexVersionRepository;
 import com.modelrag.knowledge.service.InMemoryKnowledgeStore;
+import com.modelrag.knowledge.service.DocumentLifecycleService;
 import com.modelrag.qa.orchestrator.QaOrchestrator;
 import com.modelrag.api.ConversationContextBuilder;
 import com.modelrag.api.ConversationRepository;
@@ -61,6 +64,18 @@ class TestPersistenceConfiguration {
 
     @Bean
     DocumentRepository documentRepository(InMemoryKnowledgeStore store) { return new TestDocumentRepository(store); }
+
+    @Bean
+    DocumentVersionRepository documentVersionRepository() { return new TestDocumentVersionRepository(); }
+
+    @Bean
+    DocumentStructureRepository documentStructureRepository() { return new TestDocumentStructureRepository(); }
+
+    @Bean
+    DocumentLifecycleService documentLifecycleService(DatasetRepository datasets, DocumentRepository documents,
+            DocumentVersionRepository versions, TransactionOperations transactions) {
+        return new DocumentLifecycleService(datasets, documents, versions, transactions);
+    }
 
     @Bean
     ChunkRepository chunkRepository(InMemoryKnowledgeStore store) { return new TestChunkRepository(store); }

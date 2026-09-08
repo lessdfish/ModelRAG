@@ -53,6 +53,25 @@ public class JdbcDocumentRepository implements DocumentRepository {
     }
 
     @Override
+    public void activateVersion(long documentId, long documentVersionId) {
+        if (jdbc.query("SELECT id FROM kb_document WHERE id=? AND delete_time IS NULL",
+                (rs, n) -> rs.getLong(1), documentId).isEmpty()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "文档不存在");
+        }
+        if (jdbc.query("SELECT id FROM kb_document_version WHERE id=? AND document_id=?",
+                (rs, n) -> rs.getLong(1), documentVersionId, documentId).isEmpty()) {
+            throw new BusinessException(ErrorCode.VALIDATION, "文档版本不属于该文档");
+        }
+        int updated = jdbc.update("""
+                UPDATE kb_document SET active_version_id=?,update_time=NOW()
+                WHERE id=? AND delete_time IS NULL
+                AND EXISTS (SELECT 1 FROM kb_document_version v
+                    WHERE v.id=? AND v.document_id=kb_document.id)
+                """, documentVersionId, documentId, documentVersionId);
+        if (updated != 1) throw new BusinessException(ErrorCode.INTERNAL, "文档版本激活失败");
+    }
+
+    @Override
     public List<Document> findByDatasetId(long datasetId) {
         return jdbc.query("SELECT * FROM kb_document WHERE dataset_id=? AND delete_time IS NULL ORDER BY id",
                 (rs, n) -> document(rs), datasetId);
@@ -85,6 +104,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
     private Document document(ResultSet rs) throws java.sql.SQLException {
         return new Document(rs.getLong("id"), rs.getLong("dataset_id"), rs.getString("file_name"), rs.getString("file_type"),
                 rs.getString("file_hash"), null, rs.getString("index_status"), rs.getString("error_msg"), rs.getInt("chunk_count"),
-                rs.getString("source_object_key"), rs.getString("artifact_object_key"), rs.getString("content_hash"));
+                rs.getString("source_object_key"), rs.getString("artifact_object_key"), rs.getString("content_hash"),
+                rs.getObject("active_version_id", Long.class));
     }
 }
