@@ -7,6 +7,7 @@ import com.modelrag.knowledge.model.NodeEdgeDraft;
 import com.modelrag.knowledge.model.NodeEdgeType;
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 import java.util.Set;
 
 /** Persistence contract for immutable document structure. */
@@ -23,6 +24,9 @@ public interface DocumentStructureRepository {
     Optional<DocumentNode> findById(long nodeId);
 
     Optional<DocumentNode> findActiveById(long nodeId);
+
+    /** Bounded batch lookup for V2 evidence validation. */
+    default List<DocumentNode> findActiveByIds(long datasetId, Collection<Long> nodeIds) { return List.of(); }
 
     List<DocumentNode> findActiveChildren(long parentNodeId, int offset, int limit);
 

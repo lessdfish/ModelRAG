@@ -44,6 +44,14 @@ modelrag:
   qa:
     context-max-tokens: 1600
     online-ab-enabled: false
+    v2:
+      enabled: ${MODELRAG_QA_V2_ENABLED:false}
+      max-primary-evidence: ${MODELRAG_QA_V2_MAX_PRIMARY_EVIDENCE:8}
+      max-expanded-evidence: ${MODELRAG_QA_V2_MAX_EXPANDED_EVIDENCE:16}
+      max-navigation-actions: ${MODELRAG_QA_V2_MAX_NAVIGATION_ACTIONS:24}
+      max-table-rows: ${MODELRAG_QA_V2_MAX_TABLE_ROWS:20}
+      neighbor-radius: ${MODELRAG_QA_V2_NEIGHBOR_RADIUS:1}
+      min-evidence-score: ${MODELRAG_QA_V2_MIN_EVIDENCE_SCORE:0}
   search:
     rrf-vector-weight: 0.7
     rrf-bm25-weight: 0.3

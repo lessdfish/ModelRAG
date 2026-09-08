@@ -3,6 +3,7 @@ package com.modelrag.server;
 import com.modelrag.knowledge.model.Document;
 import com.modelrag.knowledge.repository.DocumentRepository;
 import com.modelrag.knowledge.service.InMemoryKnowledgeStore;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,6 +27,11 @@ final class TestDocumentRepository implements DocumentRepository {
     @Override public Document findById(long id) {
         Document document = store.document(id);
         return document.withActiveVersionId(activeVersions.get(id)).withActiveIndexBuildId(activeBuilds.get(id));
+    }
+    @Override public List<Document> findByIds(Collection<Long> ids) {
+        if (ids == null || ids.isEmpty()) return List.of();
+        return ids.stream().filter(id -> id != null && id > 0).distinct()
+                .map(this::findById).toList();
     }
     @Override public void activateVersion(long documentId, long documentVersionId) {
         store.document(documentId);

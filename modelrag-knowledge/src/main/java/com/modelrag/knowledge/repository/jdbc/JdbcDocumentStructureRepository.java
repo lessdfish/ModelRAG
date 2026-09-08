@@ -15,6 +15,7 @@ import java.sql.ResultSet;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -105,6 +106,30 @@ public class JdbcDocumentStructureRepository implements DocumentStructureReposit
                 JOIN kb_dataset ds ON ds.id=n.dataset_id AND ds.id=d.dataset_id
                 WHERE n.id=? AND d.delete_time IS NULL AND ds.delete_time IS NULL
                 """, nodeId).stream().findFirst();
+    }
+
+    @Override
+    public List<DocumentNode> findActiveByIds(long datasetId, Collection<Long> nodeIds) {
+        List<Long> requested = nodeIds == null ? List.of() : nodeIds.stream()
+                .filter(id -> id != null && id > 0).distinct().toList();
+        if (datasetId <= 0 || requested.isEmpty()) return List.of();
+        if (requested.size() > MAX_QUERY_LIMIT) {
+            throw new BusinessException(ErrorCode.VALIDATION, "节点批量读取范围过大");
+        }
+        String placeholders = requested.stream().map(ignored -> "?")
+                .collect(java.util.stream.Collectors.joining(","));
+        List<Object> args = new ArrayList<>();
+        args.add(datasetId);
+        args.addAll(requested);
+        return query("""
+                SELECT n.* FROM kb_document_node n
+                JOIN kb_document d ON d.id=n.document_id
+                    AND d.active_version_id=n.document_version_id
+                JOIN kb_dataset ds ON ds.id=n.dataset_id AND ds.id=d.dataset_id
+                WHERE n.dataset_id=? AND n.id IN (%s)
+                    AND d.delete_time IS NULL AND ds.delete_time IS NULL
+                ORDER BY n.id
+                """.formatted(placeholders), args.toArray());
     }
 
     @Override

@@ -14,6 +14,7 @@ import com.modelrag.knowledge.repository.DocumentRepository;
 import com.modelrag.qa.dto.Citation;
 import com.modelrag.qa.dto.QaRequest;
 import com.modelrag.qa.dto.QaResult;
+import com.modelrag.qa.evidence.AnswerSynthesizer;
 import com.modelrag.qa.sanitizer.ContextSanitizer;
 import com.modelrag.qa.sanitizer.ContextWindowManager;
 import com.modelrag.qa.sanitizer.PromptSanitizer;
@@ -34,6 +35,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
@@ -57,6 +59,8 @@ public class QaOrchestrator {
     private final RetrievalPipeline retrievalPipeline;
     private final AnswerApplicationService answerApplication;
     private final AnswerTraceRepository answerTraceRepository;
+    private final ObjectProvider<QaV2ApplicationService> qaV2;
+    private final boolean qaV2Enabled;
     private final int contextMaxTokens;
     private final ObjectMapper json = new ObjectMapper();
 
@@ -77,7 +81,9 @@ public class QaOrchestrator {
             RetrievalPipeline retrievalPipeline,
             AnswerApplicationService answerApplication,
             AnswerTraceRepository answerTraceRepository,
-            @Value("${modelrag.qa.context-max-tokens:1600}") int contextMaxTokens) {
+            @Value("${modelrag.qa.context-max-tokens:1600}") int contextMaxTokens,
+            ObjectProvider<QaV2ApplicationService> qaV2,
+            @Value("${modelrag.qa.v2.enabled:false}") boolean qaV2Enabled) {
         this.datasets = datasets;
         this.documents = documents;
         this.chunks = chunks;
@@ -95,6 +101,8 @@ public class QaOrchestrator {
         this.answerApplication = answerApplication;
         this.answerTraceRepository = answerTraceRepository;
         this.contextMaxTokens = contextMaxTokens;
+        this.qaV2 = qaV2;
+        this.qaV2Enabled = qaV2Enabled;
     }
 
     public QaResult answer(QaRequest request) {
@@ -106,7 +114,16 @@ public class QaOrchestrator {
         limiter.check(request.datasetId());
         Dataset dataset = datasets.findById(request.datasetId());
         boolean userMessagePersisted = !request.persistConversationMessage() || persistUserMessage(request);
-        QaResult result = answerUncached(request, tokenConsumer);
+        QaResult result;
+        if (qaV2Enabled && !isDatasetOverviewQuery(request.query())) {
+            QaV2ApplicationService service = qaV2.getIfAvailable();
+            result = service == null
+                    ? new QaResult(AnswerSynthesizer.INSUFFICIENT_EVIDENCE, List.of(), 0, true,
+                            UUID.randomUUID().toString(), List.of("v2-unavailable"))
+                    : service.answer(request, tokenConsumer);
+        } else {
+            result = answerUncached(request, tokenConsumer);
+        }
         audit(request, result);
         metrics.counter("modelrag.qa.requests", "status", result.refused() ? "refused" : "success").increment();
         tokens.record(request.datasetId(), request.query(), result.answer());
@@ -711,15 +728,32 @@ public class QaOrchestrator {
 
     private String citationsJson(List<Citation> citations) {
         return citations.stream()
-                .map(c -> "{\"chunkId\":" + c.chunkId()
-                        + ",\"documentId\":" + c.documentId()
-                        + ",\"documentName\":\"" + json(c.documentName()) + "\""
-                        + ",\"location\":\"" + json(c.location()) + "\""
-                        + ",\"indexVersion\":" + c.indexVersion()
-                        + ",\"excerpt\":\"" + json(c.excerpt()) + "\""
-                        + ",\"score\":" + c.score() + "}")
+                .map(this::citationJson)
                 .collect(Collectors.joining(",", "[", "]"));
     }
+
+    private String citationJson(Citation c) {
+        String value = "{\"chunkId\":" + c.chunkId()
+                + ",\"documentId\":" + c.documentId()
+                + ",\"documentName\":\"" + json(c.documentName()) + "\""
+                + ",\"location\":\"" + json(c.location()) + "\""
+                + ",\"indexVersion\":" + c.indexVersion()
+                + ",\"excerpt\":\"" + json(c.excerpt()) + "\""
+                + ",\"score\":" + c.score();
+        if (c.v2()) {
+            value += ",\"citationId\":\"" + json(c.citationId()) + "\""
+                    + ",\"documentVersionId\":" + c.documentVersionId()
+                    + ",\"nodeId\":" + c.nodeId()
+                    + ",\"retrievalUnitId\":" + nullableLong(c.retrievalUnitId())
+                    + ",\"indexBuildId\":" + nullableLong(c.indexBuildId())
+                    + ",\"titlePath\":\"" + json(c.titlePath()) + "\""
+                    + ",\"pageFrom\":" + nullableLong(c.pageFrom())
+                    + ",\"pageTo\":" + nullableLong(c.pageTo());
+        }
+        return value + "}";
+    }
+
+    private String nullableLong(Number value) { return value == null ? "null" : String.valueOf(value); }
 
     private List<Citation> citations(long datasetId, List<ScoredChunk> scored, int limit) {
         List<Long> chunkIds = scored.stream().limit(limit).map(ScoredChunk::chunkId).toList();

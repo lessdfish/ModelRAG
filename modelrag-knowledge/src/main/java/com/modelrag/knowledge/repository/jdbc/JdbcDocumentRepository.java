@@ -5,7 +5,9 @@ import com.modelrag.common.exception.ErrorCode;
 import com.modelrag.knowledge.model.Document;
 import com.modelrag.knowledge.repository.DocumentRepository;
 import java.sql.ResultSet;
+import java.util.Collection;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.springframework.context.annotation.Profile;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -15,6 +17,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 @Profile("!test")
 public class JdbcDocumentRepository implements DocumentRepository {
+    private static final int MAX_BATCH_LOOKUP = 100;
     private final JdbcTemplate jdbc;
 
     public JdbcDocumentRepository(JdbcTemplate jdbc) {
@@ -50,6 +53,19 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 (rs, n) -> document(rs), id);
         if (rows.isEmpty()) throw new BusinessException(ErrorCode.NOT_FOUND, "文档不存在");
         return rows.get(0);
+    }
+
+    @Override
+    public List<Document> findByIds(Collection<Long> ids) {
+        List<Long> requested = ids == null ? List.of() : ids.stream()
+                .filter(id -> id != null && id > 0).distinct().toList();
+        if (requested.isEmpty()) return List.of();
+        if (requested.size() > MAX_BATCH_LOOKUP) {
+            throw new BusinessException(ErrorCode.VALIDATION, "文档批量读取范围过大");
+        }
+        String placeholders = requested.stream().map(ignored -> "?").collect(Collectors.joining(","));
+        return jdbc.query("SELECT * FROM kb_document WHERE id IN (" + placeholders
+                + ") AND delete_time IS NULL ORDER BY id", (rs, n) -> document(rs), requested.toArray());
     }
 
     @Override

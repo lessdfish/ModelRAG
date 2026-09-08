@@ -1,6 +1,7 @@
 package com.modelrag.knowledge.repository;
 
 import com.modelrag.knowledge.model.Document;
+import java.util.Collection;
 import java.util.List;
 
 /** Persistence contract for the current logical document aggregate. */
@@ -11,6 +12,12 @@ public interface DocumentRepository {
             String sourceObjectKey, String artifactObjectKey, String contentHash);
 
     Document findById(long id);
+
+    /** Bounded batch lookup used by V2 evidence assembly; implementations must not enumerate a dataset. */
+    default List<Document> findByIds(Collection<Long> ids) {
+        if (ids == null || ids.isEmpty()) return List.of();
+        return ids.stream().filter(id -> id != null && id > 0).distinct().map(this::findById).toList();
+    }
 
     void activateVersion(long documentId, long documentVersionId);
 

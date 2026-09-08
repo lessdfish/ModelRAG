@@ -10,6 +10,7 @@ import com.modelrag.knowledge.model.NodeEdgeType;
 import com.modelrag.knowledge.repository.DocumentStructureRepository;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -89,6 +90,13 @@ final class TestDocumentStructureRepository implements DocumentStructureReposito
     @Override public synchronized Optional<DocumentNode> findActiveById(long nodeId) {
         DocumentNode node = nodes.get(nodeId);
         return isActive(node) ? Optional.of(node) : Optional.empty();
+    }
+
+    @Override public synchronized List<DocumentNode> findActiveByIds(long datasetId, Collection<Long> nodeIds) {
+        if (nodeIds == null || nodeIds.isEmpty()) return List.of();
+        return nodeIds.stream().filter(id -> id != null && id > 0).distinct()
+                .map(nodes::get).filter(node -> node != null && node.datasetId() == datasetId)
+                .filter(this::isActive).sorted(Comparator.comparingLong(DocumentNode::id)).toList();
     }
 
     @Override public synchronized List<DocumentNode> findActiveChildren(long parentNodeId, int offset, int limit) {
