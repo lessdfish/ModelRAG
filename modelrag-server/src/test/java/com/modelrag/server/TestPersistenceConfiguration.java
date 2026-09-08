@@ -32,6 +32,7 @@ import com.modelrag.knowledge.repository.DocumentStructureRepository;
 import com.modelrag.knowledge.repository.IndexVersionRepository;
 import com.modelrag.knowledge.repository.IndexBuildRepository;
 import com.modelrag.knowledge.repository.RetrievalUnitRepository;
+import com.modelrag.indexing.outbox.RetrievalProjectionOutbox;
 import com.modelrag.indexing.store.RetrievalEmbeddingRepository;
 import com.modelrag.knowledge.service.InMemoryKnowledgeStore;
 import com.modelrag.knowledge.service.DocumentLifecycleService;
@@ -84,6 +85,9 @@ class TestPersistenceConfiguration {
     RetrievalEmbeddingRepository retrievalEmbeddingRepository(TestRetrievalUnitRepository units) {
         return new TestRetrievalEmbeddingRepository(units);
     }
+
+    @Bean
+    RetrievalProjectionOutbox retrievalProjectionOutbox() { return new TestRetrievalProjectionOutbox(); }
 
     @Bean
     DocumentLifecycleService documentLifecycleService(DatasetRepository datasets, DocumentRepository documents,

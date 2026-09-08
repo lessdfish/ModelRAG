@@ -51,4 +51,11 @@ final class ParserSupport {
     static String normalize(String value) {
         return value == null ? "" : value.replace("\r\n", "\n").replace('\r', '\n');
     }
+
+    static String requireLogicalFileName(String fileName) {
+        if (fileName == null || fileName.isBlank()) {
+            throw new IllegalArgumentException("逻辑文件名不能为空");
+        }
+        return fileName;
+    }
 }

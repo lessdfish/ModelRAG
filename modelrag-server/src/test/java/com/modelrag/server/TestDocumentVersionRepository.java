@@ -39,4 +39,10 @@ final class TestDocumentVersionRepository implements DocumentVersionRepository {
     @Override public List<DocumentVersion> findByDocumentId(long documentId) {
         return List.copyOf(versions.getOrDefault(documentId, List.of()));
     }
+
+    @Override public void lockForStructure(long documentVersionId) {
+        if (findById(documentVersionId).isEmpty()) {
+            throw new IllegalArgumentException("文档版本不存在");
+        }
+    }
 }

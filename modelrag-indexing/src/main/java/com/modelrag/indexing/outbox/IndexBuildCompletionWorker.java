@@ -35,7 +35,7 @@ public class IndexBuildCompletionWorker {
         }
     }
 
-    private void complete(IndexBuild build) {
+    void complete(IndexBuild build) {
         try {
             if (outbox.hasTerminalFailure(build.id())) {
                 fail(build.id(), new IllegalStateException("V2 词法投影存在不可重试事件"));
@@ -44,7 +44,10 @@ public class IndexBuildCompletionWorker {
             long lexicalCount = outbox.countByBuildAndStatus(build.id(), "DONE");
             if (lexicalCount != build.unitCount()) return;
 
-            lifecycle.transition(build.id(), IndexBuildState.LEXICAL_SYNCING, IndexBuildState.VERIFYING);
+            if (!lifecycle.tryTransition(build.id(), IndexBuildState.LEXICAL_SYNCING,
+                    IndexBuildState.VERIFYING)) {
+                return;
+            }
             IndexBuild checking = builds.findById(build.id()).orElseThrow(
                     () -> new IllegalStateException("V2 构建在校验前不可见"));
             IndexVerificationStage.VerificationResult result = verification.verify(checking, lexicalCount);

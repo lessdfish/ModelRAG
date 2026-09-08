@@ -15,7 +15,6 @@ import com.modelrag.indexing.pipeline.stage.LexicalProjectionStage;
 import com.modelrag.indexing.pipeline.stage.RetrievalUnitBuildStage;
 import com.modelrag.indexing.pipeline.stage.StructurePersistStage;
 import com.modelrag.indexing.pipeline.stage.VectorProjectionStage;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -32,7 +31,7 @@ public class IndexBuildCoordinator {
     private final StructurePersistStage persist;
     private final RetrievalUnitBuildStage unitBuild;
     private final VectorProjectionStage vectors;
-    private final ObjectProvider<LexicalProjectionStage> lexical;
+    private final LexicalProjectionStage lexical;
     private final String embeddingProfile;
     private final String rerankProfile;
 
@@ -41,7 +40,7 @@ public class IndexBuildCoordinator {
             DocumentStructureRepository structures, IndexBuildRepository builds,
             IndexBuildLifecycleService lifecycle, DocumentParseStage parse, StructurePersistStage persist,
             RetrievalUnitBuildStage unitBuild, VectorProjectionStage vectors,
-            ObjectProvider<LexicalProjectionStage> lexical,
+            LexicalProjectionStage lexical,
             @Value("${modelrag.index.v2.embedding-profile:qwen3-v1}") String embeddingProfile,
             @Value("${modelrag.index.v2.rerank-profile:default}") String rerankProfile) {
         this.documents = documents;
@@ -83,11 +82,8 @@ public class IndexBuildCoordinator {
             long vectorCount = vectors.project(context.withCounts(nodeCount, unitCount, 0, 0));
             lifecycle.updateCounts(build.id(), nodeCount, unitCount, vectorCount, 0);
             lifecycle.transition(build.id(), IndexBuildState.VECTOR_BUILDING, IndexBuildState.VECTOR_READY);
-            LexicalProjectionStage lexicalStage = lexical.getIfAvailable();
-            if (lexicalStage != null) {
-                lifecycle.transition(build.id(), IndexBuildState.VECTOR_READY, IndexBuildState.LEXICAL_SYNCING);
-                lexicalStage.project(context.withCounts(nodeCount, unitCount, vectorCount, 0));
-            }
+            lifecycle.transition(build.id(), IndexBuildState.VECTOR_READY, IndexBuildState.LEXICAL_SYNCING);
+            lexical.project(context.withCounts(nodeCount, unitCount, vectorCount, 0));
         } catch (Exception error) {
             lifecycle.fail(build.id(), SafeErrorSummary.of(error));
         }

@@ -17,4 +17,7 @@ public interface DocumentVersionRepository {
     Optional<DocumentVersion> findActiveByDocumentId(long documentId);
 
     List<DocumentVersion> findByDocumentId(long documentId);
+
+    /** Locks the immutable version row for one short structure-persistence transaction. */
+    void lockForStructure(long documentVersionId);
 }

@@ -9,6 +9,7 @@ import com.modelrag.knowledge.parser.ParsedDocument;
 import com.modelrag.knowledge.parser.ParsedEdge;
 import com.modelrag.knowledge.parser.ParsedNode;
 import com.modelrag.knowledge.repository.DocumentStructureRepository;
+import com.modelrag.knowledge.repository.DocumentVersionRepository;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
@@ -23,10 +24,13 @@ import org.springframework.transaction.support.TransactionOperations;
 @Service
 public class StructurePersistStage {
     private final DocumentStructureRepository structures;
+    private final DocumentVersionRepository versions;
     private final TransactionOperations transactions;
 
-    public StructurePersistStage(DocumentStructureRepository structures, TransactionOperations transactions) {
+    public StructurePersistStage(DocumentStructureRepository structures, DocumentVersionRepository versions,
+            TransactionOperations transactions) {
         this.structures = structures;
+        this.versions = java.util.Objects.requireNonNull(versions, "文档版本仓储不能为空");
         this.transactions = transactions;
     }
 
@@ -40,6 +44,7 @@ public class StructurePersistStage {
 
     private StructureResult persistInTransaction(long datasetId, long documentId, long documentVersionId,
             ParsedDocument parsed) {
+        versions.lockForStructure(documentVersionId);
         var existing = structures.findRootByVersion(documentVersionId);
         if (existing.isPresent()) {
             return new StructureResult(existing.get().id(), structures.countByVersion(documentVersionId), true, Map.of());
@@ -48,37 +53,28 @@ public class StructurePersistStage {
         List<ParsedNode> ordered = parsed.nodes().stream()
                 .sorted(Comparator.comparingInt(ParsedNode::depth).thenComparingInt(ParsedNode::ordinal))
                 .toList();
-        try {
-            for (ParsedNode node : ordered) {
-                Long parentId = node.parentLocalId() == null ? null : ids.get(node.parentLocalId());
-                if (node.parentLocalId() != null && parentId == null) {
-                    throw new BusinessException(ErrorCode.VALIDATION, "解析节点父级未按拓扑顺序出现");
-                }
-                DocumentNode created = structures.createNode(new DocumentNodeDraft(datasetId, documentId,
-                        documentVersionId, parentId, node.nodeType(), node.depth(), node.ordinal(), node.title(),
-                        node.content(), contentHash(node.content()), node.pageFrom(), node.pageTo(), node.charStart(),
-                        node.charEnd(), node.tokenCount(), node.searchable(), node.metadata()));
-                ids.put(node.localId(), created.id());
+        for (ParsedNode node : ordered) {
+            Long parentId = node.parentLocalId() == null ? null : ids.get(node.parentLocalId());
+            if (node.parentLocalId() != null && parentId == null) {
+                throw new BusinessException(ErrorCode.VALIDATION, "解析节点父级未按拓扑顺序出现");
             }
-            for (ParsedEdge edge : parsed.edges()) {
-                Long from = ids.get(edge.fromLocalId());
-                Long to = ids.get(edge.toLocalId());
-                if (from == null || to == null) {
-                    throw new BusinessException(ErrorCode.VALIDATION, "解析边端点未持久化");
-                }
-                structures.createEdge(new NodeEdgeDraft(from, to, edge.edgeType(), edge.metadata()));
-            }
-            long rootId = ids.get(parsed.nodes().stream().filter(node -> node.parentLocalId() == null)
-                    .findFirst().orElseThrow().localId());
-            return new StructureResult(rootId, ids.size(), false, Map.copyOf(ids));
-        } catch (BusinessException error) {
-            if (error.errorCode() == ErrorCode.DUPLICATE_OPERATION) {
-                return structures.findRootByVersion(documentVersionId)
-                        .map(root -> new StructureResult(root.id(), structures.countByVersion(documentVersionId), true, Map.of()))
-                        .orElseThrow(() -> error);
-            }
-            throw error;
+            DocumentNode created = structures.createNode(new DocumentNodeDraft(datasetId, documentId,
+                    documentVersionId, parentId, node.nodeType(), node.depth(), node.ordinal(), node.title(),
+                    node.content(), contentHash(node.content()), node.pageFrom(), node.pageTo(), node.charStart(),
+                    node.charEnd(), node.tokenCount(), node.searchable(), node.metadata()));
+            ids.put(node.localId(), created.id());
         }
+        for (ParsedEdge edge : parsed.edges()) {
+            Long from = ids.get(edge.fromLocalId());
+            Long to = ids.get(edge.toLocalId());
+            if (from == null || to == null) {
+                throw new BusinessException(ErrorCode.VALIDATION, "解析边端点未持久化");
+            }
+            structures.createEdge(new NodeEdgeDraft(from, to, edge.edgeType(), edge.metadata()));
+        }
+        long rootId = ids.get(parsed.nodes().stream().filter(node -> node.parentLocalId() == null)
+                .findFirst().orElseThrow().localId());
+        return new StructureResult(rootId, ids.size(), false, Map.copyOf(ids));
     }
 
     private String contentHash(String content) {

@@ -51,6 +51,11 @@ public class IndexBuildLifecycleService {
         });
     }
 
+    /** Performs a non-throwing compare-and-set for competing completion workers. */
+    public boolean tryTransition(long buildId, IndexBuildState expected, IndexBuildState next) {
+        return transactions.execute(status -> builds.transition(buildId, expected, next));
+    }
+
     public IndexBuild updateCounts(long buildId, long nodeCount, long unitCount,
             long vectorCount, long lexicalCount) {
         return transactions.execute(status -> {

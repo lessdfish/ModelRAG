@@ -24,9 +24,9 @@ public final class PdfStructuredParser implements StructuredDocumentParser {
     }
 
     @Override
-    public ParsedDocument parse(Path source, ParseLimits limits) throws Exception {
+    public ParsedDocument parse(Path source, String logicalFileName, ParseLimits limits) throws Exception {
         if (source == null || limits == null) throw new IllegalArgumentException("解析源和限制不能为空");
-        String fileName = source.getFileName() == null ? "document" : source.getFileName().toString();
+        String fileName = ParserSupport.requireLogicalFileName(logicalFileName);
         List<ParsedNode> nodes = new ArrayList<>();
         nodes.add(node("root", null, NodeType.DOCUMENT, 0, 0, fileName, "", false, null, null,
                 ParserSupport.metadata("format", "pdf", "parserQuality", "HEURISTIC", "layoutPreserved", false)));

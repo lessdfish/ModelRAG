@@ -6,7 +6,7 @@ import java.nio.file.Path;
 public interface StructuredDocumentParser {
     boolean supports(String fileName);
 
-    ParsedDocument parse(Path source, ParseLimits limits) throws Exception;
+    ParsedDocument parse(Path source, String logicalFileName, ParseLimits limits) throws Exception;
 
     String name();
 

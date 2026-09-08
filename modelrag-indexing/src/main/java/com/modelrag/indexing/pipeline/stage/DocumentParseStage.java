@@ -54,7 +54,7 @@ public class DocumentParseStage {
         Path temporary = Files.createTempFile("modelrag-structured-", ".bin");
         try {
             copySource(document, version, temporary);
-            return parseWithTimeout(parser, temporary);
+            return parseWithTimeout(parser, temporary, document.fileName());
         } finally {
             Files.deleteIfExists(temporary);
         }
@@ -83,8 +83,10 @@ public class DocumentParseStage {
         }
     }
 
-    private ParsedDocument parseWithTimeout(StructuredDocumentParser parser, Path source) throws Exception {
-        FutureTask<ParsedDocument> task = new FutureTask<>(() -> parser.parse(source, limits));
+    private ParsedDocument parseWithTimeout(StructuredDocumentParser parser, Path source,
+            String logicalFileName) throws Exception {
+        FutureTask<ParsedDocument> task = new FutureTask<>(
+                () -> parser.parse(source, logicalFileName, limits));
         Thread worker = Thread.ofVirtual().name("modelrag-structured-parser").start(task);
         try {
             return task.get(timeout.toMillis(), TimeUnit.MILLISECONDS);

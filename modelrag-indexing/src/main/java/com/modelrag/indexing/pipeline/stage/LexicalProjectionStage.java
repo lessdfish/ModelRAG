@@ -5,12 +5,10 @@ import com.modelrag.indexing.pipeline.IndexBuildContext;
 import com.modelrag.knowledge.model.RetrievalUnit;
 import com.modelrag.knowledge.repository.RetrievalUnitRepository;
 import java.util.List;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 /** Appends paged V2 retrieval units to the dedicated lexical outbox without calling Elasticsearch. */
 @Service
-@Profile("!test")
 public class LexicalProjectionStage {
     private static final int PAGE_SIZE = 100;
     private final RetrievalUnitRepository units;

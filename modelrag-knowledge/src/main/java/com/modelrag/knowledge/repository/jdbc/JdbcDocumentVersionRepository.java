@@ -102,6 +102,17 @@ public class JdbcDocumentVersionRepository implements DocumentVersionRepository 
         return query("SELECT * FROM kb_document_version WHERE document_id=? ORDER BY version_no", documentId);
     }
 
+    @Override
+    public void lockForStructure(long documentVersionId) {
+        if (documentVersionId <= 0) {
+            throw new BusinessException(ErrorCode.VALIDATION, "文档版本 ID 无效");
+        }
+        if (jdbc.query("SELECT id FROM kb_document_version WHERE id=? FOR UPDATE",
+                (rs, n) -> rs.getLong(1), documentVersionId).isEmpty()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "文档版本不存在");
+        }
+    }
+
     private List<DocumentVersion> query(String sql, Object... args) {
         return jdbc.query(sql, (rs, n) -> version(rs), args);
     }
