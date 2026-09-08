@@ -29,6 +29,18 @@ modelrag:
   indexing.async: true
   chunk-size: 600
   chunk-overlap: 80
+  index:
+    v2:
+      shadow-enabled: ${MODELRAG_INDEX_V2_SHADOW_ENABLED:false}
+      embedding-profile: ${MODELRAG_INDEX_V2_EMBEDDING_PROFILE:qwen3-v1}
+      rerank-profile: ${MODELRAG_INDEX_V2_RERANK_PROFILE:default}
+      max-unit-chars: ${MODELRAG_INDEX_V2_MAX_UNIT_CHARS:4000}
+      overlap-chars: ${MODELRAG_INDEX_V2_OVERLAP_CHARS:200}
+      max-units-per-node: ${MODELRAG_INDEX_V2_MAX_UNITS_PER_NODE:128}
+      max-units-per-build: ${MODELRAG_INDEX_V2_MAX_UNITS_PER_BUILD:100000}
+      completion-poll-ms: ${MODELRAG_INDEX_V2_COMPLETION_POLL_MS:1000}
+  v2-outbox:
+    poll-ms: ${MODELRAG_V2_OUTBOX_POLL_MS:1000}
   qa:
     context-max-tokens: 1600
     online-ab-enabled: false

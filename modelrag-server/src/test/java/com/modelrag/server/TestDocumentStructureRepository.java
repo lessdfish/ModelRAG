@@ -64,6 +64,26 @@ final class TestDocumentStructureRepository implements DocumentStructureReposito
         return node;
     }
 
+    @Override
+    public synchronized Optional<DocumentNode> findRootByVersion(long documentVersionId) {
+        return nodes.values().stream().filter(node -> node.documentVersionId() == documentVersionId
+                && node.parentId() == null).findFirst();
+    }
+
+    @Override
+    public synchronized long countByVersion(long documentVersionId) {
+        return nodes.values().stream().filter(node -> node.documentVersionId() == documentVersionId).count();
+    }
+
+    @Override
+    public synchronized List<DocumentNode> findByVersion(long documentVersionId, int offset, int limit) {
+        if (limit <= 0) return List.of();
+        return nodes.values().stream().filter(node -> node.documentVersionId() == documentVersionId)
+                .sorted(Comparator.comparingInt(DocumentNode::depth).thenComparingInt(DocumentNode::ordinal)
+                        .thenComparingLong(DocumentNode::id))
+                .skip(Math.max(0, offset)).limit(Math.min(100, limit)).toList();
+    }
+
     @Override public synchronized Optional<DocumentNode> findById(long nodeId) { return Optional.ofNullable(nodes.get(nodeId)); }
 
     @Override public synchronized Optional<DocumentNode> findActiveById(long nodeId) {

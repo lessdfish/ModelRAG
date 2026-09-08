@@ -17,6 +17,9 @@ public interface IndexBuildRepository {
 
     List<IndexBuild> findByDocumentId(long documentId, int offset, int limit);
 
+    /** Bounded worker query; there is intentionally no dataset-wide findAll operation. */
+    default List<IndexBuild> findByState(IndexBuildState state, int limit) { return List.of(); }
+
     boolean transition(long buildId, IndexBuildState expected, IndexBuildState next);
 
     void updateCounts(long buildId, long nodeCount, long unitCount, long vectorCount, long lexicalCount);

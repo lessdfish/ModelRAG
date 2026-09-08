@@ -45,6 +45,31 @@ public class JdbcDocumentStructureRepository implements DocumentStructureReposit
     }
 
     @Override
+    public Optional<DocumentNode> findRootByVersion(long documentVersionId) {
+        if (documentVersionId <= 0) return Optional.empty();
+        return query("SELECT * FROM kb_document_node WHERE document_version_id=? AND parent_id IS NULL",
+                documentVersionId).stream().findFirst();
+    }
+
+    @Override
+    public long countByVersion(long documentVersionId) {
+        if (documentVersionId <= 0) return 0;
+        Long count = jdbc.queryForObject("SELECT COUNT(*) FROM kb_document_node WHERE document_version_id=?",
+                Long.class, documentVersionId);
+        return count == null ? 0 : count;
+    }
+
+    @Override
+    public List<DocumentNode> findByVersion(long documentVersionId, int offset, int limit) {
+        if (documentVersionId <= 0) return List.of();
+        int boundedLimit = Math.min(MAX_QUERY_LIMIT, Math.max(0, limit));
+        if (boundedLimit == 0) return List.of();
+        return query("SELECT * FROM kb_document_node WHERE document_version_id=? "
+                + "ORDER BY depth ASC,ordinal ASC,id ASC LIMIT ? OFFSET ?",
+                documentVersionId, boundedLimit, Math.max(0, offset));
+    }
+
+    @Override
     public DocumentNode createNode(DocumentNodeDraft node) {
         validateDraft(node);
         validateDocumentVersion(node);

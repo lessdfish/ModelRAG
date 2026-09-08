@@ -13,6 +13,13 @@ import java.util.Set;
 public interface DocumentStructureRepository {
     DocumentNode createNode(DocumentNodeDraft node);
 
+    /** Bounded version-scoped reads used by offline structure reuse and indexing. */
+    default Optional<DocumentNode> findRootByVersion(long documentVersionId) { return Optional.empty(); }
+
+    default long countByVersion(long documentVersionId) { return 0; }
+
+    default List<DocumentNode> findByVersion(long documentVersionId, int offset, int limit) { return List.of(); }
+
     Optional<DocumentNode> findById(long nodeId);
 
     Optional<DocumentNode> findActiveById(long nodeId);

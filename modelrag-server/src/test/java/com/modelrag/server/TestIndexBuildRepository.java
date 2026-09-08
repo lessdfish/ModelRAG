@@ -51,6 +51,14 @@ final class TestIndexBuildRepository implements IndexBuildRepository {
     }
 
     @Override
+    public synchronized List<IndexBuild> findByState(IndexBuildState state, int limit) {
+        int boundedLimit = Math.min(MAX_LIMIT, Math.max(0, limit));
+        if (state == null || boundedLimit == 0) return List.of();
+        return builds.values().stream().filter(build -> build.state() == state)
+                .sorted(Comparator.comparingLong(IndexBuild::id)).limit(boundedLimit).toList();
+    }
+
+    @Override
     public synchronized boolean transition(long buildId, IndexBuildState expected, IndexBuildState next) {
         if (expected == null || next == null || !expected.canTransitionTo(next)) {
             throw new BusinessException(ErrorCode.VALIDATION, "非法的 IndexBuild 状态转移");

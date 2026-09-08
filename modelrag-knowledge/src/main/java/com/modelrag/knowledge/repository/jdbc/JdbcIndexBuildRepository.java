@@ -91,6 +91,15 @@ public class JdbcIndexBuildRepository implements IndexBuildRepository {
     }
 
     @Override
+    public List<IndexBuild> findByState(IndexBuildState state, int limit) {
+        if (state == null) return List.of();
+        int boundedLimit = boundedLimit(limit);
+        if (boundedLimit == 0) return List.of();
+        return query("SELECT " + BUILD_COLUMNS + " FROM kb_index_build "
+                + "WHERE state=? ORDER BY id LIMIT ?", state.name(), boundedLimit);
+    }
+
+    @Override
     public boolean transition(long buildId, IndexBuildState expected, IndexBuildState next) {
         if (buildId <= 0 || expected == null || next == null || !expected.canTransitionTo(next)) {
             throw new BusinessException(ErrorCode.VALIDATION, "非法的 IndexBuild 状态转移");

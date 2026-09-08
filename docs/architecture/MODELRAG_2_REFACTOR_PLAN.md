@@ -623,7 +623,40 @@ If a new build fails, the previous active build must continue serving traffic.
 
 ---
 
-## 5.7 V60 - Retrieval Trace Header and Actions
+## 5.7 V60 - V2 Retrieval Projection Outbox
+
+G4 adds a dedicated asynchronous lexical projection outbox:
+
+```text
+kb_retrieval_projection_outbox
+```
+
+Each row belongs to one `IndexBuild` and one `RetrievalUnit`. The outbox owns
+lease, retry, dead-letter, and idempotency state. Its payload is the V2
+Elasticsearch document; it must never overload the legacy chunk-shaped outbox
+or `chunk_id`.
+
+Required indexes are:
+
+```text
+(status, next_retry_at, id)
+(index_build_id, status)
+(document_id, index_build_id)
+(retrieval_unit_id)
+```
+
+V2 projection writes one shared Elasticsearch index:
+
+```text
+modelrag-retrieval-units-v2
+```
+
+There is no V2 read alias or query path in this phase. The existing
+`modelrag-chunks-active` alias and V1 indexing lifecycle remain unchanged.
+
+---
+
+## 5.8 V61 - Retrieval Trace Header and Actions
 
 Keep `kb_retrieval_trace` as the run header.
 
@@ -678,7 +711,7 @@ RERANK
 
 ---
 
-## 5.8 V61 - kb_retrieval_evidence
+## 5.9 V62 - kb_retrieval_evidence
 
 Create:
 
@@ -719,7 +752,7 @@ Example locator:
 
 ---
 
-## 5.9 V62 - Resource ACL
+## 5.10 V63 - Resource ACL
 
 Current dataset ACL should be retained.
 
@@ -755,7 +788,7 @@ Nodes inherit document/dataset authorization.
 
 ---
 
-## 5.10 V63 - Agent Checkpoint
+## 5.11 V64 - Agent Checkpoint
 
 Extend:
 
@@ -2750,7 +2783,7 @@ SYNTHESIS
 
 ## M7 - Durable Agent Runtime
 
-Add V63 checkpoint storage.
+Add V64 checkpoint storage.
 
 Refactor:
 
