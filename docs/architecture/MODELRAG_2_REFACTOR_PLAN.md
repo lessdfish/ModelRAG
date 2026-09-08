@@ -1,7 +1,7 @@
 # ModelRAG 2.0 Refactor Plan
 
 > Status: architecture source of truth  
-> Target runtime: Java 17  
+> Target runtime: Java 21
 > Migration strategy: incremental, no big-bang rewrite  
 > Legacy Flyway migrations: `V1-V53` are immutable
 

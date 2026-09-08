@@ -13,15 +13,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.modelrag.knowledge.model.Chunk;
-import com.modelrag.knowledge.service.KnowledgeStore;
-import com.modelrag.knowledge.service.KnowledgeStore.ChunkWindow;
-import com.modelrag.knowledge.service.PostgresKnowledgeStore;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.modelrag.knowledge.repository.ChunkRepository;
+import com.modelrag.knowledge.repository.ChunkWindow;
+import com.modelrag.knowledge.repository.jdbc.JdbcChunkRepository;
 import com.modelrag.qa.orchestrator.RetrievalPipeline;
 import com.modelrag.search.dto.HybridSearchRequest;
 import com.modelrag.search.dto.ScoredChunk;
 import com.modelrag.search.dto.SearchStages;
 import com.modelrag.search.facade.SearchFacade;
-import com.modelrag.api.TextEmbeddingProvider;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -34,43 +34,43 @@ class RetrievalPipelineTest {
 
     @Test
     void parentExpansionUsesTheSelectedChunkParentGroup() {
-        KnowledgeStore store = mock(KnowledgeStore.class);
+        ChunkRepository store = mock(ChunkRepository.class);
         Chunk center = chunk(2, 10, 2, "child", 100L);
         Chunk first = chunk(1, 10, 1, "first", 100L);
         Chunk last = chunk(3, 10, 3, "last", 100L);
-        when(store.findChunksByIds(eq(DATASET_ID), anyCollection())).thenReturn(List.of(center));
-        when(store.findChunksByParentIds(eq(DATASET_ID), anyCollection())).thenReturn(List.of(center, first, last));
+        when(store.findActiveByIds(eq(DATASET_ID), anyCollection())).thenReturn(List.of(center));
+        when(store.findActiveByParentIds(eq(DATASET_ID), anyCollection())).thenReturn(List.of(center, first, last));
 
         RetrievalPipeline.RetrievalResult result = pipeline(store, selected(center)).retrieve(DATASET_ID, "query", 1, 0);
 
         assertEquals("first\nchild\nlast", result.contextChunks().get(0).content());
-        verify(store, never()).chunks(DATASET_ID);
+        verify(store, never()).findActiveByDatasetId(DATASET_ID);
     }
 
     @Test
     void neighborExpansionUsesOneBoundedBatchOfWindows() {
-        KnowledgeStore store = mock(KnowledgeStore.class);
+        ChunkRepository store = mock(ChunkRepository.class);
         Chunk center = chunk(2, 10, 2, "center", null);
         Chunk before = chunk(1, 10, 1, "before", null);
         Chunk after = chunk(3, 10, 3, "after", null);
-        when(store.findChunksByIds(eq(DATASET_ID), anyCollection())).thenReturn(List.of(center));
-        when(store.findChunksByParentIds(eq(DATASET_ID), anyCollection())).thenReturn(List.of());
-        when(store.findChunkNeighbors(eq(DATASET_ID), anyCollection())).thenReturn(List.of(after, center, before));
+        when(store.findActiveByIds(eq(DATASET_ID), anyCollection())).thenReturn(List.of(center));
+        when(store.findActiveByParentIds(eq(DATASET_ID), anyCollection())).thenReturn(List.of());
+        when(store.findActiveNeighbors(eq(DATASET_ID), anyCollection())).thenReturn(List.of(after, center, before));
 
         RetrievalPipeline.RetrievalResult result = pipeline(store, selected(center)).retrieve(DATASET_ID, "query", 1, 0);
 
         assertEquals("before\ncenter\nafter", result.contextChunks().get(0).content());
-        verify(store).findChunkNeighbors(DATASET_ID, List.of(new ChunkWindow(10, 1, 3)));
-        verify(store, never()).chunks(DATASET_ID);
+        verify(store).findActiveNeighbors(DATASET_ID, List.of(new ChunkWindow(10, 1, 3)));
+        verify(store, never()).findActiveByDatasetId(DATASET_ID);
     }
 
     @Test
     void duplicateExpandedChunksAreEmittedOnce() {
-        KnowledgeStore store = mock(KnowledgeStore.class);
+        ChunkRepository store = mock(ChunkRepository.class);
         Chunk center = chunk(2, 10, 2, "child", 100L);
         Chunk sibling = chunk(3, 10, 3, "sibling", 100L);
-        when(store.findChunksByIds(eq(DATASET_ID), anyCollection())).thenReturn(List.of(center));
-        when(store.findChunksByParentIds(eq(DATASET_ID), anyCollection()))
+        when(store.findActiveByIds(eq(DATASET_ID), anyCollection())).thenReturn(List.of(center));
+        when(store.findActiveByParentIds(eq(DATASET_ID), anyCollection()))
                 .thenReturn(List.of(center, center, sibling, sibling));
 
         String content = pipeline(store, selected(center)).retrieve(DATASET_ID, "query", 1, 0)
@@ -82,12 +82,12 @@ class RetrievalPipelineTest {
 
     @Test
     void duplicateParentContextsAcrossSelectedChunksAreEmittedOnce() {
-        KnowledgeStore store = mock(KnowledgeStore.class);
+        ChunkRepository store = mock(ChunkRepository.class);
         Chunk first = chunk(2, 10, 2, "first", 100L);
         Chunk second = chunk(3, 10, 3, "second", 100L);
         Chunk sibling = chunk(4, 10, 4, "sibling", 100L);
-        when(store.findChunksByIds(eq(DATASET_ID), anyCollection())).thenReturn(List.of(first, second));
-        when(store.findChunksByParentIds(eq(DATASET_ID), anyCollection())).thenReturn(List.of(first, second, sibling));
+        when(store.findActiveByIds(eq(DATASET_ID), anyCollection())).thenReturn(List.of(first, second));
+        when(store.findActiveByParentIds(eq(DATASET_ID), anyCollection())).thenReturn(List.of(first, second, sibling));
 
         RetrievalPipeline.RetrievalResult result = pipeline(store, List.of(
                 new ScoredChunk(first.id(), first.content(), 1, "vector", 1),
@@ -100,9 +100,9 @@ class RetrievalPipelineTest {
 
     @Test
     void inactiveVersionChunksAreNotReturnedWhenTheBoundedVisibilityLookupOmitsThem() {
-        KnowledgeStore store = mock(KnowledgeStore.class);
+        ChunkRepository store = mock(ChunkRepository.class);
         ScoredChunk inactive = new ScoredChunk(2, "inactive content", 1, "vector", 1);
-        when(store.findChunksByIds(eq(DATASET_ID), anyCollection())).thenReturn(List.of());
+        when(store.findActiveByIds(eq(DATASET_ID), anyCollection())).thenReturn(List.of());
 
         RetrievalPipeline.RetrievalResult result = pipeline(store, List.of(inactive))
                 .retrieve(DATASET_ID, "query", 1, 0);
@@ -113,24 +113,24 @@ class RetrievalPipelineTest {
 
     @Test
     void contextExpansionDoesNotDependOnTheFullDatasetChunksApi() {
-        KnowledgeStore store = mock(KnowledgeStore.class);
+        ChunkRepository store = mock(ChunkRepository.class);
         Chunk center = chunk(2, 10, 2, "center", null);
-        when(store.findChunksByIds(eq(DATASET_ID), anyCollection())).thenReturn(List.of(center));
-        when(store.findChunksByParentIds(eq(DATASET_ID), anyCollection())).thenReturn(List.of());
-        when(store.findChunkNeighbors(eq(DATASET_ID), anyCollection())).thenReturn(List.of(center));
-        when(store.chunks(anyLong())).thenThrow(new AssertionError("full dataset chunk loading is forbidden"));
+        when(store.findActiveByIds(eq(DATASET_ID), anyCollection())).thenReturn(List.of(center));
+        when(store.findActiveByParentIds(eq(DATASET_ID), anyCollection())).thenReturn(List.of());
+        when(store.findActiveNeighbors(eq(DATASET_ID), anyCollection())).thenReturn(List.of(center));
+        when(store.findActiveByDatasetId(anyLong())).thenThrow(new AssertionError("full dataset chunk loading is forbidden"));
 
         assertFalse(pipeline(store, selected(center)).retrieve(DATASET_ID, "query", 1, 0).contextChunks().isEmpty());
-        verify(store, never()).chunks(anyLong());
+        verify(store, never()).findActiveByDatasetId(anyLong());
     }
 
     @Test
     void everyBoundedPostgresQueryKeepsOnlyLiveChunksFromTheActiveDocumentVersion() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        PostgresKnowledgeStore store = new PostgresKnowledgeStore(jdbc, mock(TextEmbeddingProvider.class));
-        store.findChunksByIds(DATASET_ID, List.of(2L));
-        store.findChunksByParentIds(DATASET_ID, List.of(100L));
-        store.findChunkNeighbors(DATASET_ID, List.of(new ChunkWindow(10, 1, 3)));
+        JdbcChunkRepository store = new JdbcChunkRepository(jdbc, new ObjectMapper());
+        store.findActiveByIds(DATASET_ID, List.of(2L));
+        store.findActiveByParentIds(DATASET_ID, List.of(100L));
+        store.findActiveNeighbors(DATASET_ID, List.of(new ChunkWindow(10, 1, 3)));
 
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
         verify(jdbc, org.mockito.Mockito.times(3)).query(sql.capture(), any(RowMapper.class), any(Object[].class));
@@ -142,7 +142,7 @@ class RetrievalPipelineTest {
                 && value.contains("c.version=d.active_index_version")));
     }
 
-    private RetrievalPipeline pipeline(KnowledgeStore store, List<ScoredChunk> selected) {
+    private RetrievalPipeline pipeline(ChunkRepository store, List<ScoredChunk> selected) {
         SearchFacade search = mock(SearchFacade.class);
         SearchStages stages = new SearchStages("query", List.of("query"), "query",
                 List.of(), List.of(), selected, List.of(), false, selected);

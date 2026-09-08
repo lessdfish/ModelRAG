@@ -8,7 +8,7 @@ import com.modelrag.agent.router.ComplexityRouter;
 import com.modelrag.agent.router.RouteDecision;
 import com.modelrag.api.ConversationContextBuilder;
 import com.modelrag.knowledge.model.Dataset;
-import com.modelrag.knowledge.service.KnowledgeStore;
+import com.modelrag.knowledge.repository.DatasetRepository;
 import com.modelrag.qa.dto.QaRequest;
 import com.modelrag.qa.dto.QaResult;
 import com.modelrag.qa.orchestrator.QaOrchestrator;
@@ -27,7 +27,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class AutoQaService {
-    private final KnowledgeStore store;
+    private final DatasetRepository datasets;
     private final SearchFacade search;
     private final ComplexityRouter router;
     private final QaOrchestrator qa;
@@ -35,9 +35,10 @@ public class AutoQaService {
     private final IntentTreeService intents;
     private final ConversationContextBuilder contexts;
 
-    public AutoQaService(KnowledgeStore store, SearchFacade search, ComplexityRouter router, QaOrchestrator qa,
+    public AutoQaService(DatasetRepository datasets, SearchFacade search,
+                         ComplexityRouter router, QaOrchestrator qa,
                          AgentOrchestrator agent, IntentTreeService intents, ConversationContextBuilder contexts) {
-        this.store = store;
+        this.datasets = datasets;
         this.search = search;
         this.router = router;
         this.qa = qa;
@@ -72,7 +73,7 @@ public class AutoQaService {
         if (request.query() == null || request.query().isBlank()) throw new IllegalArgumentException("问题不能为空");
         String routedQuestion = request.query();
         ConversationContextBuilder context = contexts;
-        List<Dataset> preselected = store.routeDatasets(request.query(), allowedDatasetIds, 3);
+        List<Dataset> preselected = datasets.route(request.query(), allowedDatasetIds, 3);
         ConversationContextBuilder.ConversationContext resolvedContext = null;
         {
             List<ConversationContextBuilder.DatasetCandidate> routingCandidates = preselected.stream()
@@ -135,7 +136,7 @@ public class AutoQaService {
     }
 
     public Dataset selectDataset(String query, Set<Long> allowedDatasetIds) {
-        Candidate candidate = selectCandidate(query, allowedDatasetIds, store.routeDatasets(query, allowedDatasetIds, 3), List.of());
+        Candidate candidate = selectCandidate(query, allowedDatasetIds, datasets.route(query, allowedDatasetIds, 3), List.of());
         if (!candidate.confident()) throw new IllegalStateException("没有匹配到足够相关的知识库");
         return candidate.dataset();
     }
@@ -158,13 +159,13 @@ public class AutoQaService {
                                                      Set<Long> allowedDatasetIds) {
         List<Dataset> values = new ArrayList<>(initialCandidates == null ? List.of() : initialCandidates);
         if (structuredIds == null || structuredIds.isEmpty()) return values;
-        Set<Long> indexed = store.indexedDatasetIds();
+        Set<Long> indexed = datasets.findIndexedDatasetIds();
         for (Long id : structuredIds.stream().distinct().toList()) {
             if (id == null || values.stream().anyMatch(dataset -> dataset.id() == id)) continue;
             if (allowedDatasetIds != null && !allowedDatasetIds.isEmpty() && !allowedDatasetIds.contains(id)) continue;
             if (!indexed.contains(id)) continue;
             try {
-                values.add(store.dataset(id));
+                values.add(datasets.findById(id));
             } catch (RuntimeException ignored) {
                 // A stale model candidate must not break auto routing.
             }
@@ -235,7 +236,7 @@ public class AutoQaService {
     }
 
     private boolean indexedIntent(Dataset dataset, IntentNode intent) {
-        return "TOOL".equals(intent.targetType()) || !store.chunks(dataset.id()).isEmpty();
+        return "TOOL".equals(intent.targetType()) || datasets.findIndexedDatasetIds().contains(dataset.id());
     }
 
     private RouteDecision route(IntentNode intent) {

@@ -5,6 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.modelrag.common.outbox.IndexOutbox;
 import com.modelrag.common.vector.VectorStore;
 import com.modelrag.knowledge.model.Document;
+import com.modelrag.knowledge.repository.ChunkRepository;
+import com.modelrag.knowledge.repository.DatasetRepository;
+import com.modelrag.knowledge.repository.DocumentRepository;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
@@ -13,15 +16,20 @@ import org.springframework.transaction.support.TransactionOperations;
 /** Soft deletion and the ES cleanup event commit together; object cleanup happens after ES delivery. */
 @Service
 public class DocumentDeletionService {
-    private final KnowledgeStore store;
+    private final DatasetRepository datasets;
+    private final DocumentRepository documents;
+    private final ChunkRepository chunks;
     private final IndexOutbox outbox;
     private final TransactionOperations transactions;
     private final ObjectMapper json;
     private final VectorStore vectors;
 
-    public DocumentDeletionService(KnowledgeStore store, IndexOutbox outbox, TransactionOperations transactions,
+    public DocumentDeletionService(DatasetRepository datasets, DocumentRepository documents, ChunkRepository chunks,
+            IndexOutbox outbox, TransactionOperations transactions,
             ObjectMapper json, VectorStore vectors) {
-        this.store = store;
+        this.datasets = datasets;
+        this.documents = documents;
+        this.chunks = chunks;
         this.outbox = outbox;
         this.transactions = transactions;
         this.json = json;
@@ -30,20 +38,25 @@ public class DocumentDeletionService {
 
     public void deleteDocument(long datasetId, long documentId) {
         transactions.executeWithoutResult(status -> {
-            Document document = store.document(documentId);
+            Document document = documents.findById(documentId);
             if (document.datasetId() != datasetId) throw new IllegalArgumentException("文档不属于该知识库");
             appendDeletion(document);
-            store.deleteDocument(datasetId, documentId);
+            documents.softDelete(documentId);
+            chunks.softDeleteByDocumentId(documentId);
+            datasets.bumpRevision(datasetId);
             vectors.deleteDocument(documentId);
         });
     }
 
     public void deleteDataset(long datasetId) {
         transactions.executeWithoutResult(status -> {
-            List<Document> documents = store.documents(datasetId);
-            documents.forEach(this::appendDeletion);
-            store.deleteDataset(datasetId);
-            documents.forEach(document -> vectors.deleteDocument(document.id()));
+            datasets.findById(datasetId);
+            List<Document> documentsForDataset = documents.findByDatasetId(datasetId);
+            documentsForDataset.forEach(this::appendDeletion);
+            datasets.softDelete(datasetId);
+            documents.softDeleteByDatasetId(datasetId);
+            chunks.softDeleteByDatasetId(datasetId);
+            documentsForDataset.forEach(document -> vectors.deleteDocument(document.id()));
         });
     }
 

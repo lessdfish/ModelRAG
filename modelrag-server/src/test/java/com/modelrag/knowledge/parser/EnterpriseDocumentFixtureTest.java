@@ -19,8 +19,9 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import com.modelrag.knowledge.service.BasicDocumentSafetyScanner;
 import com.modelrag.knowledge.service.DocumentService;
-import com.modelrag.knowledge.service.KnowledgeStore;
 import com.modelrag.knowledge.service.ObjectStorageService;
+import com.modelrag.knowledge.repository.DatasetRepository;
+import com.modelrag.knowledge.repository.DocumentRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -116,9 +117,10 @@ class EnterpriseDocumentFixtureTest {
     @Test
     void acceptsExactFiftyMiBBoundaryAndFailsOnExtractedTextLimitWithoutSavingMetadata() throws Exception {
         long bytes = 50L * 1024 * 1024;
-        KnowledgeStore store = mock(KnowledgeStore.class);
+        DatasetRepository datasets = mock(DatasetRepository.class);
+        DocumentRepository documents = mock(DocumentRepository.class);
         ObjectStorageService storage = mock(ObjectStorageService.class);
-        DocumentService service = new DocumentService(store, storage, mock(ApplicationEventPublisher.class),
+        DocumentService service = new DocumentService(datasets, documents, storage, mock(ApplicationEventPublisher.class),
                 1_000, 5_000_000, bytes);
         byte[] block = "enterprise-boundary-fixture\n".repeat(2048).getBytes(StandardCharsets.UTF_8);
         var input = new java.io.InputStream() {
@@ -148,15 +150,16 @@ class EnterpriseDocumentFixtureTest {
         assertTrue(error.getMessage().contains("解析文本超过安全上限"));
         verify(storage).put(org.mockito.ArgumentMatchers.contains("/source.txt"), any(),
                 org.mockito.ArgumentMatchers.eq(bytes), anyString());
-        verify(store, never()).addDocument(anyLong(), anyString(), anyString(), anyString(), any(),
+        verify(documents, never()).create(anyLong(), anyString(), anyString(), anyString(), any(),
                 any(), any(), anyString());
     }
 
     @Test
     void rejectsOversizedUploadBeforeReadingOrPersistingContent() throws Exception {
-        KnowledgeStore store = mock(KnowledgeStore.class);
+        DatasetRepository datasets = mock(DatasetRepository.class);
+        DocumentRepository documents = mock(DocumentRepository.class);
         ObjectStorageService storage = mock(ObjectStorageService.class);
-        DocumentService service = new DocumentService(store, storage, mock(ApplicationEventPublisher.class),
+        DocumentService service = new DocumentService(datasets, documents, storage, mock(ApplicationEventPublisher.class),
                 1_000, 5_000_000, 50L * 1024 * 1024);
         java.util.concurrent.atomic.AtomicBoolean read = new java.util.concurrent.atomic.AtomicBoolean();
         var input = new java.io.InputStream() {
@@ -167,7 +170,7 @@ class EnterpriseDocumentFixtureTest {
                 50L * 1024 * 1024 + 1, input));
         assertTrue(!read.get());
         verify(storage, never()).put(anyString(), any(), anyLong(), anyString());
-        verify(store, never()).addDocument(anyLong(), anyString(), anyString(), anyString(), any(),
+        verify(documents, never()).create(anyLong(), anyString(), anyString(), anyString(), any(),
                 any(), any(), anyString());
     }
 

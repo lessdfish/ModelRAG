@@ -12,7 +12,10 @@ import com.modelrag.indexing.service.EmbeddingService;
 import com.modelrag.knowledge.model.Chunk;
 import com.modelrag.knowledge.model.Dataset;
 import com.modelrag.knowledge.model.Document;
-import com.modelrag.knowledge.service.KnowledgeStore;
+import com.modelrag.knowledge.repository.ChunkRepository;
+import com.modelrag.knowledge.repository.DatasetRepository;
+import com.modelrag.knowledge.repository.DocumentRepository;
+import com.modelrag.knowledge.repository.IndexVersionRepository;
 import com.modelrag.knowledge.service.ObjectStorageService;
 import com.modelrag.knowledge.splitter.RecursiveCharSplitter;
 import java.util.ArrayList;
@@ -35,7 +38,10 @@ import org.slf4j.LoggerFactory;
 public class IndexingPipeline {
     private static final Logger LOG = LoggerFactory.getLogger(IndexingPipeline.class);
     private static final int PARENT_TOKEN_BUDGET = 1800;
-    private final KnowledgeStore store;
+    private final DatasetRepository datasets;
+    private final DocumentRepository documents;
+    private final ChunkRepository chunks;
+    private final IndexVersionRepository versions;
     private final EmbeddingService embed;
     private final VectorStore vectors;
     private final ApplicationEventPublisher events;
@@ -46,11 +52,15 @@ public class IndexingPipeline {
     private final ExecutorService embeddingExecutor;
     private final RecursiveCharSplitter splitter = new RecursiveCharSplitter();
 
-    public IndexingPipeline(KnowledgeStore store, EmbeddingService embed, VectorStore vectors,
+    public IndexingPipeline(DatasetRepository datasets, DocumentRepository documents, ChunkRepository chunks,
+            IndexVersionRepository versions, EmbeddingService embed, VectorStore vectors,
             ApplicationEventPublisher events, SseEmitterService sse, IndexOutbox outbox, ObjectStorageService storage,
             TransactionOperations transaction,
             @org.springframework.beans.factory.annotation.Qualifier("embeddingExecutor") ExecutorService embeddingExecutor) {
-        this.store = store;
+        this.datasets = datasets;
+        this.documents = documents;
+        this.chunks = chunks;
+        this.versions = versions;
         this.embed = embed;
         this.vectors = vectors;
         this.events = events;
@@ -67,7 +77,7 @@ public class IndexingPipeline {
     }
 
     public int reembedDataset(long datasetId) {
-        List<Chunk> chunks = store.chunks(datasetId);
+        List<Chunk> chunks = this.chunks.findActiveByDatasetId(datasetId);
         int total = 0;
         for (int start = 0; start < chunks.size(); start += 64) {
             List<Chunk> window = chunks.subList(start, Math.min(chunks.size(), start + 64));
@@ -78,20 +88,20 @@ public class IndexingPipeline {
     }
 
     public int rebuildDataset(long datasetId) {
-        List<Document> documents = store.documents(datasetId);
-        documents.forEach(d -> index(d.id()));
-        return documents.size();
+        List<Document> documentsForDataset = this.documents.findByDatasetId(datasetId);
+        documentsForDataset.forEach(d -> index(d.id()));
+        return documentsForDataset.size();
     }
 
     public void index(long id) {
         try {
-            long indexVersion = store.beginIndexVersion(id);
-            Document document = store.document(id);
-            Dataset dataset = store.dataset(document.datasetId());
+            long indexVersion = versions.begin(id);
+            Document document = documents.findById(id);
+            Dataset dataset = datasets.findById(document.datasetId());
             status(id, "PARSING", null, 0);
             status(id, "CHUNKING", null, 0);
             Map<String, String> documentMetadata = metadata(document, indexVersion);
-            store.beginChunks(id, indexVersion);
+            chunks.beginDocumentVersion(id, indexVersion);
             IndexState state = new IndexState(document.fileName());
             try (Reader content = content(document)) {
                 splitter.forEachWindow(content, dataset.chunkSize(), dataset.chunkOverlap(), 64, parts -> {
@@ -100,7 +110,7 @@ public class IndexingPipeline {
                     for (String rawPart : parts) {
                         String part = rawPart.replaceAll("\\[\\[MODELRAG_PAGE:\\d+]]", "").trim();
                         if (part.isBlank()) continue;
-                        long chunkId = store.nextId();
+                        long chunkId = this.chunks.nextId();
                         String detectedTitle = titleIn(part);
                         if (detectedTitle != null && !detectedTitle.equals(state.currentTitlePath)) {
                             state.currentTitlePath = detectedTitle;
@@ -126,7 +136,7 @@ public class IndexingPipeline {
                     }
                     List<VectorDocument> docs = embedChunks(document.datasetId(), chunks);
                     Runnable persist = () -> {
-                        store.appendChunks(id, chunks);
+                        this.chunks.append(id, chunks);
                         vectors.upsert(docs);
                         pendingOutbox.forEach(event -> outbox.append("UPSERT_CHUNK", event.datasetId(), event.documentId(),
                                 event.chunkId(), event.payload()));
@@ -138,7 +148,7 @@ public class IndexingPipeline {
             }
             status(id, "VECTOR_READY", null, state.totalChunks);
             status(id, "SEARCH_SYNCING", null, state.totalChunks);
-            if (state.totalChunks == 0) store.activateIndexVersion(id, indexVersion);
+            if (state.totalChunks == 0) versions.activate(id, indexVersion);
             events.publishEvent(new IndexingCompletedEvent(this, id, true, null));
         } catch (Exception error) {
             LOG.error("Document indexing failed: documentId={}", id, error);
@@ -217,7 +227,7 @@ public class IndexingPipeline {
     }
 
     private void status(long id, String value, String error, int chunks) {
-        store.status(id, value, error, chunks);
+        documents.updateStatus(id, value, error, chunks);
         sse.publish("document:" + id, new SseEvent(value, error == null ? value : error,
                 Map.of("documentId", id, "status", value, "chunkCount", chunks)));
     }

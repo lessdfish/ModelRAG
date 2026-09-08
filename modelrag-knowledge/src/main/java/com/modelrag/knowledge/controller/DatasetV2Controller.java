@@ -7,7 +7,9 @@ import com.modelrag.common.outbox.IndexOutbox;
 import com.modelrag.common.security.AccessControlService;
 import com.modelrag.common.rate.DatasetRateLimiter;
 import com.modelrag.knowledge.model.Dataset;
-import com.modelrag.knowledge.service.KnowledgeStore;
+import com.modelrag.knowledge.repository.ChunkRepository;
+import com.modelrag.knowledge.repository.DatasetRepository;
+import com.modelrag.knowledge.repository.DocumentRepository;
 import com.modelrag.knowledge.service.DocumentService;
 import com.modelrag.knowledge.service.DocumentDeletionService;
 import jakarta.validation.Valid;
@@ -27,7 +29,9 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/api/v2")
 public class DatasetV2Controller {
-    private final KnowledgeStore store;
+    private final DatasetRepository datasets;
+    private final DocumentRepository documentsRepository;
+    private final ChunkRepository chunksRepository;
     private final DocumentService documents;
     private final IndexOutbox outbox;
     private final DocumentDeletionService deletion;
@@ -35,10 +39,13 @@ public class DatasetV2Controller {
     private final AccessControlService access;
     private final DatasetRateLimiter limiter;
 
-    public DatasetV2Controller(KnowledgeStore store, DocumentService documents, IndexOutbox outbox,
+    public DatasetV2Controller(DatasetRepository datasets, DocumentRepository documentsRepository,
+            ChunkRepository chunksRepository, DocumentService documents, IndexOutbox outbox,
             DocumentDeletionService deletion, ApplicationEventPublisher events, AccessControlService access,
             DatasetRateLimiter limiter) {
-        this.store = store;
+        this.datasets = datasets;
+        this.documentsRepository = documentsRepository;
+        this.chunksRepository = chunksRepository;
         this.documents = documents;
         this.outbox = outbox;
         this.deletion = deletion;
@@ -50,7 +57,7 @@ public class DatasetV2Controller {
     @GetMapping("/datasets")
     public ApiResponse<List<Dataset>> list() {
         var user = access.currentUser();
-        List<Dataset> result = store.datasets();
+        List<Dataset> result = datasets.findAll();
         return ApiResponse.success(user.hasRole("ADMIN") ? result
                 : result.stream().filter(item -> user.datasetIds().contains(item.id())).toList());
     }
@@ -58,21 +65,21 @@ public class DatasetV2Controller {
     @GetMapping("/datasets/{datasetId}")
     public ApiResponse<Dataset> get(@PathVariable long datasetId) {
         access.requireDatasetAccess(datasetId);
-        return ApiResponse.success(store.dataset(datasetId));
+        return ApiResponse.success(datasets.findById(datasetId));
     }
 
     @PostMapping("/datasets")
     public ApiResponse<Dataset> create(@Valid @RequestBody DatasetMutationRequest request) {
         access.requireRole("ADMIN");
-        return ApiResponse.success(store.createDataset(request.name(), request.description(), request.chunkSize(),
+        return ApiResponse.success(datasets.create(request.name(), request.description(), request.chunkSize(),
                 request.chunkOverlap(), request.topK(), request.thresholdValue()));
     }
 
     @PutMapping("/datasets/{datasetId}")
     public ApiResponse<Dataset> update(@PathVariable long datasetId, @Valid @RequestBody DatasetMutationRequest request) {
         access.requireDatasetAdmin(datasetId);
-        Dataset before = store.dataset(datasetId);
-        Dataset updated = store.updateDataset(datasetId, request.name(), request.description(), request.chunkSize(),
+        Dataset before = datasets.findById(datasetId);
+        Dataset updated = datasets.update(datasetId, request.name(), request.description(), request.chunkSize(),
                 request.chunkOverlap(), request.topK(), request.thresholdValue());
         if (before.chunkSize() != updated.chunkSize() || before.chunkOverlap() != updated.chunkOverlap()) {
             events.publishEvent(new ReembedDatasetEvent(datasetId));
@@ -91,9 +98,9 @@ public class DatasetV2Controller {
     public ApiResponse<RebuildIndexView> rebuild(@PathVariable long datasetId) {
         access.requireDatasetWrite(datasetId);
         limiter.checkUpload(access.currentUser().id());
-        store.dataset(datasetId);
+        datasets.findById(datasetId);
         events.publishEvent(new ReembedDatasetEvent(datasetId));
-        return ApiResponse.success(new RebuildIndexView(store.documents(datasetId).size(),
+        return ApiResponse.success(new RebuildIndexView(documentsRepository.findByDatasetId(datasetId).size(),
                 outbox.requeueDataset(datasetId)));
     }
 
@@ -102,28 +109,28 @@ public class DatasetV2Controller {
             @RequestParam("file") MultipartFile file) throws Exception {
         access.requireDatasetWrite(datasetId);
         limiter.checkUpload(access.currentUser().id());
-        store.dataset(datasetId);
+        datasets.findById(datasetId);
         return ApiResponse.success(documents.upload(datasetId, file));
     }
 
     @GetMapping("/datasets/{datasetId}/documents")
     public ApiResponse<List<com.modelrag.knowledge.model.Document>> documents(@PathVariable long datasetId) {
         access.requireDatasetAccess(datasetId);
-        store.dataset(datasetId);
-        return ApiResponse.success(store.documents(datasetId));
+        datasets.findById(datasetId);
+        return ApiResponse.success(documentsRepository.findByDatasetId(datasetId));
     }
 
     @PostMapping("/documents/{documentId}/reindex")
     public ApiResponse<com.modelrag.knowledge.model.Document> reindex(@PathVariable long documentId) {
-        var document = store.document(documentId);
+        var document = documentsRepository.findById(documentId);
         access.requireDatasetWrite(document.datasetId());
         events.publishEvent(new DocumentUploadedEvent(this, document.id(), document.datasetId()));
-        return ApiResponse.success(store.document(documentId));
+        return ApiResponse.success(documentsRepository.findById(documentId));
     }
 
     @GetMapping("/documents/{documentId}/index-status")
     public ApiResponse<IndexStatus> indexStatus(@PathVariable long documentId) {
-        var document = store.document(documentId);
+        var document = documentsRepository.findById(documentId);
         access.requireDatasetAccess(document.datasetId());
         return ApiResponse.success(new IndexStatus(document.id(), document.datasetId(), document.status(),
                 document.error(), document.chunkCount()));
@@ -131,7 +138,7 @@ public class DatasetV2Controller {
 
     @DeleteMapping("/documents/{documentId}")
     public ApiResponse<Void> deleteDocument(@PathVariable long documentId) {
-        var document = store.document(documentId);
+        var document = documentsRepository.findById(documentId);
         access.requireDatasetWrite(document.datasetId());
         deletion.deleteDocument(document.datasetId(), documentId);
         return ApiResponse.success(null);
@@ -141,7 +148,7 @@ public class DatasetV2Controller {
     public ApiResponse<List<com.modelrag.knowledge.model.Chunk>> chunks(@PathVariable long datasetId,
             @PathVariable long documentId) {
         access.requireDatasetAccess(datasetId);
-        return ApiResponse.success(store.chunks(datasetId).stream()
+        return ApiResponse.success(chunksRepository.findActiveByDatasetId(datasetId).stream()
                 .filter(chunk -> chunk.documentId() == documentId).toList());
     }
 

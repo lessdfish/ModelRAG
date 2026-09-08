@@ -12,7 +12,7 @@ import static org.mockito.Mockito.when;
 import com.modelrag.common.vector.SearchResult;
 import com.modelrag.common.vector.VectorStore;
 import com.modelrag.indexing.service.EmbeddingService;
-import com.modelrag.knowledge.service.KnowledgeStore;
+import com.modelrag.knowledge.repository.IndexVersionRepository;
 import com.modelrag.search.channel.Bm25Search;
 import com.modelrag.search.dto.HybridSearchRequest;
 import com.modelrag.search.dto.ScoredChunk;
@@ -35,9 +35,9 @@ class SearchFaultDegradationTest {
         VectorStore vectors = mock(VectorStore.class);
         EmbeddingService embeddings = mock(EmbeddingService.class);
         Bm25Search bm25 = mock(Bm25Search.class);
-        KnowledgeStore knowledge = mock(KnowledgeStore.class);
+        IndexVersionRepository versions = mock(IndexVersionRepository.class);
         Reranker reranker = mock(Reranker.class);
-        when(knowledge.activeIndexVersions(7L)).thenReturn(Map.of(11L, 1L));
+        when(versions.findActiveByDatasetId(7L)).thenReturn(Map.of(11L, 1L));
         when(embeddings.embed(anyLong(), anyString())).thenReturn(new float[1024]);
         when(reranker.enabled()).thenReturn(false);
         when(vectors.search(any())).thenReturn(List.of(
@@ -46,7 +46,7 @@ class SearchFaultDegradationTest {
         when(bm25.search(any(), anyInt())).thenReturn(List.of(
                 new ScoredChunk(103L, "lexical evidence", 8, "bm25", 1)));
 
-        var stages = orchestrator(vectors, embeddings, bm25, reranker, knowledge)
+        var stages = orchestrator(vectors, embeddings, bm25, reranker, versions)
                 .inspect(new HybridSearchRequest(7L, "policy", 3));
 
         assertTrue(stages.finalResults().size() > 1);
@@ -60,9 +60,9 @@ class SearchFaultDegradationTest {
         VectorStore vectors = mock(VectorStore.class);
         EmbeddingService embeddings = mock(EmbeddingService.class);
         Bm25Search bm25 = mock(Bm25Search.class);
-        KnowledgeStore knowledge = mock(KnowledgeStore.class);
+        IndexVersionRepository versions = mock(IndexVersionRepository.class);
         Reranker reranker = mock(Reranker.class);
-        when(knowledge.activeIndexVersions(7L)).thenReturn(Map.of(11L, 1L));
+        when(versions.findActiveByDatasetId(7L)).thenReturn(Map.of(11L, 1L));
         when(embeddings.embed(anyLong(), anyString())).thenReturn(new float[1024]);
         when(reranker.enabled()).thenReturn(false);
         if (vectorFails) {
@@ -79,7 +79,7 @@ class SearchFaultDegradationTest {
                     new ScoredChunk(102L, "lexical evidence", 8, "bm25", 1)));
         }
 
-        var stages = orchestrator(vectors, embeddings, bm25, reranker, knowledge)
+        var stages = orchestrator(vectors, embeddings, bm25, reranker, versions)
                 .inspect(new HybridSearchRequest(7L, "policy", 3));
 
         assertTrue(stages.degradedComponents().contains(failedComponent));
@@ -92,9 +92,9 @@ class SearchFaultDegradationTest {
         VectorStore vectors = mock(VectorStore.class);
         EmbeddingService embeddings = mock(EmbeddingService.class);
         Bm25Search bm25 = mock(Bm25Search.class);
-        KnowledgeStore knowledge = mock(KnowledgeStore.class);
+        IndexVersionRepository versions = mock(IndexVersionRepository.class);
         Reranker reranker = mock(Reranker.class);
-        when(knowledge.activeIndexVersions(7L)).thenReturn(Map.of(11L, 1L));
+        when(versions.findActiveByDatasetId(7L)).thenReturn(Map.of(11L, 1L));
         when(embeddings.embed(anyLong(), anyString())).thenReturn(new float[1024]);
         when(vectors.search(any())).thenReturn(List.of(new SearchResult(101L, "evidence one", .9, "vector")));
         when(bm25.search(any(), anyInt())).thenReturn(List.of(
@@ -107,7 +107,7 @@ class SearchFaultDegradationTest {
                     item.chunkId(), item.content(), item.score(), channel, item.rank())).toList();
         });
 
-        var stages = orchestrator(vectors, embeddings, bm25, reranker, knowledge)
+        var stages = orchestrator(vectors, embeddings, bm25, reranker, versions)
                 .inspect(new HybridSearchRequest(7L, "policy?", 3));
 
         assertTrue(stages.rerankApplied());
@@ -116,9 +116,9 @@ class SearchFaultDegradationTest {
     }
 
     private SearchOrchestrator orchestrator(VectorStore vectors, EmbeddingService embeddings,
-            Bm25Search bm25, Reranker reranker, KnowledgeStore knowledge) {
+            Bm25Search bm25, Reranker reranker, IndexVersionRepository versions) {
         Executor direct = Runnable::run;
-        return new SearchOrchestrator(vectors, embeddings, bm25, reranker, new QueryRewriter(), knowledge,
+        return new SearchOrchestrator(vectors, embeddings, bm25, reranker, new QueryRewriter(), versions,
                 .7, .3, 800, 500, new SimpleMeterRegistry(), direct, direct, direct);
     }
 

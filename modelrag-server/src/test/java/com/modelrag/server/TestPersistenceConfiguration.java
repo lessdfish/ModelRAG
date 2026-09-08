@@ -24,7 +24,11 @@ import com.modelrag.qa.feedback.FeedbackView;
 import com.modelrag.qa.trace.QaTraceStore;
 import com.modelrag.server.eval.EvalController;
 import com.modelrag.search.facade.SearchFacade;
-import com.modelrag.knowledge.service.KnowledgeStore;
+import com.modelrag.knowledge.repository.ChunkRepository;
+import com.modelrag.knowledge.repository.DatasetRepository;
+import com.modelrag.knowledge.repository.DocumentRepository;
+import com.modelrag.knowledge.repository.IndexVersionRepository;
+import com.modelrag.knowledge.service.InMemoryKnowledgeStore;
 import com.modelrag.qa.orchestrator.QaOrchestrator;
 import com.modelrag.api.ConversationContextBuilder;
 import com.modelrag.api.ConversationRepository;
@@ -52,6 +56,18 @@ import jakarta.servlet.http.HttpServletRequest;
 @Configuration(proxyBeanMethods = false)
 @Profile("test")
 class TestPersistenceConfiguration {
+    @Bean
+    DatasetRepository datasetRepository(InMemoryKnowledgeStore store) { return new TestDatasetRepository(store); }
+
+    @Bean
+    DocumentRepository documentRepository(InMemoryKnowledgeStore store) { return new TestDocumentRepository(store); }
+
+    @Bean
+    ChunkRepository chunkRepository(InMemoryKnowledgeStore store) { return new TestChunkRepository(store); }
+
+    @Bean
+    IndexVersionRepository indexVersionRepository(InMemoryKnowledgeStore store) { return new TestIndexVersionRepository(store); }
+
     @Bean
     TransactionOperations testTransactionOperations() {
         return new TransactionOperations() {
@@ -183,10 +199,11 @@ class TestPersistenceConfiguration {
     QaTraceStore qaTraceStore() { return new TestQaTraceStore(); }
 
     @Bean
-    EvalController evalController(QaOrchestrator qa, SearchFacade search, KnowledgeStore store,
+    EvalController evalController(QaOrchestrator qa, SearchFacade search, DatasetRepository datasets,
+            ChunkRepository chunks,
             ObjectMapper json, AccessControlService access, ObjectProvider<com.modelrag.common.model.ModelGateway> models,
             @Value("${modelrag.eval.llm-judge-enabled:false}") boolean llmJudgeEnabled) {
-        return new EvalController(qa, search, store,
+        return new EvalController(qa, search, datasets, chunks,
                 org.mockito.Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class),
                 json, access, models, llmJudgeEnabled);
     }

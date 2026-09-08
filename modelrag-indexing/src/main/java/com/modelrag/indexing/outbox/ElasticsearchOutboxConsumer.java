@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.modelrag.common.outbox.IndexOutbox;
 import com.modelrag.common.exception.SafeErrorSummary;
-import com.modelrag.knowledge.service.KnowledgeStore;
+import com.modelrag.knowledge.repository.IndexVersionRepository;
 import com.modelrag.knowledge.service.ObjectStorageService;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -25,7 +25,7 @@ import org.springframework.stereotype.Component;
 @Profile("!test")
 public class ElasticsearchOutboxConsumer {
     private final IndexOutbox outbox;
-    private final KnowledgeStore knowledge;
+    private final IndexVersionRepository versions;
     private final ObjectStorageService objectStorage;
     private final HttpClient http = HttpClient.newHttpClient();
     private final ObjectMapper json = new ObjectMapper();
@@ -33,11 +33,11 @@ public class ElasticsearchOutboxConsumer {
     private final long retiredIndexRetentionMillis;
     private final Set<String> preparedIndexes = ConcurrentHashMap.newKeySet();
 
-    public ElasticsearchOutboxConsumer(IndexOutbox outbox, KnowledgeStore knowledge, ObjectStorageService objectStorage,
+    public ElasticsearchOutboxConsumer(IndexOutbox outbox, IndexVersionRepository versions, ObjectStorageService objectStorage,
             @Value("${modelrag.elasticsearch.endpoint:http://localhost:9200}") String endpoint,
             @Value("${modelrag.elasticsearch.retired-index-retention-hours:24}") long retentionHours) {
         this.outbox = outbox;
-        this.knowledge = knowledge;
+        this.versions = versions;
         this.objectStorage = objectStorage;
         this.endpoint = endpoint.replaceAll("/$", "");
         this.retiredIndexRetentionMillis = Math.max(1, retentionHours) * 3_600_000L;
@@ -219,7 +219,7 @@ public class ElasticsearchOutboxConsumer {
     }
 
     private Set<String> activePhysicalIndexes(com.modelrag.common.outbox.IndexOutboxEvent event, Long completedVersion) {
-        Map<Long, Long> active = new HashMap<>(knowledge.allActiveIndexVersions());
+        Map<Long, Long> active = new HashMap<>(versions.findAllActive());
         if (completedVersion == null) active.remove(event.documentId());
         else active.put(event.documentId(), completedVersion);
         return new HashSet<>(active.values().stream().map(this::physicalIndex).toList());

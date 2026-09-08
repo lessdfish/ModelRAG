@@ -11,6 +11,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.context.annotation.Profile;
@@ -42,6 +43,21 @@ public class InMemoryKnowledgeStore implements KnowledgeStore {
 
     public List<Dataset> datasets() { return datasets.values().stream().sorted(Comparator.comparingLong(Dataset::id)).toList(); }
 
+    public List<Dataset> routeDatasets(String query, Set<Long> allowedDatasetIds, int limit) {
+        Set<Long> indexed = indexedDatasetIds();
+        return datasets().stream()
+                .filter(dataset -> allowedDatasetIds == null || allowedDatasetIds.isEmpty()
+                        || allowedDatasetIds.contains(dataset.id()))
+                .filter(dataset -> indexed.contains(dataset.id()))
+                .sorted(Comparator.comparingInt((Dataset dataset) -> metadataScore(dataset, query)).reversed()
+                        .thenComparing(Dataset::id))
+                .limit(Math.max(1, Math.min(3, limit))).toList();
+    }
+
+    public Set<Long> indexedDatasetIds() {
+        return chunks.values().stream().flatMap(List::stream).map(Chunk::datasetId).collect(java.util.stream.Collectors.toSet());
+    }
+
     public Dataset dataset(long id) {
         Dataset value = datasets.get(id);
         if (value == null) throw new BusinessException(ErrorCode.NOT_FOUND, "知识库不存在");
@@ -66,10 +82,9 @@ public class InMemoryKnowledgeStore implements KnowledgeStore {
     }
 
     public void deleteDataset(long id) {
-        dataset(id);
-        datasets.remove(id);
-        documents.values().removeIf(document -> document.datasetId() == id);
-        chunks.entrySet().removeIf(entry -> entry.getValue().stream().anyMatch(chunk -> chunk.datasetId() == id));
+        softDeleteDatasetOnly(id);
+        softDeleteDocumentsByDataset(id);
+        softDeleteChunksByDataset(id);
     }
 
     public Document addDocument(long datasetId, String name, String type, String hash, String content) {
@@ -77,6 +92,14 @@ public class InMemoryKnowledgeStore implements KnowledgeStore {
     }
 
     public Document addDocument(long datasetId, String name, String type, String hash, String content,
+            String sourceKey, String artifactKey, String contentHash) {
+        Document document = createDocumentOnly(datasetId, name, type, hash, content,
+                sourceKey, artifactKey, contentHash);
+        bumpDatasetRevision(datasetId);
+        return document;
+    }
+
+    public Document createDocumentOnly(long datasetId, String name, String type, String hash, String content,
             String sourceKey, String artifactKey, String contentHash) {
         dataset(datasetId);
         if (documents.values().stream().anyMatch(document -> document.datasetId() == datasetId && hash.equals(document.hash()))) {
@@ -86,7 +109,6 @@ public class InMemoryKnowledgeStore implements KnowledgeStore {
         Document document = new Document(id, datasetId, name, type, hash, content, "PENDING", null, 0,
                 sourceKey, artifactKey, contentHash);
         documents.put(id, document);
-        bumpDatasetRevision(datasetId);
         return document;
     }
 
@@ -99,8 +121,8 @@ public class InMemoryKnowledgeStore implements KnowledgeStore {
     public void deleteDocument(long datasetId, long documentId) {
         Document value = document(documentId);
         if (value.datasetId() != datasetId) throw new BusinessException(ErrorCode.NOT_FOUND, "文档不存在");
-        documents.remove(documentId);
-        chunks.remove(documentId);
+        softDeleteDocumentOnly(documentId);
+        softDeleteChunksByDocument(documentId);
         bumpDatasetRevision(datasetId);
     }
 
@@ -127,7 +149,10 @@ public class InMemoryKnowledgeStore implements KnowledgeStore {
         }
         return result.values().stream().sorted(Comparator.comparingLong(Chunk::documentId).thenComparingInt(Chunk::index)).toList();
     }
-    public void chunks(long documentId, List<Chunk> next) { chunks.put(documentId, new ArrayList<>(next)); bumpDatasetRevision(document(documentId).datasetId()); }
+    public void chunks(long documentId, List<Chunk> next) {
+        replaceChunksOnly(documentId, next);
+        bumpDatasetRevision(document(documentId).datasetId());
+    }
     @Override public void beginChunks(long documentId, long version) { chunks.remove(documentId); }
     @Override public void appendChunks(long documentId, List<Chunk> next) {
         chunks.computeIfAbsent(documentId, ignored -> new ArrayList<>()).addAll(next);
@@ -140,6 +165,42 @@ public class InMemoryKnowledgeStore implements KnowledgeStore {
                 current.topK(), current.threshold(), current.revision() + 1);
         datasets.put(datasetId, next);
         return next;
+    }
+
+    public void softDeleteDatasetOnly(long datasetId) {
+        dataset(datasetId);
+        datasets.remove(datasetId);
+    }
+
+    public void softDeleteDocumentsByDataset(long datasetId) {
+        documents.values().removeIf(document -> document.datasetId() == datasetId);
+    }
+
+    public void softDeleteChunksByDataset(long datasetId) {
+        chunks.entrySet().removeIf(entry -> entry.getValue().stream().anyMatch(chunk -> chunk.datasetId() == datasetId));
+    }
+
+    public void softDeleteDocumentOnly(long documentId) {
+        document(documentId);
+        documents.remove(documentId);
+    }
+
+    public void softDeleteChunksByDocument(long documentId) {
+        chunks.remove(documentId);
+    }
+
+    public void replaceChunksOnly(long documentId, List<Chunk> next) {
+        chunks.put(documentId, new ArrayList<>(next));
+    }
+
+    private int metadataScore(Dataset dataset, String query) {
+        String source = query == null ? "" : query.replaceAll("[\\s，。！？、：:]+", "");
+        String target = dataset.name() + " " + (dataset.description() == null ? "" : dataset.description());
+        int score = 0;
+        for (int index = 0; index + 1 < source.length(); index++) {
+            if (target.contains(source.substring(index, index + 2))) score++;
+        }
+        return score;
     }
 
     private void requireName(String value) { if (value == null || value.isBlank()) throw new BusinessException(ErrorCode.VALIDATION, "知识库名称不能为空"); }

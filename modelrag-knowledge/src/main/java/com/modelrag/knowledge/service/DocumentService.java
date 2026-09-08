@@ -4,6 +4,8 @@ import com.modelrag.common.event.DocumentUploadedEvent;
 import com.modelrag.knowledge.model.Document;
 import com.modelrag.knowledge.parser.ParseLimits;
 import com.modelrag.knowledge.parser.DocumentParserRegistry;
+import com.modelrag.knowledge.repository.DatasetRepository;
+import com.modelrag.knowledge.repository.DocumentRepository;
 import java.io.InputStream;
 import java.io.Reader;
 import java.io.Writer;
@@ -32,7 +34,8 @@ import org.slf4j.LoggerFactory;
 @Service
 public class DocumentService {
     private static final Logger LOG = LoggerFactory.getLogger(DocumentService.class);
-    private final KnowledgeStore store;
+    private final DatasetRepository datasets;
+    private final DocumentRepository documents;
     private final ObjectStorageService storage;
     private final ApplicationEventPublisher events;
     private final ParseLimits parseLimits;
@@ -41,20 +44,23 @@ public class DocumentService {
     private final DocumentParserRegistry parsers;
     private final java.util.List<DocumentSafetyScanner> scanners;
 
-    public DocumentService(KnowledgeStore store, ObjectStorageService storage, ApplicationEventPublisher events,
+    public DocumentService(DatasetRepository datasets, DocumentRepository documents, ObjectStorageService storage,
+            ApplicationEventPublisher events,
             long maxPages, int maxExtractedChars, long maxFileSize) {
-        this(store, storage, events, maxPages, maxExtractedChars, maxFileSize, 120,
+        this(datasets, documents, storage, events, maxPages, maxExtractedChars, maxFileSize, 120,
                 new DocumentParserRegistry(), java.util.List.of(new BasicDocumentSafetyScanner()));
     }
 
     @org.springframework.beans.factory.annotation.Autowired
-    public DocumentService(KnowledgeStore store, ObjectStorageService storage, ApplicationEventPublisher events,
+    public DocumentService(DatasetRepository datasets, DocumentRepository documents, ObjectStorageService storage,
+            ApplicationEventPublisher events,
             @Value("${modelrag.ingestion.max-pages:1000}") long maxPages,
             @Value("${modelrag.ingestion.max-extracted-chars:5000000}") int maxExtractedChars,
             @Value("${modelrag.ingestion.max-file-size-bytes:52428800}") long maxFileSize,
             @Value("${modelrag.ingestion.parse-timeout-seconds:120}") long parseTimeoutSeconds,
             DocumentParserRegistry parsers, java.util.List<DocumentSafetyScanner> scanners) {
-        this.store = store;
+        this.datasets = datasets;
+        this.documents = documents;
         this.storage = storage;
         this.events = events;
         this.parseLimits = new ParseLimits(maxPages, maxExtractedChars);
@@ -112,8 +118,10 @@ public class DocumentService {
                 try (InputStream artifactInput = Files.newInputStream(artifact)) {
                     storage.put(artifactKey, artifactInput, Files.size(artifact), "text/plain; charset=utf-8");
                 }
-                Document document = store.addDocument(datasetId, fileName, type(fileName), hash, null,
+                datasets.findById(datasetId);
+                Document document = documents.create(datasetId, fileName, type(fileName), hash, null,
                         sourceKey, artifactKey, normalizedContentHash);
+                datasets.bumpRevision(datasetId);
                 metadataSaved = true;
                 events.publishEvent(new DocumentUploadedEvent(this, document.id(), datasetId));
                 return document;

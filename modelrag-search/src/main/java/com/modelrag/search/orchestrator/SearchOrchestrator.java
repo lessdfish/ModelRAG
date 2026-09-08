@@ -4,7 +4,7 @@ import com.modelrag.common.vector.SearchRequest;
 import com.modelrag.common.vector.SearchResult;
 import com.modelrag.common.vector.VectorStore;
 import com.modelrag.indexing.service.EmbeddingService;
-import com.modelrag.knowledge.service.KnowledgeStore;
+import com.modelrag.knowledge.repository.IndexVersionRepository;
 import com.modelrag.search.channel.Bm25Search;
 import com.modelrag.search.dto.HybridSearchRequest;
 import com.modelrag.search.dto.ScoredChunk;
@@ -37,7 +37,7 @@ public class SearchOrchestrator implements SearchFacade {
     private final Bm25Search bm25;
     private final Reranker reranker;
     private final QueryRewriter rewriter;
-    private final KnowledgeStore knowledge;
+    private final IndexVersionRepository versions;
     private final double vectorWeight;
     private final double bm25Weight;
     private final MeterRegistry metrics;
@@ -49,7 +49,7 @@ public class SearchOrchestrator implements SearchFacade {
 
     public SearchOrchestrator(VectorStore vectors, EmbeddingService embeddings, Bm25Search bm25,
             Reranker reranker, QueryRewriter rewriter,
-            KnowledgeStore knowledge,
+            IndexVersionRepository versions,
             @Value("${modelrag.search.rrf-vector-weight:.7}") double vectorWeight,
             @Value("${modelrag.search.rrf-bm25-weight:.3}") double bm25Weight,
             @Value("${modelrag.search.channel-timeout-ms:800}") long channelTimeoutMs,
@@ -63,7 +63,7 @@ public class SearchOrchestrator implements SearchFacade {
         this.bm25 = bm25;
         this.reranker = reranker;
         this.rewriter = rewriter;
-        this.knowledge = knowledge;
+        this.versions = versions;
         this.vectorWeight = vectorWeight;
         this.bm25Weight = bm25Weight;
         this.channelTimeoutMs = Math.max(50, channelTimeoutMs);
@@ -77,7 +77,7 @@ public class SearchOrchestrator implements SearchFacade {
     @Override
     public SearchStages inspect(HybridSearchRequest request) {
         final HybridSearchRequest scopedRequest = request.withActiveIndexVersions(
-                knowledge.activeIndexVersions(request.datasetId()));
+                versions.findActiveByDatasetId(request.datasetId()));
         long started = System.nanoTime();
         int topK = Math.max(1, scopedRequest.topK());
         int recall = Math.max(topK * 2, 10);

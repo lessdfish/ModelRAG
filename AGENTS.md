@@ -171,7 +171,7 @@ If a new build fails, the previous active build must continue serving traffic.
 
 ## 10. Coding Rules
 
-- Use Java 17.
+- Use Java 21.
 - Keep module boundaries explicit.
 - Prefer ports/interfaces between modules.
 - Do not introduce unnecessary dependencies.

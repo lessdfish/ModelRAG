@@ -19,7 +19,7 @@ import com.modelrag.agent.trace.ToolCallTracer;
 import com.modelrag.common.dto.SseEvent;
 import com.modelrag.common.operation.OperationGuard;
 import com.modelrag.common.sse.SseEmitterService;
-import com.modelrag.knowledge.service.KnowledgeStore;
+import com.modelrag.knowledge.repository.DatasetRepository;
 import com.modelrag.qa.dto.Citation;
 import com.modelrag.qa.dto.QaRequest;
 import com.modelrag.qa.dto.QaResult;
@@ -54,7 +54,7 @@ public class AgentOrchestrator {
     private final ResilientToolExecutor executor;
     private final HttpToolInvoker httpTools;
     private final AgentPlanner planner;
-    private final KnowledgeStore store;
+    private final DatasetRepository datasets;
     private final AgentExecutionRegistry executions;
     private final OperationGuard operationGuard;
     private final int maxSteps;
@@ -64,7 +64,7 @@ public class AgentOrchestrator {
                              ToolRegistry tools, LoopDetector loops, ConversationMemory memory,
                              LongTermMemoryService longTermMemory, SseEmitterService sse, ToolCallTracer tracer,
                              AgentStepTracer stepTracer, IntentTreeService intents, ResilientToolExecutor executor,
-                             HttpToolInvoker httpTools, AgentPlanner planner, KnowledgeStore store,
+                             HttpToolInvoker httpTools, AgentPlanner planner, DatasetRepository datasets,
                              AgentExecutionRegistry executions, OperationGuard operationGuard,
                              @Value("${modelrag.agent.max-steps:6}") int maxSteps,
                              @Value("${modelrag.agent.deadline-ms:10000}") long deadlineMs) {
@@ -82,7 +82,7 @@ public class AgentOrchestrator {
         this.executor = executor;
         this.httpTools = httpTools;
         this.planner = planner;
-        this.store = store;
+        this.datasets = datasets;
         this.executions = executions;
         this.operationGuard = operationGuard;
         this.maxSteps = Math.max(1, Math.min(10, maxSteps));
@@ -481,7 +481,7 @@ public class AgentOrchestrator {
 
     private String datasetName(long datasetId) {
         try {
-            return store.dataset(datasetId).name();
+            return datasets.findById(datasetId).name();
         } catch (RuntimeException ignored) {
             return null;
         }

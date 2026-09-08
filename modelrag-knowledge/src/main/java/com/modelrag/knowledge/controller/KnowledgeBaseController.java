@@ -6,7 +6,8 @@ import com.modelrag.common.outbox.IndexOutbox;
 import com.modelrag.common.security.AccessControlService;
 import com.modelrag.common.security.RequestUser;
 import com.modelrag.knowledge.model.Dataset;
-import com.modelrag.knowledge.service.KnowledgeStore;
+import com.modelrag.knowledge.repository.DatasetRepository;
+import com.modelrag.knowledge.repository.DocumentRepository;
 import com.modelrag.knowledge.service.DocumentService;
 import com.modelrag.knowledge.service.DocumentDeletionService;
 import jakarta.validation.Valid;
@@ -24,15 +25,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/knowledge-bases")
 public class KnowledgeBaseController {
-    private final KnowledgeStore store;
+    private final DatasetRepository datasets;
+    private final DocumentRepository documents;
     private final IndexOutbox outbox;
     private final ApplicationEventPublisher events;
     private final AccessControlService access;
     private final DocumentDeletionService deletion;
 
-    public KnowledgeBaseController(KnowledgeStore store, IndexOutbox outbox,
+    public KnowledgeBaseController(DatasetRepository datasets, DocumentRepository documents, IndexOutbox outbox,
             ApplicationEventPublisher events, AccessControlService access, DocumentDeletionService deletion) {
-        this.store = store;
+        this.datasets = datasets;
+        this.documents = documents;
         this.outbox = outbox;
         this.events = events;
         this.access = access;
@@ -42,29 +45,29 @@ public class KnowledgeBaseController {
     @GetMapping
     public ApiResponse<List<Dataset>> list() {
         RequestUser user = access.currentUser();
-        List<Dataset> datasets = store.datasets();
-        return ApiResponse.success(user.roles().contains("ADMIN") ? datasets
-                : datasets.stream().filter(dataset -> user.datasetIds().contains(dataset.id())).toList());
+        List<Dataset> values = datasets.findAll();
+        return ApiResponse.success(user.roles().contains("ADMIN") ? values
+                : values.stream().filter(dataset -> user.datasetIds().contains(dataset.id())).toList());
     }
 
     @GetMapping("/{datasetId}")
     public ApiResponse<Dataset> get(@PathVariable long datasetId) {
         access.requireDatasetAccess(datasetId);
-        return ApiResponse.success(store.dataset(datasetId));
+        return ApiResponse.success(datasets.findById(datasetId));
     }
 
     @PostMapping
     public ApiResponse<Dataset> create(@Valid @RequestBody DatasetMutationRequest request) {
         access.requireRole("ADMIN");
-        return ApiResponse.success(store.createDataset(request.name(), request.description(), request.chunkSize(),
+        return ApiResponse.success(datasets.create(request.name(), request.description(), request.chunkSize(),
                 request.chunkOverlap(), request.topK(), request.thresholdValue()));
     }
 
     @PutMapping("/{datasetId}")
     public ApiResponse<Dataset> update(@PathVariable long datasetId, @Valid @RequestBody DatasetMutationRequest request) {
         access.requireDatasetAdmin(datasetId);
-        Dataset before = store.dataset(datasetId);
-        Dataset updated = store.updateDataset(datasetId, request.name(), request.description(),
+        Dataset before = datasets.findById(datasetId);
+        Dataset updated = datasets.update(datasetId, request.name(), request.description(),
                 request.chunkSize() == null ? before.chunkSize() : request.chunkSize(),
                 request.chunkOverlap() == null ? before.chunkOverlap() : request.chunkOverlap(),
                 request.topK() == null ? before.topK() : request.topK(),
@@ -85,8 +88,8 @@ public class KnowledgeBaseController {
     @PostMapping("/{datasetId}/rebuild-index")
     public ApiResponse<RebuildIndexView> rebuild(@PathVariable long datasetId) {
         access.requireDatasetWrite(datasetId);
-        store.dataset(datasetId);
+        datasets.findById(datasetId);
         events.publishEvent(new ReembedDatasetEvent(datasetId));
-        return ApiResponse.success(new RebuildIndexView(store.documents(datasetId).size(), outbox.requeueDataset(datasetId)));
+        return ApiResponse.success(new RebuildIndexView(documents.findByDatasetId(datasetId).size(), outbox.requeueDataset(datasetId)));
     }
 }

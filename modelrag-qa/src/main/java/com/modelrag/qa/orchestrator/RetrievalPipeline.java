@@ -1,7 +1,8 @@
 package com.modelrag.qa.orchestrator;
 
 import com.modelrag.knowledge.model.Chunk;
-import com.modelrag.knowledge.service.KnowledgeStore;
+import com.modelrag.knowledge.repository.ChunkRepository;
+import com.modelrag.knowledge.repository.ChunkWindow;
 import com.modelrag.search.dto.HybridSearchRequest;
 import com.modelrag.search.dto.ScoredChunk;
 import com.modelrag.search.dto.SearchStages;
@@ -23,11 +24,11 @@ import org.springframework.stereotype.Service;
 public class RetrievalPipeline {
     private static final double MMR_LAMBDA = 0.75;
     private final SearchFacade search;
-    private final KnowledgeStore store;
+    private final ChunkRepository chunks;
 
-    public RetrievalPipeline(SearchFacade search, KnowledgeStore store) {
+    public RetrievalPipeline(SearchFacade search, ChunkRepository chunks) {
         this.search = search;
-        this.store = store;
+        this.chunks = chunks;
     }
 
     public RetrievalResult retrieve(long datasetId, String query, int topK, double threshold) {
@@ -77,18 +78,18 @@ public class RetrievalPipeline {
     private List<ScoredChunk> expandContext(long datasetId, List<ScoredChunk> selected) {
         if (selected.isEmpty()) return List.of();
         Set<Long> selectedIds = selected.stream().map(ScoredChunk::chunkId).collect(Collectors.toCollection(LinkedHashSet::new));
-        Map<Long, Chunk> byId = store.findChunksByIds(datasetId, selectedIds).stream()
+        Map<Long, Chunk> byId = chunks.findActiveByIds(datasetId, selectedIds).stream()
                 .collect(Collectors.toMap(Chunk::id, chunk -> chunk, (a, b) -> a));
         Set<Long> parentIds = byId.values().stream().map(Chunk::parentChunkId).filter(Objects::nonNull)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
-        Map<Long, List<Chunk>> byParent = store.findChunksByParentIds(datasetId, parentIds).stream()
+        Map<Long, List<Chunk>> byParent = chunks.findActiveByParentIds(datasetId, parentIds).stream()
                 .filter(chunk -> chunk.parentChunkId() != null)
                 .collect(Collectors.groupingBy(Chunk::parentChunkId, java.util.LinkedHashMap::new, Collectors.toList()));
-        List<KnowledgeStore.ChunkWindow> windows = byId.values().stream()
+        List<ChunkWindow> windows = byId.values().stream()
                 .filter(chunk -> chunk.parentChunkId() == null)
-                .map(chunk -> new KnowledgeStore.ChunkWindow(chunk.documentId(), Math.max(0, chunk.index() - 1), chunk.index() + 1))
+                .map(chunk -> new ChunkWindow(chunk.documentId(), Math.max(0, chunk.index() - 1), chunk.index() + 1))
                 .toList();
-        Map<String, List<Chunk>> byPosition = store.findChunkNeighbors(datasetId, windows).stream()
+        Map<String, List<Chunk>> byPosition = chunks.findActiveNeighbors(datasetId, windows).stream()
                 .collect(Collectors.groupingBy(chunk -> chunk.documentId() + ":" + chunk.index(),
                         java.util.LinkedHashMap::new, Collectors.toList()));
         List<ScoredChunk> expanded = new ArrayList<>();

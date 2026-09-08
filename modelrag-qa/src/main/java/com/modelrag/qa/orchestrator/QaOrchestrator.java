@@ -8,7 +8,9 @@ import com.modelrag.api.ConversationRepository;
 import com.modelrag.common.rate.DatasetRateLimiter;
 import com.modelrag.knowledge.model.Chunk;
 import com.modelrag.knowledge.model.Dataset;
-import com.modelrag.knowledge.service.KnowledgeStore;
+import com.modelrag.knowledge.repository.ChunkRepository;
+import com.modelrag.knowledge.repository.DatasetRepository;
+import com.modelrag.knowledge.repository.DocumentRepository;
 import com.modelrag.qa.dto.Citation;
 import com.modelrag.qa.dto.QaRequest;
 import com.modelrag.qa.dto.QaResult;
@@ -39,7 +41,9 @@ import org.springframework.stereotype.Service;
 public class QaOrchestrator {
     private static final Pattern FAQ = Pattern.compile("问[:：]\\s*([^？?\\n]+)[？?]\\s*答[:：]\\s*([^。！？\\n]+)");
 
-    private final KnowledgeStore store;
+    private final DatasetRepository datasets;
+    private final DocumentRepository documents;
+    private final ChunkRepository chunks;
     private final PromptSanitizer sanitizer;
     private final ContextSanitizer contextSanitizer;
     private final ContextWindowManager contextWindow;
@@ -57,7 +61,9 @@ public class QaOrchestrator {
     private final ObjectMapper json = new ObjectMapper();
 
     public QaOrchestrator(
-            KnowledgeStore store,
+            DatasetRepository datasets,
+            DocumentRepository documents,
+            ChunkRepository chunks,
             PromptSanitizer p,
             ContextSanitizer contextSanitizer,
             ContextWindowManager contextWindow,
@@ -72,7 +78,9 @@ public class QaOrchestrator {
             AnswerApplicationService answerApplication,
             AnswerTraceRepository answerTraceRepository,
             @Value("${modelrag.qa.context-max-tokens:1600}") int contextMaxTokens) {
-        this.store = store;
+        this.datasets = datasets;
+        this.documents = documents;
+        this.chunks = chunks;
         sanitizer = p;
         this.contextSanitizer = contextSanitizer;
         this.contextWindow = contextWindow;
@@ -96,7 +104,7 @@ public class QaOrchestrator {
     public QaResult answer(QaRequest request, Consumer<String> tokenConsumer) {
         if (request.query() == null || request.query().isBlank()) throw new IllegalArgumentException("问题不能为空");
         limiter.check(request.datasetId());
-        Dataset dataset = store.dataset(request.datasetId());
+        Dataset dataset = datasets.findById(request.datasetId());
         boolean userMessagePersisted = !request.persistConversationMessage() || persistUserMessage(request);
         QaResult result = answerUncached(request, tokenConsumer);
         audit(request, result);
@@ -118,7 +126,7 @@ public class QaOrchestrator {
 
     private QaResult answerUncached(QaRequest request, Consumer<String> tokenConsumer) {
         long started = System.nanoTime();
-        Dataset dataset = store.dataset(request.datasetId());
+        Dataset dataset = datasets.findById(request.datasetId());
         String query = sanitizer.sanitize(request.query());
         ContextAssembler.ContextBundle contextBundle = contextAssembler.build(request, query);
         ConversationContextBuilder.ConversationContext conversationContext = contextBundle.conversation();
@@ -192,15 +200,15 @@ public class QaOrchestrator {
     }
 
     private QaResult datasetOverview(QaRequest request, Dataset dataset, String query, long started) {
-        List<com.modelrag.knowledge.model.Document> documents = store.documents(request.datasetId());
-        List<Chunk> chunks = store.chunks(request.datasetId());
-        List<ScoredChunk> contextChunks = chunks.stream()
+        List<com.modelrag.knowledge.model.Document> documentsForDataset = documents.findByDatasetId(request.datasetId());
+        List<Chunk> chunksForDataset = chunks.findActiveByDatasetId(request.datasetId());
+        List<ScoredChunk> contextChunks = chunksForDataset.stream()
                 .limit(5)
                 .map(chunk -> new ScoredChunk(chunk.id(), chunk.content(), 1, "dataset-overview", chunk.index() + 1))
                 .toList();
         String traceId = UUID.randomUUID().toString();
         List<Citation> citations = citations(request.datasetId(), contextChunks, 2);
-        String answer = overviewAnswer(dataset, documents, chunks);
+        String answer = overviewAnswer(dataset, documentsForDataset, chunksForDataset);
         SearchStages emptyStages = new SearchStages(query, List.of(query), query, List.of(), List.of(), contextChunks, List.of(), false, contextChunks);
         AnswerApplicationService.AnswerDraft draft = new AnswerApplicationService.AnswerDraft(answer, "",
                 contextWindow.fit(contextChunks.stream().map(ScoredChunk::content).toList(), contextMaxTokens),
@@ -228,12 +236,12 @@ public class QaOrchestrator {
         trace.put("contextMaxTokens", contextMaxTokens);
         trace.put("answerSource", draft.answerSource());
         trace.put("modelOutput", "");
-        trace.put("confidence", documents.isEmpty() ? .3 : .9);
+        trace.put("confidence", documentsForDataset.isEmpty() ? .3 : .9);
         trace.put("refused", false);
         long latencyMs = (System.nanoTime() - started) / 1_000_000;
         trace.put("latencyMs", latencyMs);
         persistTrace(trace);
-        return new QaResult(answer, citations, documents.isEmpty() ? .3 : .9, false, traceId, List.of());
+        return new QaResult(answer, citations, documentsForDataset.isEmpty() ? .3 : .9, false, traceId, List.of());
     }
 
     private boolean isDatasetOverviewQuery(String query) {
@@ -714,12 +722,13 @@ public class QaOrchestrator {
     }
 
     private List<Citation> citations(long datasetId, List<ScoredChunk> scored, int limit) {
-        Map<Long, Chunk> chunks = store.chunks(datasetId).stream()
+        List<Long> chunkIds = scored.stream().limit(limit).map(ScoredChunk::chunkId).toList();
+        Map<Long, Chunk> chunksById = chunks.findActiveByIds(datasetId, chunkIds).stream()
                 .collect(Collectors.toMap(Chunk::id, chunk -> chunk, (left, right) -> left));
         return scored.stream().limit(limit).map(item -> {
-            Chunk chunk = chunks.get(item.chunkId());
+            Chunk chunk = chunksById.get(item.chunkId());
             if (chunk == null) return new Citation(item.chunkId(), excerpt(item.content()), item.score());
-            com.modelrag.knowledge.model.Document document = store.document(chunk.documentId());
+            com.modelrag.knowledge.model.Document document = documents.findById(chunk.documentId());
             String page = chunk.metadata().get("page");
             String title = chunk.metadata().get("titlePath");
             String location = page == null || page.isBlank()

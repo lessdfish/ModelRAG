@@ -6,7 +6,8 @@ import com.modelrag.common.exception.ErrorCode;
 import com.modelrag.common.security.AccessControlService;
 import com.modelrag.knowledge.model.Chunk;
 import com.modelrag.knowledge.model.Document;
-import com.modelrag.knowledge.service.KnowledgeStore;
+import com.modelrag.knowledge.repository.ChunkRepository;
+import com.modelrag.knowledge.repository.DocumentRepository;
 import com.modelrag.search.dto.HybridSearchRequest;
 import com.modelrag.search.facade.SearchFacade;
 import java.util.LinkedHashSet;
@@ -19,12 +20,15 @@ import org.springframework.stereotype.Service;
 @Service
 public class DefaultRetriever implements Retriever {
     private final SearchFacade search;
-    private final KnowledgeStore knowledge;
+    private final ChunkRepository chunks;
+    private final DocumentRepository documents;
     private final AccessControlService access;
 
-    public DefaultRetriever(SearchFacade search, KnowledgeStore knowledge, AccessControlService access) {
+    public DefaultRetriever(SearchFacade search, ChunkRepository chunks, DocumentRepository documents,
+            AccessControlService access) {
         this.search = search;
-        this.knowledge = knowledge;
+        this.chunks = chunks;
+        this.documents = documents;
         this.access = access;
     }
 
@@ -42,13 +46,12 @@ public class DefaultRetriever implements Retriever {
         }
         int topK = Math.max(1, Math.min(20, request.topK()));
         var stages = search.inspect(new HybridSearchRequest(request.datasetId(), request.question(), topK));
-        Map<Long, Chunk> chunks = knowledge.chunks(request.datasetId()).stream()
+        var resultIds = stages.finalResults().stream().limit(topK).map(result -> result.chunkId()).toList();
+        Map<Long, Chunk> chunksById = chunks.findActiveByIds(request.datasetId(), resultIds).stream()
                 .collect(Collectors.toMap(Chunk::id, Function.identity(), (left, right) -> left));
-        Map<Long, Document> documents = knowledge.documents(request.datasetId()).stream()
-                .collect(Collectors.toMap(Document::id, Function.identity()));
         var evidence = stages.finalResults().stream().limit(topK).map(result -> {
-            Chunk chunk = chunks.get(result.chunkId());
-            Document document = chunk == null ? null : documents.get(chunk.documentId());
+            Chunk chunk = chunksById.get(result.chunkId());
+            Document document = chunk == null ? null : documents.findById(chunk.documentId());
             return new Evidence(result.chunkId(), chunk == null ? 0 : chunk.documentId(),
                     document == null ? "" : document.fileName(), location(chunk), result.content(), result.score());
         }).toList();

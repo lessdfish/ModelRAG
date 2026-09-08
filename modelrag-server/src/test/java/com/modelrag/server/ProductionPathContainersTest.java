@@ -22,6 +22,8 @@ import com.modelrag.knowledge.service.DocumentDeletionService;
 import com.modelrag.knowledge.service.PostgresKnowledgeStore;
 import com.modelrag.knowledge.service.DocumentService;
 import com.modelrag.knowledge.service.ObjectStorageService;
+import com.modelrag.knowledge.repository.jdbc.JdbcDatasetRepository;
+import com.modelrag.knowledge.repository.jdbc.JdbcDocumentRepository;
 import com.modelrag.common.exception.BusinessException;
 import com.modelrag.common.exception.ErrorCode;
 import com.modelrag.common.operation.RedisOperationGuard;
@@ -370,11 +372,14 @@ class ProductionPathContainersTest {
     }
 
     private void verifyConcurrentDuplicateUploadIsAtomic(JdbcTemplate database, long datasetId) throws Exception {
-        DocumentService documents = new DocumentService(new PostgresKnowledgeStore(database, (ignored, text) -> {
+        com.modelrag.api.TextEmbeddingProvider embeddings = (ignored, text) -> {
             float[] embedding = new float[1024];
             embedding[0] = 1;
             return embedding;
-        }), objectStorage, event -> { }, 1_000, 5_000_000, 50L * 1024 * 1024);
+        };
+        DocumentService documents = new DocumentService(new JdbcDatasetRepository(database, embeddings),
+                new JdbcDocumentRepository(database), objectStorage, event -> { },
+                1_000, 5_000_000, 50L * 1024 * 1024);
         byte[] content = "concurrent upload must retain exactly one database fact and one object pair"
                 .getBytes(java.nio.charset.StandardCharsets.UTF_8);
         java.util.concurrent.CountDownLatch ready = new java.util.concurrent.CountDownLatch(2);

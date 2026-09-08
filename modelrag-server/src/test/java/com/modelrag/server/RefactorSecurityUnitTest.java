@@ -29,7 +29,7 @@ import com.modelrag.api.ConversationContextBuilder.RoutingDecision;
 import com.modelrag.api.UserModelProvider;
 import com.modelrag.common.security.LocalAuthTokenService;
 import com.modelrag.knowledge.model.Dataset;
-import com.modelrag.knowledge.service.KnowledgeStore;
+import com.modelrag.knowledge.repository.DatasetRepository;
 import com.modelrag.qa.orchestrator.QaOrchestrator;
 import com.modelrag.search.dto.ScoredChunk;
 import com.modelrag.search.dto.SearchStages;
@@ -248,19 +248,19 @@ class RefactorSecurityUnitTest {
 
     @Test
     void automaticDatasetRoutingRunsOneFormalHybridRetrievalAfterTopThreePreselection() {
-        KnowledgeStore store = mock(KnowledgeStore.class);
+        DatasetRepository datasets = mock(DatasetRepository.class);
         SearchFacade search = mock(SearchFacade.class);
         IntentTreeService intents = mock(IntentTreeService.class);
         Dataset first = new Dataset(98, "annual leave", "annual leave policy", 600, 80, 5, .7, 1);
         Dataset second = new Dataset(99, "payroll", "salary policy", 600, 80, 5, .7, 1);
         Dataset third = new Dataset(100, "travel", "travel policy", 600, 80, 5, .7, 1);
-        when(store.routeDatasets("annual leave policy", Set.of(), 3)).thenReturn(List.of(first, second, third));
+        when(datasets.route("annual leave policy", Set.of(), 3)).thenReturn(List.of(first, second, third));
         when(intents.match(any(Long.class), any(String.class))).thenReturn(Optional.empty());
         ScoredChunk evidence = new ScoredChunk(1, "annual leave policy permits annual leave", .98, "hybrid", 1);
         when(search.inspect(any())).thenReturn(new SearchStages("annual leave policy", List.of("annual leave policy"),
                 "annual leave policy", List.of(evidence), List.of(evidence), List.of(evidence), List.of(evidence),
                 true, List.of(evidence), List.of(), Map.of()));
-        AutoQaService service = new AutoQaService(store, search, mock(ComplexityRouter.class),
+        AutoQaService service = new AutoQaService(datasets, search, mock(ComplexityRouter.class),
                 mock(QaOrchestrator.class), mock(AgentOrchestrator.class), intents,
                 mock(com.modelrag.api.ConversationContextBuilder.class));
 

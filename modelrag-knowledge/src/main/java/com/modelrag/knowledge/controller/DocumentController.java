@@ -6,9 +6,10 @@ import com.modelrag.common.rate.DatasetRateLimiter;
 import com.modelrag.common.sse.SseEmitterService;
 import com.modelrag.knowledge.model.Chunk;
 import com.modelrag.knowledge.model.Document;
+import com.modelrag.knowledge.repository.ChunkRepository;
+import com.modelrag.knowledge.repository.DocumentRepository;
 import com.modelrag.knowledge.service.DocumentService;
 import com.modelrag.knowledge.service.DocumentDeletionService;
-import com.modelrag.knowledge.service.KnowledgeStore;
 import java.util.List;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -25,16 +26,19 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RequestMapping("/api/v1/knowledge-bases/{datasetId}/documents")
 public class DocumentController {
     private final DocumentService documents;
-    private final KnowledgeStore store;
+    private final DocumentRepository documentRepository;
+    private final ChunkRepository chunks;
     private final SseEmitterService sse;
     private final DocumentDeletionService deletion;
     private final AccessControlService access;
     private final DatasetRateLimiter limiter;
 
-    public DocumentController(DocumentService documents, KnowledgeStore store, SseEmitterService sse,
+    public DocumentController(DocumentService documents, DocumentRepository documentRepository, ChunkRepository chunks,
+            SseEmitterService sse,
             DocumentDeletionService deletion, AccessControlService access, DatasetRateLimiter limiter) {
         this.documents = documents;
-        this.store = store;
+        this.documentRepository = documentRepository;
+        this.chunks = chunks;
         this.sse = sse;
         this.deletion = deletion;
         this.access = access;
@@ -51,7 +55,7 @@ public class DocumentController {
     @GetMapping
     public ApiResponse<List<Document>> list(@PathVariable long datasetId) {
         access.requireDatasetAccess(datasetId);
-        return ApiResponse.success(store.documents(datasetId));
+        return ApiResponse.success(documentRepository.findByDatasetId(datasetId));
     }
 
     @DeleteMapping("/{documentId}")
@@ -64,14 +68,14 @@ public class DocumentController {
     @GetMapping("/{documentId}/chunks")
     public ApiResponse<List<Chunk>> chunks(@PathVariable long datasetId, @PathVariable long documentId) {
         access.requireDatasetAccess(datasetId);
-        return ApiResponse.success(store.chunks(datasetId).stream()
+        return ApiResponse.success(chunks.findActiveByDatasetId(datasetId).stream()
                 .filter(chunk -> chunk.documentId() == documentId).toList());
     }
 
     @GetMapping(value = "/{documentId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream(@PathVariable long datasetId, @PathVariable long documentId) {
         access.requireDatasetAccess(datasetId);
-        store.document(documentId);
+        documentRepository.findById(documentId);
         return sse.subscribe("document:" + documentId);
     }
 }

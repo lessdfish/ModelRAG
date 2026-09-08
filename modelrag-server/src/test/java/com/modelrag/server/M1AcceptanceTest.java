@@ -2,7 +2,7 @@ package com.modelrag.server;
 
 import com.modelrag.indexing.outbox.ElasticsearchOutboxConsumer;
 import com.modelrag.indexing.outbox.InMemoryIndexOutbox;
-import com.modelrag.knowledge.service.KnowledgeStore;
+import com.modelrag.knowledge.repository.IndexVersionRepository;
 import com.modelrag.knowledge.service.ObjectStorageService;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
@@ -39,8 +39,8 @@ class M1AcceptanceTest {
     }
 
     private ElasticsearchOutboxConsumer consumer(InMemoryIndexOutbox outbox, String endpoint, long retentionHours) {
-        KnowledgeStore knowledge = mock(KnowledgeStore.class);
-        when(knowledge.allActiveIndexVersions()).thenReturn(java.util.Map.of());
-        return new ElasticsearchOutboxConsumer(outbox, knowledge, mock(ObjectStorageService.class), endpoint, retentionHours);
+        IndexVersionRepository versions = mock(IndexVersionRepository.class);
+        when(versions.findAllActive()).thenReturn(java.util.Map.of());
+        return new ElasticsearchOutboxConsumer(outbox, versions, mock(ObjectStorageService.class), endpoint, retentionHours);
     }
 }
