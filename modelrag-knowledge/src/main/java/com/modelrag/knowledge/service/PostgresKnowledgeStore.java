@@ -8,6 +8,7 @@ import com.modelrag.api.TextEmbeddingProvider;
 import com.modelrag.knowledge.model.Chunk;
 import com.modelrag.knowledge.model.Dataset;
 import com.modelrag.knowledge.model.Document;
+import java.util.Collection;
 import java.sql.ResultSet;
 import java.util.List;
 import java.util.Map;
@@ -225,6 +226,61 @@ public class PostgresKnowledgeStore implements KnowledgeStore {
                   AND d.active_index_version > 0 AND c.version=d.active_index_version
                 ORDER BY c.document_id,c.chunk_index
                 """, (rs, n) -> chunk(rs), datasetId);
+    }
+
+    @Override
+    public List<Chunk> findChunksByIds(long datasetId, Collection<Long> ids) {
+        List<Long> requested = ids == null ? List.of() : ids.stream()
+                .filter(java.util.Objects::nonNull).distinct().toList();
+        if (requested.isEmpty()) return List.of();
+        String placeholders = String.join(",", java.util.Collections.nCopies(requested.size(), "?"));
+        List<Object> args = new ArrayList<>();
+        args.add(datasetId);
+        args.addAll(requested);
+        return jdbc.query(activeChunkQuery("c.id IN (" + placeholders + ")"),
+                (rs, n) -> chunk(rs), args.toArray());
+    }
+
+    @Override
+    public List<Chunk> findChunksByParentIds(long datasetId, Collection<Long> parentIds) {
+        List<Long> requested = parentIds == null ? List.of() : parentIds.stream()
+                .filter(java.util.Objects::nonNull).distinct().toList();
+        if (requested.isEmpty()) return List.of();
+        String placeholders = String.join(",", java.util.Collections.nCopies(requested.size(), "?"));
+        List<Object> args = new ArrayList<>();
+        args.add(datasetId);
+        args.addAll(requested);
+        return jdbc.query(activeChunkQuery("c.parent_chunk_id IN (" + placeholders + ")"),
+                (rs, n) -> chunk(rs), args.toArray());
+    }
+
+    @Override
+    public List<Chunk> findChunkNeighbors(long datasetId, Collection<ChunkWindow> windows) {
+        List<ChunkWindow> requested = windows == null ? List.of() : windows.stream()
+                .filter(java.util.Objects::nonNull).toList();
+        if (requested.isEmpty()) return List.of();
+        List<Object> args = new ArrayList<>();
+        args.add(datasetId);
+        String predicate = requested.stream()
+                .map(window -> "(c.document_id=? AND c.chunk_index BETWEEN ? AND ?)")
+                .collect(java.util.stream.Collectors.joining(" OR "));
+        requested.forEach(window -> {
+            args.add(window.documentId());
+            args.add(window.fromIndex());
+            args.add(window.toIndex());
+        });
+        return jdbc.query(activeChunkQuery("(" + predicate + ")"),
+                (rs, n) -> chunk(rs), args.toArray());
+    }
+
+    private String activeChunkQuery(String predicate) {
+        return """
+                SELECT c.* FROM kb_chunk c JOIN kb_document d ON d.id=c.document_id
+                WHERE c.dataset_id=? AND c.delete_time IS NULL AND d.delete_time IS NULL
+                  AND d.active_index_version > 0 AND c.version=d.active_index_version
+                  AND %s
+                ORDER BY c.document_id,c.chunk_index
+                """.formatted(predicate);
     }
 
     @Override

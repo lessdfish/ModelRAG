@@ -6,7 +6,9 @@ import com.modelrag.knowledge.model.Chunk;
 import com.modelrag.knowledge.model.Dataset;
 import com.modelrag.knowledge.model.Document;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -105,6 +107,26 @@ public class InMemoryKnowledgeStore implements KnowledgeStore {
     public void status(long id, String status, String error, int count) { documents.put(id, document(id).withStatus(status, error, count)); }
     public List<Document> documents(long datasetId) { return documents.values().stream().filter(d -> d.datasetId() == datasetId).sorted(Comparator.comparingLong(Document::id)).toList(); }
     public List<Chunk> chunks(long datasetId) { return chunks.values().stream().flatMap(List::stream).filter(c -> c.datasetId() == datasetId).toList(); }
+    public List<Chunk> findChunksByIds(long datasetId, Collection<Long> ids) {
+        if (ids == null || ids.isEmpty()) return List.of();
+        return chunks(datasetId).stream().filter(chunk -> ids.contains(chunk.id())).toList();
+    }
+    public List<Chunk> findChunksByParentIds(long datasetId, Collection<Long> parentIds) {
+        if (parentIds == null || parentIds.isEmpty()) return List.of();
+        return chunks(datasetId).stream().filter(chunk -> chunk.parentChunkId() != null && parentIds.contains(chunk.parentChunkId()))
+                .sorted(Comparator.comparingLong(Chunk::documentId).thenComparingInt(Chunk::index)).toList();
+    }
+    public List<Chunk> findChunkNeighbors(long datasetId, Collection<KnowledgeStore.ChunkWindow> windows) {
+        if (windows == null || windows.isEmpty()) return List.of();
+        Map<Long, Chunk> result = new LinkedHashMap<>();
+        for (KnowledgeStore.ChunkWindow window : windows) {
+            chunks(datasetId).stream()
+                    .filter(chunk -> chunk.documentId() == window.documentId()
+                            && chunk.index() >= window.fromIndex() && chunk.index() <= window.toIndex())
+                    .forEach(chunk -> result.putIfAbsent(chunk.id(), chunk));
+        }
+        return result.values().stream().sorted(Comparator.comparingLong(Chunk::documentId).thenComparingInt(Chunk::index)).toList();
+    }
     public void chunks(long documentId, List<Chunk> next) { chunks.put(documentId, new ArrayList<>(next)); bumpDatasetRevision(document(documentId).datasetId()); }
     @Override public void beginChunks(long documentId, long version) { chunks.remove(documentId); }
     @Override public void appendChunks(long documentId, List<Chunk> next) {

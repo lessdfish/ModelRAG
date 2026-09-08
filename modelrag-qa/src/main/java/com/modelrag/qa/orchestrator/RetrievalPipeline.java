@@ -7,13 +7,14 @@ import com.modelrag.search.dto.ScoredChunk;
 import com.modelrag.search.dto.SearchStages;
 import com.modelrag.search.facade.SearchFacade;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
@@ -74,38 +75,68 @@ public class RetrievalPipeline {
     }
 
     private List<ScoredChunk> expandContext(long datasetId, List<ScoredChunk> selected) {
-        List<Chunk> all = store.chunks(datasetId);
-        Map<Long, Chunk> byId = all.stream().collect(Collectors.toMap(Chunk::id, Function.identity(), (a, b) -> a));
-        Map<String, Chunk> byPosition = all.stream().collect(Collectors.toMap(
-                chunk -> chunk.documentId() + ":" + chunk.index(), Function.identity(), (a, b) -> a));
+        if (selected.isEmpty()) return List.of();
+        Set<Long> selectedIds = selected.stream().map(ScoredChunk::chunkId).collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<Long, Chunk> byId = store.findChunksByIds(datasetId, selectedIds).stream()
+                .collect(Collectors.toMap(Chunk::id, chunk -> chunk, (a, b) -> a));
+        Set<Long> parentIds = byId.values().stream().map(Chunk::parentChunkId).filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<Long, List<Chunk>> byParent = store.findChunksByParentIds(datasetId, parentIds).stream()
+                .filter(chunk -> chunk.parentChunkId() != null)
+                .collect(Collectors.groupingBy(Chunk::parentChunkId, java.util.LinkedHashMap::new, Collectors.toList()));
+        List<KnowledgeStore.ChunkWindow> windows = byId.values().stream()
+                .filter(chunk -> chunk.parentChunkId() == null)
+                .map(chunk -> new KnowledgeStore.ChunkWindow(chunk.documentId(), Math.max(0, chunk.index() - 1), chunk.index() + 1))
+                .toList();
+        Map<String, List<Chunk>> byPosition = store.findChunkNeighbors(datasetId, windows).stream()
+                .collect(Collectors.groupingBy(chunk -> chunk.documentId() + ":" + chunk.index(),
+                        java.util.LinkedHashMap::new, Collectors.toList()));
         List<ScoredChunk> expanded = new ArrayList<>();
+        Set<Long> emittedChunkIds = new LinkedHashSet<>();
         for (ScoredChunk scored : selected) {
             Chunk center = byId.get(scored.chunkId());
             if (center == null) {
-                expanded.add(scored);
+                // The bounded lookup is also the visibility check. Do not fall back to
+                // search-result text when the chunk is no longer in the active index.
                 continue;
             }
             if (center.parentChunkId() != null) {
-                String parentContent = all.stream()
-                        .filter(chunk -> center.parentChunkId().equals(chunk.parentChunkId()))
-                        .filter(chunk -> chunk.documentId() == center.documentId())
-                        .sorted(Comparator.comparingInt(Chunk::index))
-                        .map(Chunk::content).collect(Collectors.joining("\n"));
+                List<Chunk> parentChunks = uniqueChunks(byParent.get(center.parentChunkId()), center.documentId());
+                String parentContent = content(parentChunks);
                 if (!parentContent.isBlank()) {
-                    expanded.add(new ScoredChunk(scored.chunkId(), parentContent, scored.score(), scored.channel(), scored.rank()));
+                    addFreshContext(expanded, scored, parentChunks, emittedChunkIds);
                     continue;
                 }
             }
-            LinkedHashSet<Long> ids = new LinkedHashSet<>();
+            List<Chunk> neighbors = new ArrayList<>();
             for (int offset = -1; offset <= 1; offset++) {
-                Chunk adjacent = byPosition.get(center.documentId() + ":" + (center.index() + offset));
-                if (adjacent != null) ids.add(adjacent.id());
+                neighbors.addAll(byPosition.getOrDefault(center.documentId() + ":" + (center.index() + offset), List.of()));
             }
-            String content = ids.stream().map(byId::get).filter(c -> c != null)
-                    .map(Chunk::content).collect(Collectors.joining("\n"));
-            expanded.add(new ScoredChunk(scored.chunkId(), content, scored.score(), scored.channel(), scored.rank()));
+            addFreshContext(expanded, scored, uniqueChunks(neighbors, center.documentId()), emittedChunkIds);
         }
         return List.copyOf(expanded);
+    }
+
+    private void addFreshContext(List<ScoredChunk> expanded, ScoredChunk scored, List<Chunk> chunks,
+            Set<Long> emittedChunkIds) {
+        List<Chunk> fresh = chunks.stream().filter(chunk -> emittedChunkIds.add(chunk.id())).toList();
+        if (!fresh.isEmpty()) {
+            expanded.add(new ScoredChunk(scored.chunkId(), content(fresh), scored.score(), scored.channel(), scored.rank()));
+        }
+    }
+
+    private List<Chunk> uniqueChunks(Collection<Chunk> chunks, long documentId) {
+        if (chunks == null) return List.of();
+        Map<Long, Chunk> unique = chunks.stream()
+                .filter(chunk -> chunk.documentId() == documentId)
+                .collect(Collectors.toMap(Chunk::id, chunk -> chunk, (a, b) -> a,
+                        java.util.LinkedHashMap::new));
+        return unique.values().stream().sorted(Comparator.comparingInt(Chunk::index)).toList();
+    }
+
+    private String content(Collection<Chunk> chunks) {
+        return chunks.stream()
+                .map(Chunk::content).collect(Collectors.joining("\n"));
     }
 
     public record RetrievalResult(SearchStages stages, List<ScoredChunk> selected, List<ScoredChunk> contextChunks) { }

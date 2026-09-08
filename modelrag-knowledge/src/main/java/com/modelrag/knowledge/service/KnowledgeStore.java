@@ -3,6 +3,7 @@ package com.modelrag.knowledge.service;
 import com.modelrag.knowledge.model.Chunk;
 import com.modelrag.knowledge.model.Dataset;
 import com.modelrag.knowledge.model.Document;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -51,6 +52,9 @@ public interface KnowledgeStore {
     default Map<Long, Long> allActiveIndexVersions() { return Map.of(); }
     List<Document> documents(long datasetId);
     List<Chunk> chunks(long datasetId);
+    List<Chunk> findChunksByIds(long datasetId, Collection<Long> ids);
+    List<Chunk> findChunksByParentIds(long datasetId, Collection<Long> parentIds);
+    List<Chunk> findChunkNeighbors(long datasetId, Collection<ChunkWindow> windows);
     void chunks(long documentId, List<Chunk> chunks);
     /** Clears only the new index version before bounded windows are appended. */
     default void beginChunks(long documentId, long version) { }
@@ -58,6 +62,12 @@ public interface KnowledgeStore {
     default void appendChunks(long documentId, List<Chunk> chunks) { chunks(documentId, chunks); }
     long nextId();
     Dataset bumpDatasetRevision(long datasetId);
+
+    record ChunkWindow(long documentId, int fromIndex, int toIndex) {
+        public ChunkWindow {
+            if (fromIndex > toIndex) throw new IllegalArgumentException("chunk window is inverted");
+        }
+    }
 
     private static int metadataScore(Dataset dataset, String query) {
         String source = query == null ? "" : query.replaceAll("[\\s，。！？、：:]+", "");
