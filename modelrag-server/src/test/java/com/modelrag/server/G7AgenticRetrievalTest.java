@@ -6,7 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -14,12 +19,27 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.modelrag.agent.orchestrator.AgenticRetrievalOrchestrator;
+import com.modelrag.agent.orchestrator.AgentOrchestrator;
+import com.modelrag.agent.orchestrator.AgentResult;
+import com.modelrag.agent.orchestrator.AgentPlanner;
 import com.modelrag.agent.policy.AgentDecision;
 import com.modelrag.agent.policy.AgentDecisionValidator;
 import com.modelrag.agent.policy.AgentPolicyInput;
 import com.modelrag.agent.policy.LlmAgentPolicy;
 import com.modelrag.agent.router.ComplexityRouter;
 import com.modelrag.agent.router.RouteDecision;
+import com.modelrag.agent.approval.ApprovalGate;
+import com.modelrag.agent.intent.IntentNode;
+import com.modelrag.agent.intent.IntentTreeService;
+import com.modelrag.agent.memory.ConversationMemory;
+import com.modelrag.agent.memory.LongTermMemoryService;
+import com.modelrag.agent.safety.LoopDetector;
+import com.modelrag.agent.tool.HttpToolInvoker;
+import com.modelrag.agent.tool.ResilientToolExecutor;
+import com.modelrag.agent.tool.ToolDefinition;
+import com.modelrag.agent.tool.ToolRegistry;
+import com.modelrag.agent.trace.AgentStepTracer;
+import com.modelrag.agent.trace.ToolCallTracer;
 import com.modelrag.agent.retrieval.DocumentLexicalFindService;
 import com.modelrag.agent.retrieval.FollowReferencesAction;
 import com.modelrag.agent.retrieval.OpenNodeAction;
@@ -41,6 +61,7 @@ import com.modelrag.knowledge.model.NodeType;
 import com.modelrag.knowledge.model.RetrievalUnit;
 import com.modelrag.knowledge.model.RetrievalUnitType;
 import com.modelrag.knowledge.repository.DocumentRepository;
+import com.modelrag.knowledge.repository.DatasetRepository;
 import com.modelrag.knowledge.repository.IndexBuildRepository;
 import com.modelrag.knowledge.repository.RetrievalUnitRepository;
 import com.modelrag.qa.evidence.AnswerSynthesizer;
@@ -52,11 +73,16 @@ import com.modelrag.qa.evidence.EvidenceSelector;
 import com.modelrag.qa.evidence.EvidenceSufficiency;
 import com.modelrag.qa.evidence.EvidenceSufficiencyPolicy;
 import com.modelrag.qa.orchestrator.ContextAssembler;
+import com.modelrag.qa.orchestrator.QaOrchestrator;
 import com.modelrag.qa.dto.QaRequest;
+import com.modelrag.qa.dto.QaResult;
+import com.modelrag.common.operation.OperationGuard;
+import com.modelrag.common.sse.SseEmitterService;
 import com.modelrag.search.channel.v2.ElasticsearchRetrievalUnitSearch;
 import com.modelrag.search.config.V2EmbeddingProfileProvider;
 import com.modelrag.search.dto.RetrievalCandidate;
 import com.modelrag.search.dto.RetrievalChannel;
+import com.modelrag.search.dto.RetrievalV2Request;
 import com.modelrag.search.dto.RetrievalV2Stages;
 import com.modelrag.search.orchestrator.HybridRetrievalService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -69,7 +95,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 
 class G7AgenticRetrievalTest {
@@ -141,6 +171,9 @@ class G7AgenticRetrievalTest {
     void searchActionReturnsV2ObservationAndEvidence() {
         HybridRetrievalService retrieval = mock(HybridRetrievalService.class);
         EvidenceRetrievalService evidence = mock(EvidenceRetrievalService.class);
+        DatasetRepository datasets = mock(DatasetRepository.class);
+        when(datasets.findById(7)).thenReturn(new com.modelrag.knowledge.model.Dataset(
+                7, "policy", "", 600, 80, 5, .73, 1));
         RetrievalCandidate candidate = new RetrievalCandidate(7, 101, 55, 23, 29, 31,
                 com.modelrag.knowledge.model.RetrievalUnitType.PARAGRAPH, "Policy", "content", .9,
                 RetrievalChannel.SEMANTIC, 1, Map.of());
@@ -152,7 +185,7 @@ class G7AgenticRetrievalTest {
                 new EvidenceRetrievalService.EvidenceRetrievalResult(List.of(primary), List.of(), 0));
 
         RetrievalObservation observation = new com.modelrag.agent.retrieval.SearchKnowledgeAction(
-                retrieval, evidence, new V2EmbeddingProfileProvider(), 20, 500).execute(
+                retrieval, evidence, new V2EmbeddingProfileProvider(), datasets, 20, 500).execute(
                         request(RetrievalActionName.SEARCH_KNOWLEDGE, "query", "question", "limit", 1),
                         context(Set.of(), Set.of()));
 
@@ -160,6 +193,9 @@ class G7AgenticRetrievalTest {
         assertEquals(1, observation.items().size());
         assertEquals(1, observation.newEvidence().size());
         assertTrue(observation.newEvidence().get(0).primary());
+        ArgumentCaptor<RetrievalV2Request> retrievalRequest = ArgumentCaptor.forClass(RetrievalV2Request.class);
+        verify(retrieval).inspect(retrievalRequest.capture());
+        assertEquals(.73, retrievalRequest.getValue().threshold(), 0.000001);
     }
 
     @Test
@@ -220,6 +256,77 @@ class G7AgenticRetrievalTest {
     }
 
     @Test
+    void policyOutputRulesSurviveAFullObservationContext() {
+        Evidence longEvidence = evidence("long", 55, true, "x".repeat(2_000));
+        AgentPolicyInput input = new AgentPolicyInput("user", "question", List.of(observation(longEvidence)),
+                List.of(longEvidence), new EvidenceSufficiency(false, .9, "active-evidence", 1),
+                Set.of(55L), Set.of(23L), 0, 3, 2, 2);
+        LlmAgentPolicy policy = new LlmAgentPolicy(new ObjectMapper(),
+                new DefaultListableBeanFactory().getBeanProvider(UserModelProvider.class),
+                new AgentDecisionValidator(), 300, new SimpleMeterRegistry());
+
+        String prompt = policy.promptFor(input);
+
+        assertTrue(prompt.contains("ACTION"));
+        assertTrue(prompt.contains("FINISH"));
+        assertTrue(prompt.contains("JSON only"));
+        assertTrue(prompt.contains("no reasoning"));
+    }
+
+    @Test
+    void unresolvedToolAgentFailsClosedWithoutKnowledgeLookupOrQaFallback() {
+        ComplexityRouter router = mock(ComplexityRouter.class);
+        when(router.route("查询订单")).thenReturn(RouteDecision.TOOL_AGENT);
+        IntentTreeService intents = mock(IntentTreeService.class);
+        when(intents.match(7, "查询订单")).thenReturn(Optional.empty());
+        ToolRegistry tools = mock(ToolRegistry.class);
+        QaOrchestrator qa = mock(QaOrchestrator.class);
+        AgentOrchestrator orchestrator = agentOrchestrator(router, intents, tools, mock(AgentPlanner.class),
+                mock(ResilientToolExecutor.class), qa);
+
+        AgentResult result = orchestrator.execute(new QaRequest(7, "查询订单", null, "user", Set.of()),
+                "exec-unresolved-tool");
+
+        assertEquals(RouteDecision.TOOL_AGENT, result.route());
+        assertEquals("ERROR", result.status());
+        assertEquals("tool-unresolved", result.answer());
+        assertTrue(result.refused());
+        assertTrue(result.degradedComponents().contains("tool-unresolved"));
+        verify(tools, never()).get(anyString());
+        verifyNoInteractions(qa);
+    }
+
+    @Test
+    void mappedToolIntentUsesTheConcreteTool() {
+        ComplexityRouter router = mock(ComplexityRouter.class);
+        IntentTreeService intents = mock(IntentTreeService.class);
+        when(intents.match(7, "查询订单")).thenReturn(Optional.of(new IntentNode(1L, 7, null,
+                "查询订单", "ACTION", "TOOL", "order_lookup", "", 1, true)));
+        ToolRegistry tools = mock(ToolRegistry.class);
+        ToolDefinition definition = new ToolDefinition("order_lookup", "查询订单", "LOW", true);
+        when(tools.get("order_lookup")).thenReturn(definition);
+        when(tools.listEnabled()).thenReturn(List.of(definition));
+        AgentPlanner planner = mock(AgentPlanner.class);
+        when(planner.reactStep(anyString(), anyString(), anyList(), eq("order_lookup"), anyList(), anyList(), anyInt()))
+                .thenReturn(new AgentPlanner.Plan("order_lookup", List.of("查询订单"), "test"))
+                .thenReturn(new AgentPlanner.Plan("order_lookup", List.of(), "test"));
+        ResilientToolExecutor executor = mock(ResilientToolExecutor.class);
+        when(executor.execute(any(ToolDefinition.class), anyString(), org.mockito.ArgumentMatchers.<Supplier<QaResult>>any()))
+                .thenReturn(new ResilientToolExecutor.Result<>(
+                        new QaResult("订单已找到", List.of(), .9, false, "trace"), 1, false));
+        AgentOrchestrator orchestrator = agentOrchestrator(router, intents, tools, planner, executor,
+                mock(QaOrchestrator.class));
+
+        AgentResult result = orchestrator.execute(new QaRequest(7, "查询订单", null, "user", Set.of()),
+                "exec-mapped-tool");
+
+        assertEquals("订单已找到", result.answer());
+        verify(tools, atLeastOnce()).get("order_lookup");
+        verify(executor).execute(any(ToolDefinition.class), anyString(),
+                org.mockito.ArgumentMatchers.<Supplier<QaResult>>any());
+    }
+
+    @Test
     void agenticLoopSynthesizesExactlyOnceFromSufficientEvidence() {
         Evidence primary = evidence("primary", 55, true, "answer source");
         RetrievalObservation observation = observation(primary);
@@ -262,6 +369,48 @@ class G7AgenticRetrievalTest {
         verify(synthesizer, never()).synthesize(any(), any(), any(), any(), any());
     }
 
+    @Test
+    void sufficientFirstSearchStillLetsPolicyRequestASecondAction() {
+        Evidence primary = evidence("primary", 55, true, "first source");
+        Evidence neighbor = evidence("neighbor", 56, false, "neighbor source");
+        RetrievalActionRegistry actions = new RetrievalActionRegistry(List.of(
+                executor(RetrievalActionName.SEARCH_KNOWLEDGE, Set.of("query", "limit"), observation(primary)),
+                executor(RetrievalActionName.READ_NEIGHBORS, Set.of("nodeId", "radius"), observation(neighbor))));
+        var policy = mock(LlmAgentPolicy.class);
+        AtomicInteger decisions = new AtomicInteger();
+        when(policy.decide(any(AgentPolicyInput.class))).thenAnswer(invocation -> {
+            AgentPolicyInput input = invocation.getArgument(0);
+            return switch (decisions.getAndIncrement()) {
+                case 0 -> AgentDecision.action(RetrievalActionName.SEARCH_KNOWLEDGE,
+                        Map.of("query", "question", "limit", 1));
+                case 1 -> {
+                    assertTrue(input.sufficiency().sufficient());
+                    yield AgentDecision.action(RetrievalActionName.READ_NEIGHBORS,
+                            Map.of("nodeId", 55L, "radius", 1));
+                }
+                default -> {
+                    assertTrue(input.sufficiency().sufficient());
+                    yield AgentDecision.finish();
+                }
+            };
+        });
+        AnswerSynthesizer synthesizer = mock(AnswerSynthesizer.class);
+        when(synthesizer.synthesize(any(), any(), any(), any(), any())).thenReturn(
+                new AnswerSynthesizer.AnswerDraft("multi-step answer", "prompt", "context", "test", "", false));
+        AgenticRetrievalOrchestrator orchestrator = orchestrator(actions, policy, synthesizer);
+        List<String> events = new java.util.ArrayList<>();
+
+        var result = orchestrator.execute(new QaRequest(7, "question", null, "user", Set.of()),
+                "exec-multi-step", () -> false,
+                (type, message, data) -> events.add(type));
+
+        assertEquals("multi-step answer", result.answer());
+        assertFalse(result.refused());
+        assertEquals(List.of("PLAN", "ACT", "OBSERVE", "PLAN", "ACT", "OBSERVE"), events);
+        assertEquals(3, decisions.get());
+        verify(synthesizer).synthesize(any(), any(), any(), any(), any());
+    }
+
     private AgenticRetrievalOrchestrator orchestrator(RetrievalActionRegistry actions,
             LlmAgentPolicy policy, AnswerSynthesizer synthesizer) {
         return new AgenticRetrievalOrchestrator(actions, policy, new AgentDecisionValidator(),
@@ -270,12 +419,30 @@ class G7AgenticRetrievalTest {
     }
 
     private RetrievalActionExecutor executor(RetrievalActionName action, RetrievalObservation observation) {
+        return executor(action, Set.of("query", "limit"), observation);
+    }
+
+    private RetrievalActionExecutor executor(RetrievalActionName action, Set<String> arguments,
+            RetrievalObservation observation) {
         return new RetrievalActionExecutor() {
             @Override public RetrievalActionName action() { return action; }
-            @Override public Set<String> allowedArguments() { return Set.of("query", "limit"); }
+            @Override public Set<String> allowedArguments() { return arguments; }
             @Override public RetrievalObservation execute(RetrievalActionRequest request,
                     RetrievalToolContext context) { return observation; }
         };
+    }
+
+    private AgentOrchestrator agentOrchestrator(ComplexityRouter router, IntentTreeService intents,
+            ToolRegistry tools, AgentPlanner planner, ResilientToolExecutor executor, QaOrchestrator qa) {
+        @SuppressWarnings("unchecked")
+        ObjectProvider<AgenticRetrievalOrchestrator> agentic = mock(ObjectProvider.class);
+        when(agentic.getIfAvailable()).thenReturn(null);
+        return new AgentOrchestrator(router, qa, mock(ApprovalGate.class), tools, mock(LoopDetector.class),
+                mock(ConversationMemory.class), mock(LongTermMemoryService.class), mock(SseEmitterService.class),
+                mock(ToolCallTracer.class), mock(AgentStepTracer.class), intents, executor,
+                mock(HttpToolInvoker.class), planner, mock(DatasetRepository.class),
+                mock(com.modelrag.agent.orchestrator.AgentExecutionRegistry.class), mock(OperationGuard.class),
+                agentic, 4, 5_000);
     }
 
     private RetrievalToolContext context(Set<Long> nodes, Set<Long> documents) {

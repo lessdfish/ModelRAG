@@ -23,6 +23,8 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -80,13 +82,19 @@ public class AgenticRetrievalOrchestrator {
     }
 
     public AgenticRetrievalResult execute(QaRequest request, String executionId) {
-        return execute(request, executionId, () -> false);
+        return execute(request, executionId, () -> false, AgenticRetrievalEventSink.NOOP);
     }
 
     public AgenticRetrievalResult execute(QaRequest request, String executionId, BooleanSupplier cancelled) {
+        return execute(request, executionId, cancelled, AgenticRetrievalEventSink.NOOP);
+    }
+
+    public AgenticRetrievalResult execute(QaRequest request, String executionId, BooleanSupplier cancelled,
+            AgenticRetrievalEventSink eventSink) {
         if (request == null || executionId == null || executionId.isBlank()) {
             throw new IllegalArgumentException("request/executionId is required");
         }
+        AgenticRetrievalEventSink events = eventSink == null ? AgenticRetrievalEventSink.NOOP : eventSink;
         String traceId = UUID.randomUUID().toString();
         long started = System.nanoTime();
         RetrievalToolContext context = new RetrievalToolContext(executionId, request.userId(), request.datasetId(),
@@ -116,7 +124,6 @@ public class AgenticRetrievalOrchestrator {
             }
             List<Evidence> selected = evidenceSelector.select(accumulated);
             EvidenceSufficiency sufficiency = sufficiencyPolicy.evaluate(request.query(), selected);
-            if (sufficiency.sufficient()) break;
 
             AgentPolicyInput input = new AgentPolicyInput(request.userId(), request.query(), observations, selected,
                     sufficiency, context.observedNodeIds(), context.observedDocumentIds(), context.consumedSteps(),
@@ -128,6 +135,16 @@ public class AgenticRetrievalOrchestrator {
             }
             try {
                 AgentDecision validated = validator.validate(decision, input);
+                int actionStep = context.consumedSteps() + 1;
+                event(events, "PLAN", "已生成检索动作计划", Map.of(
+                        "step", actionStep, "action", validated.action().name(),
+                        "remainingSteps", context.remainingSteps(),
+                        "remainingSearchActions", context.remainingSearchActions(),
+                        "remainingNavigationActions", context.remainingNavigationActions()));
+                event(events, "ACT", "正在执行只读检索动作", Map.of(
+                        "step", actionStep, "action", validated.action().name(),
+                        "arguments", safeArguments(validated.arguments())));
+                long actionStarted = System.nanoTime();
                 RetrievalObservation observation = actions.execute(new RetrievalActionRequest(validated.action(),
                         validated.arguments()), context);
                 if (observation != null) {
@@ -136,12 +153,28 @@ public class AgenticRetrievalOrchestrator {
                     accumulated.addAll(observation.newEvidence().stream().limit(maxObservationItems).toList());
                     context.observe(observation);
                     degraded.addAll(observation.degradedComponents());
+                    event(events, "OBSERVE", "检索动作已返回观察结果", Map.of(
+                            "step", actionStep, "action", validated.action().name(),
+                            "itemCount", observation.items().size(),
+                            "newEvidenceCount", observation.newEvidence().size(),
+                            "latencyMs", observation.latencyMs(),
+                            "degradedComponents", observation.degradedComponents().stream().limit(8).toList()));
                     steps.add("ACT:" + validated.action().name());
                     steps.add("OBSERVE");
                     metrics.counter("modelrag.agent.retrieval.actions", "action", validated.action().name()).increment();
+                } else {
+                    event(events, "OBSERVE", "检索动作未返回观察结果", Map.of(
+                            "step", actionStep, "action", validated.action().name(),
+                            "itemCount", 0, "newEvidenceCount", 0,
+                            "latencyMs", elapsed(actionStarted),
+                            "degradedComponents", List.of("empty-observation")));
                 }
             } catch (RuntimeException error) {
                 degraded.add("invalid-retrieval-action");
+                event(events, "OBSERVE", "检索动作执行失败", Map.of(
+                        "action", decision.action() == null ? "INVALID" : decision.action().name(), "itemCount", 0,
+                        "newEvidenceCount", 0, "latencyMs", 0,
+                        "degradedComponents", List.of("invalid-retrieval-action")));
                 steps.add("INVALID_ACTION");
                 stopped = true;
                 stopStatus = "ERROR";
@@ -202,6 +235,29 @@ public class AgenticRetrievalOrchestrator {
 
     private long elapsed(long started) {
         return Math.max(0, (System.nanoTime() - started) / 1_000_000);
+    }
+
+    private void event(AgenticRetrievalEventSink sink, String type, String message, Map<String, Object> data) {
+        try {
+            sink.publish(type, message, data);
+        } catch (RuntimeException error) {
+            if (metrics != null) metrics.counter("modelrag.agent.retrieval.event.failures", "type", type).increment();
+        }
+    }
+
+    private Map<String, Object> safeArguments(Map<String, Object> arguments) {
+        Map<String, Object> safe = new LinkedHashMap<>();
+        if (arguments == null) return safe;
+        arguments.forEach((key, value) -> {
+            if ("query".equals(key)) {
+                safe.put("queryChars", value instanceof String text ? text.length() : 0);
+            } else if (value instanceof Number || value instanceof Boolean) {
+                safe.put(key, value);
+            } else {
+                safe.put(key, "present");
+            }
+        });
+        return Map.copyOf(safe);
     }
 
 }

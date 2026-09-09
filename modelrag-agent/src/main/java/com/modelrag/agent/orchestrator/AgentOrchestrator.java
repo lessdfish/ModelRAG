@@ -6,7 +6,6 @@ import com.modelrag.agent.intent.IntentNode;
 import com.modelrag.agent.intent.IntentTreeService;
 import com.modelrag.agent.memory.ConversationMemory;
 import com.modelrag.agent.memory.LongTermMemoryService;
-import com.modelrag.agent.orchestrator.AgenticRetrievalOrchestrator;
 import com.modelrag.agent.router.ComplexityRouter;
 import com.modelrag.agent.router.RouteDecision;
 import com.modelrag.agent.safety.LoopDetector;
@@ -164,12 +163,25 @@ public class AgentOrchestrator {
         rememberAgentQuestion(request);
 
         IntentNode matchedIntent = intent;
-        boolean lockedTool = matchedIntent != null && "TOOL".equals(matchedIntent.targetType())
-                && matchedIntent.targetId() != null;
-        String fallbackTool = lockedTool ? matchedIntent.targetId()
-                : queryIsHighRisk(request.query()) ? "destructive_operation" : "knowledge_lookup";
+        boolean toolIntent = matchedIntent != null && "TOOL".equals(matchedIntent.targetType());
+        String fallbackTool;
+        if (toolIntent) {
+            if (matchedIntent.targetId() == null || matchedIntent.targetId().isBlank()) {
+                return unresolvedTool(executionId, request, new ArrayList<>());
+            }
+            fallbackTool = matchedIntent.targetId();
+        } else if (queryIsHighRisk(request.query())) {
+            fallbackTool = "destructive_operation";
+        } else {
+            return unresolvedTool(executionId, request, new ArrayList<>());
+        }
         List<String> parts = subtasks(request.query());
-        ToolDefinition definition = tools.get(fallbackTool);
+        ToolDefinition definition;
+        try {
+            definition = tools.get(fallbackTool);
+        } catch (RuntimeException error) {
+            return unresolvedTool(executionId, request, new ArrayList<>());
+        }
         List<String> steps = new ArrayList<>();
         steps.add("PLAN");
         publish(executionId, "PLAN", "已选择受限 Agent 执行", Map.of(
@@ -205,7 +217,8 @@ public class AgentOrchestrator {
                     List.of("agentic-retrieval-unavailable"));
         }
         AgenticRetrievalResult result = orchestrator.execute(request, executionId,
-                () -> executions.cancelRequested(executionId));
+                () -> executions.cancelRequested(executionId),
+                (type, message, data) -> publish(executionId, type, message, data));
         rememberAgentAnswer(request, result.answer(), result.traceId(), result.citations(), false);
         qa.recordAudit(request, result.answer(), citationsJson(result.citations()), result.confidence(),
                 result.refused(), result.traceId(), "agentic_rag");
@@ -276,7 +289,7 @@ public class AgentOrchestrator {
                         "Agent 总执行时间已达到限制");
             }
             AgentPlanner.Plan decision = planner.reactStep(request.userId(), request.query(), observations, fallbackTool,
-                    parts, availableTools(request), index);
+                    parts, availableTools(request, fallbackTool), index);
             if (decision.subtasks().isEmpty()) {
                 steps.add("PLAN_DONE");
                 publish(executionId, "PLAN", "已有足够观察，结束工具循环", Map.of("step", index + 1));
@@ -284,6 +297,9 @@ public class AgentOrchestrator {
             }
             String tool = decision.toolName();
             String subtask = decision.subtasks().get(0);
+            if ("knowledge_lookup".equals(tool) && !"knowledge_lookup".equals(fallbackTool)) {
+                return unresolvedTool(executionId, request, steps);
+            }
             ToolDefinition definition = tools.get(tool);
             if (requiresApproval(definition) && approvalId == null) {
                 operationGuard.requireAvailableForSideEffect();
@@ -425,8 +441,20 @@ public class AgentOrchestrator {
         return request;
     }
 
-    private List<ToolDefinition> availableTools(QaRequest request) {
-        return tools.listEnabled().stream().filter(tool -> canUse(tool, request)).toList();
+    private List<ToolDefinition> availableTools(QaRequest request, String fallbackTool) {
+        return tools.listEnabled().stream()
+                .filter(tool -> !"knowledge_lookup".equals(tool.name()) || "knowledge_lookup".equals(fallbackTool))
+                .filter(tool -> canUse(tool, request)).toList();
+    }
+
+    private AgentResult unresolvedTool(String executionId, QaRequest request, List<String> steps) {
+        List<String> resultSteps = new ArrayList<>(steps == null ? List.of() : steps);
+        resultSteps.add("ERROR");
+        publish(executionId, "ERROR", "业务工具未解析，已拒绝执行", Map.of(
+                "route", "TOOL_AGENT", "reason", "tool-unresolved"));
+        executions.complete(executionId, "ERROR");
+        return new AgentResult(executionId, RouteDecision.TOOL_AGENT, "ERROR", "tool-unresolved", null,
+                resultSteps, List.of(), 0, true, executionId, List.of("tool-unresolved"));
     }
 
     private void requireToolAccess(ToolDefinition tool, QaRequest request) {
