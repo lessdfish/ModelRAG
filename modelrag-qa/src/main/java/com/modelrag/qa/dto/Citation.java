@@ -30,7 +30,7 @@ public record Citation(long chunkId, long documentId, String documentName, Strin
                     : "第 " + page + " 页 · " + location;
         }
         return new Citation(0, evidence.documentId(), evidence.documentName(), location == null ? "" : location,
-                evidence.documentVersionId(), excerpt(evidence.content()), evidence.score(), evidence.evidenceId(),
+                0, excerpt(evidence.content()), evidence.score(), evidence.evidenceId(),
                 evidence.documentVersionId(), evidence.nodeId(), evidence.retrievalUnitId(), evidence.indexBuildId(),
                 evidence.titlePath(), evidence.locator().pageFrom(), evidence.locator().pageTo());
     }

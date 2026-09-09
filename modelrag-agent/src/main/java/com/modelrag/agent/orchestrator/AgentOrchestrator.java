@@ -6,6 +6,7 @@ import com.modelrag.agent.intent.IntentNode;
 import com.modelrag.agent.intent.IntentTreeService;
 import com.modelrag.agent.memory.ConversationMemory;
 import com.modelrag.agent.memory.LongTermMemoryService;
+import com.modelrag.agent.orchestrator.AgenticRetrievalOrchestrator;
 import com.modelrag.agent.router.ComplexityRouter;
 import com.modelrag.agent.router.RouteDecision;
 import com.modelrag.agent.safety.LoopDetector;
@@ -31,6 +32,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.ObjectProvider;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -57,6 +59,7 @@ public class AgentOrchestrator {
     private final DatasetRepository datasets;
     private final AgentExecutionRegistry executions;
     private final OperationGuard operationGuard;
+    private final ObjectProvider<AgenticRetrievalOrchestrator> agenticRetrieval;
     private final int maxSteps;
     private final long deadlineMs;
 
@@ -66,6 +69,7 @@ public class AgentOrchestrator {
                              AgentStepTracer stepTracer, IntentTreeService intents, ResilientToolExecutor executor,
                              HttpToolInvoker httpTools, AgentPlanner planner, DatasetRepository datasets,
                              AgentExecutionRegistry executions, OperationGuard operationGuard,
+                             ObjectProvider<AgenticRetrievalOrchestrator> agenticRetrieval,
                              @Value("${modelrag.agent.max-steps:6}") int maxSteps,
                              @Value("${modelrag.agent.deadline-ms:10000}") long deadlineMs) {
         this.router = router;
@@ -85,6 +89,7 @@ public class AgentOrchestrator {
         this.datasets = datasets;
         this.executions = executions;
         this.operationGuard = operationGuard;
+        this.agenticRetrieval = agenticRetrieval;
         this.maxSteps = Math.max(1, Math.min(10, maxSteps));
         this.deadlineMs = Math.max(500, Math.min(60_000, deadlineMs));
     }
@@ -129,9 +134,10 @@ public class AgentOrchestrator {
 
     private AgentResult executeBound(QaRequest request, String executionId) {
         IntentNode intent = intents.match(request.datasetId(), request.query()).orElse(null);
-        RouteDecision route = intent == null
-                ? router.route(request.query())
-                : "TOOL".equals(intent.targetType()) ? RouteDecision.AGENT : RouteDecision.DIRECT_RAG;
+        RouteDecision route = intent != null && "TOOL".equals(intent.targetType())
+                ? RouteDecision.TOOL_AGENT
+                : intent != null && "DIRECT".equals(intent.targetType())
+                        ? RouteDecision.DIRECT_RAG : router.route(request.query());
         if (executions.cancelRequested(executionId)) {
             return cancelled(executionId, route, request, null, new ArrayList<>(), List.of());
         }
@@ -149,6 +155,10 @@ public class AgentOrchestrator {
                     List.of("PLAN", "ANSWER"), result.citations(), result.confidence(), result.refused(), result.traceId());
         }
 
+        if (route == RouteDecision.AGENTIC_RAG) {
+            return executeAgenticRetrieval(request, executionId);
+        }
+
         // Persist the user turn before planning or invoking any tool. Agent sub-steps
         // retain this conversation id for context but are explicitly read-only turns.
         rememberAgentQuestion(request);
@@ -163,7 +173,7 @@ public class AgentOrchestrator {
         List<String> steps = new ArrayList<>();
         steps.add("PLAN");
         publish(executionId, "PLAN", "已选择受限 Agent 执行", Map.of(
-                "route", "AGENT", "tool", fallbackTool, "maxSteps", maxSteps,
+                "route", "TOOL_AGENT", "tool", fallbackTool, "maxSteps", maxSteps,
                 "subtaskCount", parts.size()));
         if (requiresApproval(definition)) {
             operationGuard.requireAvailableForSideEffect();
@@ -180,6 +190,41 @@ public class AgentOrchestrator {
         return reactLoop(executionId, route, request, null, fallbackTool, steps, false, parts);
     }
 
+    private AgentResult executeAgenticRetrieval(QaRequest request, String executionId) {
+        rememberAgentQuestion(request);
+        publish(executionId, "PLAN", "已选择只读 Agentic Retrieval", Map.of(
+                "route", "AGENTIC_RAG", "maxSteps", maxSteps));
+        AgenticRetrievalOrchestrator orchestrator = agenticRetrieval.getIfAvailable();
+        if (orchestrator == null) {
+            String answer = "只读检索 Agent 当前不可用。";
+            qa.recordAudit(request, answer, "[]", 0, true, executionId, "agentic_rag");
+            publish(executionId, "ERROR", "只读检索 Agent 不可用", Map.of("route", "AGENTIC_RAG"));
+            executions.complete(executionId, "ERROR");
+            return new AgentResult(executionId, RouteDecision.AGENTIC_RAG, "ERROR", answer, null,
+                    List.of("PLAN", "ERROR"), List.of(), 0, true, executionId,
+                    List.of("agentic-retrieval-unavailable"));
+        }
+        AgenticRetrievalResult result = orchestrator.execute(request, executionId,
+                () -> executions.cancelRequested(executionId));
+        rememberAgentAnswer(request, result.answer(), result.traceId(), result.citations(), false);
+        qa.recordAudit(request, result.answer(), citationsJson(result.citations()), result.confidence(),
+                result.refused(), result.traceId(), "agentic_rag");
+        if ("DONE".equals(result.status())) {
+            publish(executionId, result.refused() ? "OBSERVE" : "ANSWER",
+                    result.refused() ? "证据不足，未生成答案" : "已根据 EvidenceSet 形成答案",
+                    Map.of("traceId", result.traceId(), "refused", result.refused(),
+                            "citationCount", result.citations().size()));
+        } else {
+            publish(executionId, "ERROR", "Agentic Retrieval 已停止", Map.of("status", result.status()));
+        }
+        publish(executionId, "DONE", "Agentic Retrieval 完成", Map.of(
+                "route", "AGENTIC_RAG", "status", result.status(), "traceId", result.traceId()));
+        executions.complete(executionId, result.status());
+        return new AgentResult(executionId, RouteDecision.AGENTIC_RAG, result.status(), result.answer(), null,
+                result.steps(), result.citations(), result.confidence(), result.refused(), result.traceId(),
+                result.degradedComponents());
+    }
+
     public AgentResult continueAfterApproval(String approvalId, QaRequest request, boolean approved) {
         return continueAfterApproval(approvalId, request, approved, request.userId());
     }
@@ -191,7 +236,7 @@ public class AgentOrchestrator {
             String answer = "工具调用未获批准。";
             rememberApprovalDecision(request, answer, null);
             publish(record.executionId(), "ERROR", "工具调用未获批准", Map.of("status", record.status()));
-            return new AgentResult(record.executionId(), RouteDecision.AGENT, record.status(), answer,
+            return new AgentResult(record.executionId(), RouteDecision.TOOL_AGENT, record.status(), answer,
                     record.id(), List.of("APPROVAL_" + record.status()), List.of(), 0, true, null);
         }
         Thread thread = Thread.currentThread();
@@ -199,7 +244,7 @@ public class AgentOrchestrator {
         try {
             executions.bind(record.executionId(), thread);
             bound = true;
-            return reactLoop(record.executionId(), RouteDecision.AGENT, request, record.id(),
+            return reactLoop(record.executionId(), RouteDecision.TOOL_AGENT, request, record.id(),
                     record.toolName(), new ArrayList<>(List.of("PLAN", "APPROVAL_APPROVED")), false,
                     subtasks(request.query()));
         } catch (RuntimeException error) {

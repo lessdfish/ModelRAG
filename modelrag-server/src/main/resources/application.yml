@@ -64,6 +64,12 @@ modelrag:
   agent:
     max-steps: ${MODELRAG_AGENT_MAX_STEPS:6}
     deadline-ms: ${MODELRAG_AGENT_DEADLINE_MS:10000}
+    retrieval:
+      max-search-actions: ${MODELRAG_AGENT_RETRIEVAL_MAX_SEARCH_ACTIONS:4}
+      max-navigation-actions: ${MODELRAG_AGENT_RETRIEVAL_MAX_NAVIGATION_ACTIONS:12}
+      max-observation-items: ${MODELRAG_AGENT_RETRIEVAL_MAX_OBSERVATION_ITEMS:20}
+      max-observation-excerpt-chars: ${MODELRAG_AGENT_RETRIEVAL_MAX_OBSERVATION_EXCERPT_CHARS:500}
+      max-policy-context-chars: ${MODELRAG_AGENT_RETRIEVAL_MAX_POLICY_CONTEXT_CHARS:12000}
   ollama:
     enabled: ${MODELRAG_OLLAMA_ENABLED:false}
     url: ${MODELRAG_OLLAMA_URL:${OLLAMA_HOST:127.0.0.1:11434}}

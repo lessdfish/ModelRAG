@@ -112,7 +112,7 @@ public class AutoQaService {
         }
         QaRequest qaRequest = new QaRequest(dataset.id(), request.query(), request.conversationId(), userId,
                 userRoles == null ? Set.of() : userRoles).withResolvedContext(resolvedContext);
-        if (route == RouteDecision.AGENT) {
+        if (agentRoute(route)) {
             AgentResult result;
             if (executionId == null || executionId.isBlank()) {
                 result = agent.execute(qaRequest);
@@ -147,7 +147,8 @@ public class AutoQaService {
                 expandStructuredCandidates(initialCandidates, structuredCandidateIds, allowedDatasetIds),
                 structuredCandidateIds);
         Candidate intentCandidate = selectIntentCandidate(query, preselected);
-        if (intentCandidate != null && intentCandidate.route() == RouteDecision.AGENT) return intentCandidate;
+        if (intentCandidate != null && (intentCandidate.route() == RouteDecision.TOOL_AGENT
+                || intentCandidate.route() == RouteDecision.AGENT)) return intentCandidate;
         if (preselected.isEmpty()) throw new IllegalStateException("没有可用知识库，请先上传并完成索引");
         // Metadata/name routing preselects at most three candidates; only the best
         // candidate enters the formal hybrid retrieval path once.
@@ -216,9 +217,12 @@ public class AutoQaService {
         if (context != null && context.routingDecision() != null && context.routingDecision().modelInvoked()) {
             String intent = context.routingDecision().intent().toUpperCase(java.util.Locale.ROOT);
             if (intent.contains("TOOL") || intent.contains("WRITE") || intent.contains("ACTION")) {
-                return RouteDecision.AGENT;
+                return RouteDecision.TOOL_AGENT;
             }
-            return RouteDecision.DIRECT_RAG;
+            if (intent.contains("AGENTIC") || "AGENT".equals(intent) || "HYBRID".equals(intent)) {
+                return RouteDecision.AGENTIC_RAG;
+            }
+            if (intent.contains("DIRECT")) return RouteDecision.DIRECT_RAG;
         }
         return router.route(originalQuestion);
     }
@@ -240,7 +244,14 @@ public class AutoQaService {
     }
 
     private RouteDecision route(IntentNode intent) {
-        return "TOOL".equals(intent.targetType()) ? RouteDecision.AGENT : RouteDecision.DIRECT_RAG;
+        if ("TOOL".equals(intent.targetType())) return RouteDecision.TOOL_AGENT;
+        if ("DIRECT".equals(intent.targetType())) return RouteDecision.DIRECT_RAG;
+        return null;
+    }
+
+    private boolean agentRoute(RouteDecision route) {
+        return route == RouteDecision.AGENTIC_RAG || route == RouteDecision.TOOL_AGENT
+                || route == RouteDecision.AGENT;
     }
 
     private Candidate score(Dataset dataset, String query) {

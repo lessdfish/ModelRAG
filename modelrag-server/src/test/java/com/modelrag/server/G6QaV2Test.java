@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -101,8 +102,45 @@ class G6QaV2Test {
 
         assertFalse(result.refused());
         assertEquals("E1", result.citations().get(0).citationId());
+        assertEquals(0L, result.citations().get(0).indexVersion());
         assertEquals(29L, result.citations().get(0).documentVersionId());
         assertEquals(55L, result.citations().get(0).nodeId());
+        verify(synthesizer).synthesize(anyString(), anyString(), any(), any(), isNull());
+    }
+
+    @Test
+    void tracePersistenceFailureDoesNotReplaceValidAnswer() {
+        DatasetRepository datasets = mock(DatasetRepository.class);
+        when(datasets.findById(7)).thenReturn(new Dataset(7, "kb", "", 600, 80, 4, .7, 1));
+        HybridRetrievalService retrieval = mock(HybridRetrievalService.class);
+        when(retrieval.inspect(any())).thenReturn(emptyStages());
+        ContextAssembler contexts = contexts();
+        Evidence primary = new Evidence("candidate-101", 7, 23, 29, 55, 101L, 31L,
+                "policy.docx", EvidenceOrigin.RETRIEVAL, com.modelrag.knowledge.model.RetrievalUnitType.PARAGRAPH,
+                com.modelrag.knowledge.model.NodeType.PARAGRAPH, "Leave", "annual leave is 10 days",
+                new EvidenceLocator("Leave", 12, 12, 100L, 124L), .9, RetrievalChannel.SEMANTIC, true, Map.of());
+        EvidenceRetrievalService evidence = mock(EvidenceRetrievalService.class);
+        when(evidence.retrieve(anyLong(), any())).thenReturn(new EvidenceRetrievalService.EvidenceRetrievalResult(
+                List.of(primary), List.of(), 0));
+        EvidenceExpansionService expansion = mock(EvidenceExpansionService.class);
+        when(expansion.expand(any())).thenReturn(new EvidenceExpansionService.ExpansionResult(List.of(primary), 0, List.of()));
+        EvidenceSelector selector = mock(EvidenceSelector.class);
+        when(selector.select(any())).thenReturn(List.of(primary.withEvidenceId("E1")));
+        EvidenceSufficiencyPolicy policy = mock(EvidenceSufficiencyPolicy.class);
+        when(policy.evaluate(anyString(), any())).thenReturn(new EvidenceSufficiency(true, .9, "active-evidence", 1));
+        AnswerSynthesizer synthesizer = mock(AnswerSynthesizer.class);
+        when(synthesizer.synthesize(anyString(), anyString(), any(), any(), isNull()))
+                .thenReturn(new AnswerSynthesizer.AnswerDraft("answer", "prompt", "context", "user-model", "model", true));
+        AnswerTraceRepository traces = mock(AnswerTraceRepository.class);
+        doThrow(new IllegalStateException("trace store unavailable")).when(traces).saveTrace(any());
+
+        QaV2ApplicationService service = service(datasets, contexts, retrieval, evidence, expansion, selector, policy,
+                synthesizer, traces);
+        var result = service.answer(new QaRequest(7, "question", null), null);
+
+        assertFalse(result.refused());
+        assertEquals("answer", result.answer());
+        assertEquals(0L, result.citations().get(0).indexVersion());
         verify(synthesizer).synthesize(anyString(), anyString(), any(), any(), isNull());
     }
 
@@ -138,9 +176,17 @@ class G6QaV2Test {
             HybridRetrievalService retrieval, EvidenceRetrievalService evidence,
             EvidenceExpansionService expansion, EvidenceSelector selector,
             EvidenceSufficiencyPolicy policy, AnswerSynthesizer synthesizer) {
+        return service(datasets, contexts, retrieval, evidence, expansion, selector, policy, synthesizer,
+                mock(AnswerTraceRepository.class));
+    }
+
+    private QaV2ApplicationService service(DatasetRepository datasets, ContextAssembler contexts,
+            HybridRetrievalService retrieval, EvidenceRetrievalService evidence,
+            EvidenceExpansionService expansion, EvidenceSelector selector,
+            EvidenceSufficiencyPolicy policy, AnswerSynthesizer synthesizer, AnswerTraceRepository traces) {
         return new QaV2ApplicationService(datasets, new PromptSanitizer(), contexts,
                 new V2EmbeddingProfileProvider("bge-m3"), retrieval, evidence, expansion, selector,
-                policy, synthesizer, mock(AnswerTraceRepository.class), new SimpleMeterRegistry());
+                policy, synthesizer, traces, new SimpleMeterRegistry());
     }
 
     private ContextAssembler contexts() {

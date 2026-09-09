@@ -83,17 +83,17 @@ class DesignContractMatrixTest {
                 Arguments.of("安全制度是什么", RouteDecision.DIRECT_RAG),
                 Arguments.of("请解释远程办公规则", RouteDecision.DIRECT_RAG),
                 Arguments.of("报销上限是多少", RouteDecision.DIRECT_RAG),
-                Arguments.of("请审批删除这份文档", RouteDecision.AGENT),
-                Arguments.of("查订单 1001", RouteDecision.AGENT),
-                Arguments.of("调用合同状态工具", RouteDecision.AGENT),
-                Arguments.of("比较年假和远程办公", RouteDecision.AGENT),
-                Arguments.of("这两项有什么区别", RouteDecision.AGENT),
-                Arguments.of("汇总本周工单", RouteDecision.AGENT),
-                Arguments.of("分析临时访问流程", RouteDecision.AGENT),
-                Arguments.of("规划迁移步骤", RouteDecision.AGENT),
-                Arguments.of("起草审批方案", RouteDecision.AGENT),
-                Arguments.of("执行供应商变更", RouteDecision.AGENT),
-                Arguments.of("生成对比报告", RouteDecision.AGENT));
+                Arguments.of("请审批删除这份文档", RouteDecision.TOOL_AGENT),
+                Arguments.of("查订单 1001", RouteDecision.TOOL_AGENT),
+                Arguments.of("调用合同状态工具", RouteDecision.TOOL_AGENT),
+                Arguments.of("比较年假和远程办公", RouteDecision.AGENTIC_RAG),
+                Arguments.of("这两项有什么区别", RouteDecision.AGENTIC_RAG),
+                Arguments.of("汇总本周工单", RouteDecision.AGENTIC_RAG),
+                Arguments.of("分析临时访问流程", RouteDecision.AGENTIC_RAG),
+                Arguments.of("规划迁移步骤", RouteDecision.AGENTIC_RAG),
+                Arguments.of("起草审批方案", RouteDecision.AGENTIC_RAG),
+                Arguments.of("执行供应商变更", RouteDecision.TOOL_AGENT),
+                Arguments.of("生成对比报告", RouteDecision.AGENTIC_RAG));
     }
 
     @ParameterizedTest(name = "prompt guard: {0}")

@@ -56,11 +56,23 @@ public class ElasticsearchRetrievalUnitSearch implements LexicalSearchPort {
     @Override
     public List<RetrievalCandidate> search(LexicalSearchRequest request) {
         if (request.activeIndexBuildIds().isEmpty()) return List.of();
+        return search(request.query(), request.datasetId(), null, request.activeIndexBuildIds(), request.limit());
+    }
+
+    @Override
+    public List<RetrievalCandidate> findInDocument(DocumentLexicalSearchRequest request) {
+        if (request.activeIndexBuildIds().isEmpty()) return List.of();
+        return search(request.query(), request.datasetId(), request.documentId(),
+                request.activeIndexBuildIds(), request.limit());
+    }
+
+    private List<RetrievalCandidate> search(String query, long datasetId, Long documentId,
+            List<Long> activeBuildIds, int limit) {
         try {
             HttpResponse<String> response = http.send(HttpRequest.newBuilder(
                     URI.create(endpoint + "/" + INDEX + "/_search"))
                     .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(query(request)))
+                    .POST(HttpRequest.BodyPublishers.ofString(query(query, datasetId, documentId, activeBuildIds, limit)))
                     .build(), HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() / 100 != 2) {
                 throw new IllegalStateException("V2 Elasticsearch 返回 HTTP " + response.statusCode());
@@ -72,7 +84,7 @@ public class ElasticsearchRetrievalUnitSearch implements LexicalSearchPort {
                         candidates.size() + 1);
                 if (candidate != null) candidates.add(candidate);
             }
-            return validateActive(request, candidates, hits.size());
+            return validateActive(datasetId, activeBuildIds, documentId, candidates, hits.size());
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("V2 Elasticsearch 词法检索被中断", interrupted);
@@ -81,17 +93,19 @@ public class ElasticsearchRetrievalUnitSearch implements LexicalSearchPort {
         }
     }
 
-    private String query(LexicalSearchRequest request) throws Exception {
+    private String query(String query, long datasetId, Long documentId,
+            List<Long> activeBuildIds, int limit) throws Exception {
         ObjectNode root = json.createObjectNode();
-        root.put("size", request.limit());
+        root.put("size", limit);
         ObjectNode bool = root.putObject("query").putObject("bool");
         ArrayNode filters = bool.putArray("filter");
-        term(filters, "datasetId", request.datasetId());
+        term(filters, "datasetId", datasetId);
+        if (documentId != null) term(filters, "documentId", documentId);
         ArrayNode builds = filters.addObject().putObject("terms").putArray("indexBuildId");
-        request.activeIndexBuildIds().forEach(builds::add);
+        activeBuildIds.forEach(builds::add);
 
         ObjectNode multiMatch = bool.putArray("must").addObject().putObject("multi_match");
-        multiMatch.put("query", request.query());
+        multiMatch.put("query", query);
         multiMatch.put("type", "best_fields");
         multiMatch.put("operator", "or");
         ArrayNode fields = multiMatch.putArray("fields");
@@ -100,19 +114,20 @@ public class ElasticsearchRetrievalUnitSearch implements LexicalSearchPort {
         return json.writeValueAsString(root);
     }
 
-    private List<RetrievalCandidate> validateActive(LexicalSearchRequest request,
-            List<RetrievalCandidate> candidates, int rawHitCount) {
+    private List<RetrievalCandidate> validateActive(long datasetId, List<Long> activeBuildIds,
+            Long documentId, List<RetrievalCandidate> candidates, int rawHitCount) {
         if (candidates.isEmpty()) return List.of();
         Set<Long> ids = new LinkedHashSet<>(candidates.stream()
                 .map(RetrievalCandidate::retrievalUnitId).toList());
         Map<Long, RetrievalUnit> active = new HashMap<>();
-        for (RetrievalUnit unit : units.findActiveByIds(request.datasetId(), ids)) {
+        for (RetrievalUnit unit : units.findActiveByIds(datasetId, ids)) {
             active.put(unit.id(), unit);
         }
         List<RetrievalCandidate> retained = new ArrayList<>();
         for (RetrievalCandidate candidate : candidates) {
             RetrievalUnit unit = active.get(candidate.retrievalUnitId());
-            if (!request.activeIndexBuildIds().contains(candidate.indexBuildId())
+            if (!activeBuildIds.contains(candidate.indexBuildId())
+                    || (documentId != null && candidate.documentId() != documentId)
                     || unit == null || unit.datasetId() != candidate.datasetId()
                     || unit.documentId() != candidate.documentId()
                     || unit.documentVersionId() != candidate.documentVersionId()

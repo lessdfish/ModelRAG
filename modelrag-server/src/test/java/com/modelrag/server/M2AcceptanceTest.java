@@ -28,11 +28,12 @@ class M2AcceptanceTest {
     @Autowired ComplexityRouter router;
 
     @Test
-    void simpleQuestionsUseDirectRagAndActionsEscalateToAgent() {
+    void simpleQuestionsUseDirectRagAndRoutesUseTheThreeModeContract() {
         assertEquals(RouteDecision.DIRECT_RAG, router.route("年假有几天"));
         assertEquals(RouteDecision.DIRECT_RAG, router.route("审批需要谁确认"));
-        assertEquals(RouteDecision.AGENT, router.route("请审批删除这份文档"));
-        assertEquals(RouteDecision.AGENT, router.route("比较年假和远程办公要求"));
+        assertEquals(RouteDecision.TOOL_AGENT, router.route("请审批删除这份文档"));
+        assertEquals(RouteDecision.AGENTIC_RAG, router.route("比较年假和远程办公要求"));
+        assertEquals(RouteDecision.AGENTIC_RAG, router.route("总结远程办公规则"));
     }
 
     @Test

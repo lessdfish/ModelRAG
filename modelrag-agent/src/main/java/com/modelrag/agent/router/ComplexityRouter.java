@@ -9,6 +9,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.Map;
 
 import org.springframework.beans.factory.ObjectProvider;
@@ -34,7 +35,7 @@ public class ComplexityRouter {
 
     public RouteDecision route(String query) {
         RouteDecision rule = rule(query);
-        if (rule == RouteDecision.AGENT || !intentEnabled) return rule;
+        if (rule == RouteDecision.TOOL_AGENT || !intentEnabled) return rule;
         String modelName = "http-router-" + intentUrl;
         ModelHealthRegistry registry = health.getIfAvailable();
         if (registry != null && !registry.available("ROUTER", modelName)) return rule;
@@ -44,8 +45,11 @@ public class ComplexityRouter {
             JsonNode result = json.readTree(response.body());
             if (response.statusCode() / 100 == 2) {
                 registrySuccess(registry, modelName);
-                if (result.path("confidence").asDouble() < 1 && result.path("confidence").asDouble() >= .8 && "AGENT".equals(result.path("label").asText()))
-                    return RouteDecision.AGENT;
+                double confidence = result.path("confidence").asDouble(Double.NaN);
+                RouteDecision modelRoute = modelRoute(result.path("label").asText());
+                if (modelRoute != null && Double.isFinite(confidence) && confidence >= .8 && confidence <= 1.0) {
+                    return modelRoute;
+                }
             } else registryFailure(registry, modelName);
         } catch (Exception ignored) {
             registryFailure(registry, modelName);
@@ -62,8 +66,32 @@ public class ComplexityRouter {
     }
 
     private RouteDecision rule(String query) {
-        String q = query == null ? "" : query.toLowerCase();
-        return containsAny(q, "查订单", "查询订单", "调用", "执行", "删除", "变更", "批准", "请审批", "提交审批", "发起审批", "对比", "比较", "区别", "差异", "汇总", "总结", "整理", "分析", "规划", "计划", "方案", "生成", "起草", "制定") ? RouteDecision.AGENT : RouteDecision.DIRECT_RAG;
+        String q = query == null ? "" : query.toLowerCase(Locale.ROOT);
+        if (containsBusinessIntent(q)) return RouteDecision.TOOL_AGENT;
+        return containsAny(q, "对比", "比较", "差异", "区别", "分别", "跨文档", "引用关系",
+                "多个制度汇总", "多条款分析", "根据a再判断b", "汇总", "总结", "整理", "分析",
+                "规划", "计划", "方案", "生成", "起草", "制定")
+                ? RouteDecision.AGENTIC_RAG : RouteDecision.DIRECT_RAG;
+    }
+
+    private boolean containsBusinessIntent(String query) {
+        if (containsAny(query, "查订单", "查询订单", "调用", "执行", "删除", "变更", "批准",
+                "提交", "创建", "修改")) return true;
+        if (containsAny(query, "请审批", "提交审批", "发起审批", "审批这", "审批该")) return true;
+        return query.contains("审批") && !containsAny(query, "谁", "什么", "如何", "怎么", "流程",
+                "条件", "要求", "规则", "需要", "起草", "方案", "规划", "计划", "总结", "汇总",
+                "对比", "比较", "分析");
+    }
+
+    private RouteDecision modelRoute(String label) {
+        if (label == null) return null;
+        return switch (label.trim().toUpperCase(Locale.ROOT)) {
+            case "DIRECT_RAG" -> RouteDecision.DIRECT_RAG;
+            case "AGENTIC_RAG", "AGENT" -> RouteDecision.AGENTIC_RAG;
+            case "TOOL_AGENT" -> RouteDecision.TOOL_AGENT;
+            case "HYBRID" -> RouteDecision.AGENTIC_RAG;
+            default -> null;
+        };
     }
 
     private boolean containsAny(String value, String... terms) {

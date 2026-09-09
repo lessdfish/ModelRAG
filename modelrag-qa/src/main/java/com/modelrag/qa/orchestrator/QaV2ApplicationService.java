@@ -95,7 +95,7 @@ public class QaV2ApplicationService {
             if (!sufficiency.sufficient()) {
                 QaResult result = new QaResult(AnswerSynthesizer.INSUFFICIENT_EVIDENCE, List.of(),
                         sufficiency.confidence(), true, traceId, degraded);
-                persistTrace(request, traceId, retrievalQuery, stages, evidenceSet, null,
+                persistTraceSafely(request, traceId, retrievalQuery, stages, evidenceSet, null,
                         true, started);
                 return result;
             }
@@ -106,7 +106,7 @@ public class QaV2ApplicationService {
             List<String> answerDegraded = answerDegraded(degraded, draft.answerSource());
             QaResult result = new QaResult(draft.answer(), citations, sufficiency.confidence(), false,
                     traceId, answerDegraded);
-            persistTrace(request, traceId, retrievalQuery, stages, evidenceSet, draft,
+            persistTraceSafely(request, traceId, retrievalQuery, stages, evidenceSet, draft,
                     false, started);
             return result;
         } catch (RuntimeException error) {
@@ -115,9 +115,19 @@ public class QaV2ApplicationService {
             EvidenceSet empty = new EvidenceSet(traceId, query, List.of(), sufficiency, degraded,
                     elapsed(started), 0);
             metricEvidence(empty);
-            persistTrace(request, traceId, retrievalQuery, null, empty, null, true, started);
+            persistTraceSafely(request, traceId, retrievalQuery, null, empty, null, true, started);
             return new QaResult(AnswerSynthesizer.INSUFFICIENT_EVIDENCE, List.of(), 0, true,
                     traceId, degraded);
+        }
+    }
+
+    private void persistTraceSafely(QaRequest request, String traceId, String retrievalQuery,
+            RetrievalV2Stages stages, EvidenceSet evidenceSet, AnswerSynthesizer.AnswerDraft draft,
+            boolean refused, long started) {
+        try {
+            persistTrace(request, traceId, retrievalQuery, stages, evidenceSet, draft, refused, started);
+        } catch (RuntimeException error) {
+            metrics.counter("modelrag.qa.v2.trace_persistence_failure").increment();
         }
     }
 

@@ -2887,7 +2887,25 @@ V2 retrieval is shadow-only in G5. When
 `modelrag.retrieval.v2.shadow-enabled` is enabled, a bounded asynchronous
 shadow job compares V1 and V2 at document-ID level; queue saturation or V2
 failure is recorded and cannot change the V1 response. Evidence construction,
-document navigation, and QA cutover remain later tasks.
+document navigation, and QA cutover are implemented by the subsequent G6 flow.
+
+## G6/G7 implementation status
+
+G6 adds the opt-in `QaV2ApplicationService` evidence flow. `EvidenceSet` is
+assembled only from active V2 retrieval units and bounded document navigation;
+the final answer path accepts that set, emits citations keyed by
+`DocumentVersion` and `DocumentNode`, and refuses without a model call when
+the set is insufficient. V1 remains the default read path and
+`modelrag.qa.v2.enabled` remains `false` by default.
+
+G7 adds execution-local retrieval actions and the three-mode top-level routing
+contract: `DIRECT_RAG`, `AGENTIC_RAG`, and `TOOL_AGENT`. Retrieval actions return
+bounded observations/evidence and never call QA answer services. `AGENTIC_RAG`
+is read-only, uses observed source identifiers for navigation, and performs at
+most one final synthesis from a sufficient `EvidenceSet`; `TOOL_AGENT` retains
+the existing authorization, approval, idempotency, and side-effect guards.
+No durable agent state, checkpoint/resume flow, or G8 work is part of this
+implementation.
 
 ---
 
