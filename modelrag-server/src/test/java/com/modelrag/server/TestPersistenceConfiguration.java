@@ -5,11 +5,24 @@ import com.modelrag.agent.memory.LongTermMemoryService;
 import com.modelrag.agent.approval.ApprovalGate;
 import com.modelrag.agent.approval.ApprovalRecord;
 import com.modelrag.agent.orchestrator.AgentExecutionRegistry;
-import com.modelrag.agent.tool.ToolDefinition;
-import com.modelrag.agent.tool.ToolRegistry;
-import com.modelrag.agent.tool.ResilientToolExecutor;
-import com.modelrag.agent.tool.ToolCallValidator;
-import com.modelrag.agent.tool.ToolCoordinationStore;
+import com.modelrag.toolgateway.catalog.ToolCatalog;
+import com.modelrag.toolgateway.catalog.ToolDescriptor;
+import com.modelrag.toolgateway.catalog.ToolExecutionResolver;
+import com.modelrag.toolgateway.catalog.ToolExecutionSpec;
+import com.modelrag.toolgateway.catalog.ToolRegistrationCommand;
+import com.modelrag.toolgateway.coordination.ToolCoordinationStore;
+import com.modelrag.toolgateway.execution.InternalToolHandler;
+import com.modelrag.toolgateway.execution.InternalToolHandlerRegistry;
+import com.modelrag.toolgateway.execution.ResilientToolExecutor;
+import com.modelrag.toolgateway.execution.ToolDispatcher;
+import com.modelrag.toolgateway.execution.ToolExecutionCanceller;
+import com.modelrag.toolgateway.execution.ToolGateway;
+import com.modelrag.toolgateway.execution.ToolInvocation;
+import com.modelrag.toolgateway.http.HttpToolInvoker;
+import com.modelrag.toolgateway.policy.ToolAccessPolicy;
+import com.modelrag.toolgateway.policy.ToolRiskPolicy;
+import com.modelrag.toolgateway.security.ToolCallValidator;
+import com.modelrag.toolgateway.trace.ToolCallTracer;
 import com.modelrag.common.metrics.TokenUsageTracker;
 import com.modelrag.common.rate.DatasetRateLimiter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -47,6 +60,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -194,7 +208,16 @@ class TestPersistenceConfiguration {
     AgentExecutionRegistry agentExecutionRegistry() { return new TestAgentExecutionRegistry(); }
 
     @Bean
-    ToolRegistry toolRegistry() { return new TestToolRegistry(); }
+    ToolCatalog toolCatalog() { return new TestToolCatalog(); }
+
+    @Bean
+    ToolAccessPolicy toolAccessPolicy() { return new ToolAccessPolicy(); }
+
+    @Bean
+    ToolRiskPolicy toolRiskPolicy() { return new ToolRiskPolicy(); }
+
+    @Bean
+    ToolCallValidator toolCallValidator(ObjectMapper json) { return new ToolCallValidator(json); }
 
     @Bean
     ToolCoordinationStore toolCoordinationStore() {
@@ -218,6 +241,30 @@ class TestPersistenceConfiguration {
     @Bean
     ResilientToolExecutor resilientToolExecutor(ToolCallValidator validator, ToolCoordinationStore coordination) {
         return new ResilientToolExecutor(validator, coordination);
+    }
+
+    @Bean
+    ToolGateway toolGateway(ToolCatalog catalog, ToolAccessPolicy access, ResilientToolExecutor resilience,
+            QaOrchestrator qa, ObjectMapper json, ToolCallTracer tracer) {
+        InternalToolHandler legacy = new InternalToolHandler() {
+            @Override public boolean supports(String toolName) {
+                return "knowledge_lookup".equals(toolName) || "destructive_operation".equals(toolName);
+            }
+            @Override public String invoke(ToolInvocation invocation) {
+                try {
+                    var node = json.readTree(invocation.input());
+                    String query = node.path("query").asText(invocation.input());
+                    return json.writeValueAsString(qa.answer(new com.modelrag.qa.dto.QaRequest(invocation.datasetId(),
+                            query, invocation.conversationId(), invocation.userId(), invocation.userRoles())
+                            .withoutConversationMessage()));
+                } catch (Exception error) {
+                    throw new IllegalStateException(error);
+                }
+            }
+        };
+        return new ToolGateway((ToolExecutionResolver) catalog, access, resilience,
+                new ToolDispatcher(new HttpToolInvoker(json, 5_000, true, ""),
+                        new InternalToolHandlerRegistry(List.of(legacy))), tracer);
     }
 
     private record RateWindow(long startedAt, long count) { }
@@ -409,8 +456,7 @@ class TestPersistenceConfiguration {
     static final class TestAgentExecutionRegistry extends AgentExecutionRegistry {
         private final Map<String, Scope> scopes = new ConcurrentHashMap<>();
         TestAgentExecutionRegistry() { super(org.mockito.Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class),
-                org.mockito.Mockito.mock(ResilientToolExecutor.class),
-                org.mockito.Mockito.mock(com.modelrag.agent.tool.HttpToolInvoker.class),
+                org.mockito.Mockito.mock(ToolExecutionCanceller.class),
                 org.mockito.Mockito.mock(com.modelrag.api.ModelInvocationCanceller.class)); }
         @Override public void register(String id, String userId, long datasetId, Long conversationId) {
             scopes.put(id, new Scope(userId, datasetId, conversationId));
@@ -424,33 +470,60 @@ class TestPersistenceConfiguration {
         @Override public void complete(String id, String status) { }
     }
 
-    static final class TestToolRegistry extends ToolRegistry {
-        private final Map<String, ToolDefinition> tools = new ConcurrentHashMap<>();
-        TestToolRegistry() {
-            super(org.mockito.Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class),
-                    new com.modelrag.agent.tool.ToolSecretCipher("test-tool-secret-key-at-least-32-bytes"));
-            tools.put("knowledge_lookup", new ToolDefinition("knowledge_lookup", "检索已授权知识库", "LOW", true));
-            tools.put("destructive_operation", new ToolDefinition("destructive_operation", "执行删除或变更操作", "HIGH", true));
+    static final class TestToolCatalog implements ToolCatalog, ToolExecutionResolver {
+        private final Map<String, ToolDescriptor> tools = new ConcurrentHashMap<>();
+
+        TestToolCatalog() {
+            tools.put("knowledge_lookup", descriptor("knowledge_lookup", "检索已授权知识库", "LOW", true,
+                    "INTERNAL", null, null, "{}", true, false));
+            tools.put("destructive_operation", descriptor("destructive_operation", "执行删除或变更操作", "HIGH", true,
+                    "INTERNAL", null, null, "{}", false, false));
         }
-        @Override public ToolDefinition register(ToolDefinition tool) { tools.put(tool.name(), tool); return tool; }
-        @Override public ToolDefinition remove(String name) { return tools.remove(name); }
-        @Override public ToolDefinition setEnabled(String name, boolean enabled) {
-            ToolDefinition old = get(name);
-            return register(new ToolDefinition(old.name(), old.description(), old.riskLevel(), enabled, old.type(),
-                    old.endpoint(), old.authHeaderName(), old.authHeaderValue(), old.jsonSchema(), old.allowedRoles(),
-                    old.allowedDatasetIds(), old.idempotent()));
+
+        @Override public ToolDescriptor register(ToolRegistrationCommand command) {
+            ToolDescriptor value = descriptor(command.name(), command.description(), command.riskLevel(),
+                    command.enabled(), command.type(), command.endpoint(), command.authHeaderName(),
+                    command.jsonSchema(), command.idempotent(), command.authHeaderValue() != null
+                            && !command.authHeaderValue().isBlank());
+            tools.put(value.name(), value);
+            return value;
         }
-        @Override public ToolDefinition get(String name) {
-            ToolDefinition tool = tools.get(name);
-            if (tool == null || !tool.enabled()) throw new IllegalArgumentException("工具不可用");
-            return tool;
+
+        @Override public ToolDescriptor remove(String name) { return tools.remove(name); }
+
+        @Override public ToolDescriptor setEnabled(String name, boolean enabled) {
+            ToolDescriptor old = getAny(name);
+            ToolDescriptor value = new ToolDescriptor(old.name(), old.description(), old.riskLevel(), enabled,
+                    old.type(), old.endpoint(), old.authHeaderName(), old.jsonSchema(), old.allowedRoles(),
+                    old.allowedDatasetIds(), old.idempotent(), old.hasAuthSecret());
+            tools.put(name, value);
+            return value;
         }
-        @Override public ToolDefinition getAny(String name) {
-            ToolDefinition tool = tools.get(name);
-            if (tool == null) throw new IllegalArgumentException("工具不存在");
-            return tool;
+
+        @Override public ToolDescriptor get(String name) {
+            ToolDescriptor value = getAny(name);
+            if (!value.enabled()) throw new IllegalArgumentException("工具不可用");
+            return value;
         }
-        @Override public List<ToolDefinition> list() { return List.copyOf(tools.values()); }
-        @Override public List<ToolDefinition> listEnabled() { return list().stream().filter(ToolDefinition::enabled).toList(); }
+
+        @Override public ToolDescriptor getAny(String name) {
+            ToolDescriptor value = tools.get(name);
+            if (value == null) throw new IllegalArgumentException("工具不存在");
+            return value;
+        }
+
+        @Override public List<ToolDescriptor> list() { return List.copyOf(tools.values()); }
+        @Override public List<ToolDescriptor> listEnabled() { return list().stream().filter(ToolDescriptor::enabled).toList(); }
+        @Override public ToolExecutionSpec resolveForExecution(String name) {
+            ToolDescriptor descriptor = get(name);
+            return new ToolExecutionSpec(descriptor, null);
+        }
+
+        private static ToolDescriptor descriptor(String name, String description, String risk, boolean enabled,
+                String type, String endpoint, String authHeaderName, String schema, boolean idempotent,
+                boolean hasSecret) {
+            return new ToolDescriptor(name, description, risk, enabled, type, endpoint, authHeaderName, schema,
+                    Set.of(), Set.of(), idempotent, hasSecret);
+        }
     }
 }

@@ -1,5 +1,6 @@
 package com.modelrag.agent.orchestrator;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.modelrag.agent.approval.ApprovalGate;
 import com.modelrag.agent.approval.ApprovalRecord;
 import com.modelrag.agent.intent.IntentNode;
@@ -11,13 +12,7 @@ import com.modelrag.agent.router.RouteDecision;
 import com.modelrag.agent.runtime.AgentRuntime;
 import com.modelrag.agent.runtime.AgentStartCommand;
 import com.modelrag.agent.safety.LoopDetector;
-import com.modelrag.agent.tool.HttpToolInvoker;
-import com.modelrag.agent.tool.ResilientToolExecutor;
-import com.modelrag.agent.tool.ToolDefinition;
-import com.modelrag.agent.tool.ToolRegistry;
 import com.modelrag.agent.trace.AgentStepTracer;
-import com.modelrag.agent.trace.ToolCallTrace;
-import com.modelrag.agent.trace.ToolCallTracer;
 import com.modelrag.common.dto.SseEvent;
 import com.modelrag.common.operation.OperationGuard;
 import com.modelrag.common.sse.SseEmitterService;
@@ -26,6 +21,13 @@ import com.modelrag.qa.dto.Citation;
 import com.modelrag.qa.dto.QaRequest;
 import com.modelrag.qa.dto.QaResult;
 import com.modelrag.qa.orchestrator.QaOrchestrator;
+import com.modelrag.toolgateway.catalog.ToolCatalog;
+import com.modelrag.toolgateway.catalog.ToolDescriptor;
+import com.modelrag.toolgateway.execution.ToolGateway;
+import com.modelrag.toolgateway.execution.ToolInvocation;
+import com.modelrag.toolgateway.execution.ToolInvocationResult;
+import com.modelrag.toolgateway.policy.ToolAccessPolicy;
+import com.modelrag.toolgateway.policy.ToolRiskPolicy;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,19 +45,21 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class AgentOrchestrator {
+    private record ToolOutcome(QaResult value, ToolInvocationResult execution) { }
+
     private final ComplexityRouter router;
     private final QaOrchestrator qa;
     private final ApprovalGate approvals;
-    private final ToolRegistry tools;
+    private final ToolCatalog tools;
+    private final ToolRiskPolicy risk;
+    private final ToolAccessPolicy access;
+    private final ToolGateway gateway;
     private final LoopDetector loops;
     private final ConversationMemory memory;
     private final LongTermMemoryService longTermMemory;
     private final SseEmitterService sse;
-    private final ToolCallTracer tracer;
     private final AgentStepTracer stepTracer;
     private final IntentTreeService intents;
-    private final ResilientToolExecutor executor;
-    private final HttpToolInvoker httpTools;
     private final AgentPlanner planner;
     private final DatasetRepository datasets;
     private final AgentExecutionRegistry executions;
@@ -67,25 +71,27 @@ public class AgentOrchestrator {
     private AgentRuntime durableRuntime;
 
     public AgentOrchestrator(ComplexityRouter router, QaOrchestrator qa, ApprovalGate approvals,
-                             ToolRegistry tools, LoopDetector loops, ConversationMemory memory,
-                             LongTermMemoryService longTermMemory, SseEmitterService sse, ToolCallTracer tracer,
-                             AgentStepTracer stepTracer, IntentTreeService intents, ResilientToolExecutor executor,
-                             HttpToolInvoker httpTools, AgentPlanner planner, DatasetRepository datasets,
+                             ToolCatalog tools, ToolRiskPolicy risk, ToolAccessPolicy access, ToolGateway gateway,
+                             LoopDetector loops, ConversationMemory memory,
+                             LongTermMemoryService longTermMemory, SseEmitterService sse,
+                             AgentStepTracer stepTracer, IntentTreeService intents, AgentPlanner planner,
+                             DatasetRepository datasets,
                              AgentExecutionRegistry executions, OperationGuard operationGuard,
                              ObjectProvider<AgenticRetrievalOrchestrator> agenticRetrieval,
                              @Value("${modelrag.agent.max-steps:6}") int maxSteps,
                              @Value("${modelrag.agent.deadline-ms:10000}") long deadlineMs) {
-        this(router, qa, approvals, tools, loops, memory, longTermMemory, sse, tracer, stepTracer, intents,
-                executor, httpTools, planner, datasets, executions, operationGuard, agenticRetrieval,
+        this(router, qa, approvals, tools, risk, access, gateway, loops, memory, longTermMemory, sse, stepTracer,
+                intents, planner, datasets, executions, operationGuard, agenticRetrieval,
                 maxSteps, deadlineMs, true);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
     public AgentOrchestrator(ComplexityRouter router, QaOrchestrator qa, ApprovalGate approvals,
-                             ToolRegistry tools, LoopDetector loops, ConversationMemory memory,
-                             LongTermMemoryService longTermMemory, SseEmitterService sse, ToolCallTracer tracer,
-                             AgentStepTracer stepTracer, IntentTreeService intents, ResilientToolExecutor executor,
-                             HttpToolInvoker httpTools, AgentPlanner planner, DatasetRepository datasets,
+                             ToolCatalog tools, ToolRiskPolicy risk, ToolAccessPolicy access, ToolGateway gateway,
+                             LoopDetector loops, ConversationMemory memory,
+                             LongTermMemoryService longTermMemory, SseEmitterService sse,
+                             AgentStepTracer stepTracer, IntentTreeService intents, AgentPlanner planner,
+                             DatasetRepository datasets,
                              AgentExecutionRegistry executions, OperationGuard operationGuard,
                              ObjectProvider<AgenticRetrievalOrchestrator> agenticRetrieval,
                              @Value("${modelrag.agent.max-steps:6}") int maxSteps,
@@ -95,15 +101,15 @@ public class AgentOrchestrator {
         this.qa = qa;
         this.approvals = approvals;
         this.tools = tools;
+        this.risk = risk;
+        this.access = access;
+        this.gateway = gateway;
         this.loops = loops;
         this.memory = memory;
         this.longTermMemory = longTermMemory;
         this.sse = sse;
-        this.tracer = tracer;
         this.stepTracer = stepTracer;
         this.intents = intents;
-        this.executor = executor;
-        this.httpTools = httpTools;
         this.planner = planner;
         this.datasets = datasets;
         this.executions = executions;
@@ -203,7 +209,7 @@ public class AgentOrchestrator {
             return unresolvedTool(executionId, request, new ArrayList<>());
         }
         List<String> parts = subtasks(request.query());
-        ToolDefinition definition;
+        ToolDescriptor definition;
         try {
             definition = tools.get(fallbackTool);
         } catch (RuntimeException error) {
@@ -291,6 +297,9 @@ public class AgentOrchestrator {
             rememberDurableResult(request, result);
             return result;
         }
+        if (!legacyNonDurableFallback) {
+            return durableUnavailable(record.executionId(), RouteDecision.TOOL_AGENT, request);
+        }
         if (!"APPROVED".equals(record.status())) {
             String answer = "工具调用未获批准。";
             rememberApprovalDecision(request, answer, null);
@@ -346,7 +355,7 @@ public class AgentOrchestrator {
             if ("knowledge_lookup".equals(tool) && !"knowledge_lookup".equals(fallbackTool)) {
                 return unresolvedTool(executionId, request, steps);
             }
-            ToolDefinition definition = tools.get(tool);
+            ToolDescriptor definition = tools.get(tool);
             if (requiresApproval(definition) && approvalId == null) {
                 operationGuard.requireAvailableForSideEffect();
                 ApprovalRecord approval = approvals.request(executionId, tool,
@@ -386,8 +395,9 @@ public class AgentOrchestrator {
                         .withResolvedContext(request.resolvedContext())
                         .withoutConversationMessage();
                 String idempotencyKey = executionId + ":" + fingerprint;
-                var execution = executor.execute(definition, toolParams,
-                        () -> executeTool(definition, subRequest, idempotencyKey));
+                String actionId = executionId + ":action:" + (index + 1);
+                ToolOutcome execution = executeTool(definition, subRequest, toolParams, executionId, actionId,
+                        idempotencyKey);
                 if (executions.cancelRequested(executionId)) {
                     executions.complete(executionId, "CANCELLED");
                     return cancelled(executionId, route, request, approvalId, steps, results);
@@ -399,13 +409,10 @@ public class AgentOrchestrator {
                 if (normalize(observation).equals(previousObservation)) unchangedObservations++;
                 else unchangedObservations = 0;
                 previousObservation = normalize(observation);
-                tracer.record(new ToolCallTrace(executionId, tool, toolParams,
-                        toolOutput(result, execution), true, null,
-                        (System.nanoTime() - started) / 1_000_000));
                 steps.add("OBSERVE");
                 publish(executionId, "OBSERVE", result.refused() ? "工具未获得足够证据" : "工具已返回结果", Map.of(
                         "traceId", safeTraceId(result), "refused", result.refused(),
-                        "attempts", execution.attempts(), "step", index + 1));
+                        "attempts", execution.execution().attempts(), "step", index + 1));
                 if (unchangedObservations >= 2) {
                     steps.add("LOOP_STOPPED");
                     publish(executionId, "PLAN", "连续多步没有新观察，已停止循环", Map.of("step", index + 1));
@@ -416,8 +423,6 @@ public class AgentOrchestrator {
                     executions.complete(executionId, "CANCELLED");
                     return cancelled(executionId, route, request, approvalId, steps, results);
                 }
-                tracer.record(new ToolCallTrace(executionId, tool, toolParams, "{}", false,
-                        error.getMessage(), (System.nanoTime() - started) / 1_000_000));
                 publish(executionId, "ERROR", "工具执行失败", Map.of("toolName", tool, "step", index + 1));
                 executions.complete(executionId, "ERROR");
                 return new AgentResult(executionId, route, "ERROR", "工具执行失败，请稍后重试。",
@@ -473,12 +478,25 @@ public class AgentOrchestrator {
                 citations, confidence(results), true, traceId);
     }
 
-    private QaResult executeTool(ToolDefinition definition, QaRequest request, String idempotencyKey) {
+    private ToolOutcome executeTool(ToolDescriptor definition, QaRequest request, String params,
+                                    String executionId, String actionId, String idempotencyKey) {
+        ToolInvocation invocation = new ToolInvocation(executionId, actionId, definition.name(), request.userId(),
+                request.userRoles(), request.datasetId(),
+                request.conversationId(), params, idempotencyKey, actionId);
+        ToolInvocationResult execution = gateway.invoke(invocation);
+        return new ToolOutcome(toQaResult(definition, execution.output()), execution);
+    }
+
+    private QaResult toQaResult(ToolDescriptor definition, String output) {
         if (definition.http()) {
-            String output = httpTools.invoke(definition, request.query(), idempotencyKey);
             return new QaResult("结论：" + limit(output, 500), List.of(), 1, false, null);
         }
-        return qa.answer(withContext(request).withoutConversationMessage());
+        try {
+            return new ObjectMapper().readValue(output, QaResult.class);
+        } catch (Exception error) {
+            return new QaResult("结论：" + limit(output, 500), List.of(), 1, false, null,
+                    List.of("internal-result-unstructured"));
+        }
     }
 
     private QaRequest withContext(QaRequest request) {
@@ -487,7 +505,7 @@ public class AgentOrchestrator {
         return request;
     }
 
-    private List<ToolDefinition> availableTools(QaRequest request, String fallbackTool) {
+    private List<ToolDescriptor> availableTools(QaRequest request, String fallbackTool) {
         return tools.listEnabled().stream()
                 .filter(tool -> !"knowledge_lookup".equals(tool.name()) || "knowledge_lookup".equals(fallbackTool))
                 .filter(tool -> canUse(tool, request)).toList();
@@ -516,17 +534,13 @@ public class AgentOrchestrator {
                 List.of("durable-agent-runtime-unavailable"));
     }
 
-    private void requireToolAccess(ToolDefinition tool, QaRequest request) {
+    private void requireToolAccess(ToolDescriptor tool, QaRequest request) {
         if (!canUse(tool, request)) throw new IllegalStateException("用户无权调用工具: " + tool.name());
     }
 
-    private boolean canUse(ToolDefinition tool, QaRequest request) {
-        boolean datasetOk = tool.allowedDatasetIds() == null || tool.allowedDatasetIds().isEmpty()
-                || tool.allowedDatasetIds().contains(request.datasetId());
-        if (!datasetOk) return false;
-        Set<String> roles = request.userRoles() == null ? Set.of() : request.userRoles();
-        return tool.allowedRoles() == null || tool.allowedRoles().isEmpty()
-                || roles.stream().anyMatch(tool.allowedRoles()::contains);
+    private boolean canUse(ToolDescriptor tool, QaRequest request) {
+        return access.allowed(tool, new ToolInvocation("planning", "planning", tool.name(), request.userId(),
+                request.userRoles(), request.datasetId(), request.conversationId(), "planning", "planning", "planning"));
     }
 
     private boolean queryIsHighRisk(String query) {
@@ -535,9 +549,8 @@ public class AgentOrchestrator {
                 || value.contains("发起审批") || (value.contains("请审批") && !value.contains("谁"));
     }
 
-    private boolean requiresApproval(ToolDefinition definition) {
-        return definition != null && ("HIGH".equalsIgnoreCase(definition.riskLevel())
-                || "EXTERNAL_SIDE_EFFECT".equalsIgnoreCase(definition.riskLevel()));
+    private boolean requiresApproval(ToolDescriptor definition) {
+        return risk.requiresApproval(definition);
     }
 
     private List<String> subtasks(String query) {
@@ -575,12 +588,6 @@ public class AgentOrchestrator {
             if (!value.isBlank()) return value;
         }
         return "";
-    }
-
-    private String toolOutput(QaResult result, ResilientToolExecutor.Result<QaResult> execution) {
-        return "{\"traceId\":\"" + escape(result.traceId()) + "\",\"refused\":" + result.refused()
-                + ",\"attempts\":" + execution.attempts() + ",\"reused\":" + execution.reused()
-                + ",\"answer\":\"" + escape(result.answer()) + "\"}";
     }
 
     private String toolParams(QaRequest request, String subtask) {

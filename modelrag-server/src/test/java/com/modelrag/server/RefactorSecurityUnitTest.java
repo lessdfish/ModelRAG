@@ -14,16 +14,23 @@ import com.modelrag.agent.intent.IntentTreeService;
 import com.modelrag.agent.orchestrator.AgentOrchestrator;
 import com.modelrag.agent.orchestrator.AgentExecutionRegistry;
 import com.modelrag.agent.router.ComplexityRouter;
-import com.modelrag.agent.tool.HttpToolInvoker;
-import com.modelrag.agent.tool.ToolDefinition;
-import com.modelrag.agent.tool.ToolSecretCipher;
-import com.modelrag.agent.tool.ToolRegistry;
-import com.modelrag.agent.tool.ResilientToolExecutor;
-import com.modelrag.agent.tool.ToolCallValidator;
-import com.modelrag.agent.tool.ToolCoordinationStore;
 import com.modelrag.agent.trace.AgentStepTracer;
-import com.modelrag.agent.trace.ToolCallTrace;
-import com.modelrag.agent.trace.ToolCallTracer;
+import com.modelrag.toolgateway.catalog.ToolDescriptor;
+import com.modelrag.toolgateway.catalog.ToolExecutionSpec;
+import com.modelrag.toolgateway.catalog.JdbcToolCatalog;
+import com.modelrag.toolgateway.catalog.ToolRegistrationCommand;
+import com.modelrag.toolgateway.coordination.ToolCoordinationStore;
+import com.modelrag.toolgateway.execution.InternalToolHandlerRegistry;
+import com.modelrag.toolgateway.execution.ResilientToolExecutor;
+import com.modelrag.toolgateway.execution.ToolDispatcher;
+import com.modelrag.toolgateway.execution.ToolExecutionCanceller;
+import com.modelrag.toolgateway.execution.ToolGateway;
+import com.modelrag.toolgateway.http.HttpToolInvoker;
+import com.modelrag.toolgateway.policy.ToolAccessPolicy;
+import com.modelrag.toolgateway.security.ToolCallValidator;
+import com.modelrag.toolgateway.security.ToolSecretCipher;
+import com.modelrag.toolgateway.trace.ToolCallTrace;
+import com.modelrag.toolgateway.trace.ToolCallTracer;
 import com.modelrag.api.ConversationContextBuilder.DatasetCandidate;
 import com.modelrag.api.ConversationContextBuilder.RoutingDecision;
 import com.modelrag.api.UserModelProvider;
@@ -84,17 +91,22 @@ class RefactorSecurityUnitTest {
                 @Override public long incrementRate(String toolName, Duration window) { return 1; }
             };
             ResilientToolExecutor executor = new ResilientToolExecutor(new ToolCallValidator(), coordination);
-            AgentExecutionRegistry executions = new AgentExecutionRegistry(mock(JdbcTemplate.class), executor, http,
+            ToolDescriptor tool = new ToolDescriptor("slow-http", "slow cancellation fixture", "HIGH", true,
+                    "HTTP", "http://127.0.0.1:" + server.getAddress().getPort() + "/slow", null, "{}",
+                    Set.of(), Set.of(), false, false);
+            ToolGateway gateway = new ToolGateway(name -> new ToolExecutionSpec(tool, null), new ToolAccessPolicy(),
+                    executor, new ToolDispatcher(http, new InternalToolHandlerRegistry(List.of())),
+                    mock(ToolCallTracer.class));
+            AgentExecutionRegistry executions = new AgentExecutionRegistry(mock(JdbcTemplate.class), gateway,
                     mock(com.modelrag.api.ModelInvocationCanceller.class)) { };
             CountDownLatch finished = new CountDownLatch(1);
             AtomicReference<Throwable> result = new AtomicReference<>();
-            ToolDefinition tool = new ToolDefinition("slow-http", "slow cancellation fixture", "HIGH", true,
-                    "HTTP", "http://127.0.0.1:" + server.getAddress().getPort() + "/slow",
-                    null, null, "{}", Set.of(), Set.of(), false);
             Thread owner = Thread.ofVirtual().start(() -> {
                 executions.bind("execution-http-cancel", Thread.currentThread());
                 try {
-                    executor.execute(tool, "{}", () -> http.invoke(tool, "{}"));
+                    gateway.invoke(new com.modelrag.toolgateway.execution.ToolInvocation(
+                            "execution-http-cancel", "execution-http-cancel:action:1", tool.name(), "user", Set.of(),
+                            7, null, "{}", "", "execution-http-cancel"));
                 } catch (Throwable error) {
                     result.set(error);
                 } finally {
@@ -145,8 +157,9 @@ class RefactorSecurityUnitTest {
     @Test
     void malformedToolMetadataIsRejectedBeforePersistence() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        ToolRegistry registry = new ToolRegistry(jdbc, new ToolSecretCipher("test-tool-secret-key"));
-        assertThrows(IllegalArgumentException.class, () -> registry.register(new ToolDefinition(
+        JdbcToolCatalog registry = new JdbcToolCatalog(jdbc, new ToolSecretCipher("test-tool-secret-key"),
+                new ObjectMapper());
+        assertThrows(IllegalArgumentException.class, () -> registry.register(new ToolRegistrationCommand(
                 "bad name", "bad", "LOW", true, "HTTP", "https://api.example.com/path?secret=x",
                 "Authorization\r\nX-Evil", "secret", "{}", Set.of(), Set.of(), false)));
     }
@@ -180,13 +193,13 @@ class RefactorSecurityUnitTest {
     @Test
     void httpToolRejectsPrivateAndNonAllowlistedEndpoints() {
         HttpToolInvoker invoker = new HttpToolInvoker(new ObjectMapper(), 500, false, "api.example.com");
-        ToolDefinition metadata = new ToolDefinition("metadata", "metadata", "LOW", true,
-                "HTTP", "https://169.254.169.254/latest/meta-data", null, null, "{}", Set.of(), Set.of());
-        ToolDefinition unlisted = new ToolDefinition("unlisted", "unlisted", "LOW", true,
-                "HTTP", "https://example.org/tool", null, null, "{}", Set.of(), Set.of());
+        ToolDescriptor metadata = new ToolDescriptor("metadata", "metadata", "LOW", true,
+                "HTTP", "https://169.254.169.254/latest/meta-data", null, "{}", Set.of(), Set.of(), false, false);
+        ToolDescriptor unlisted = new ToolDescriptor("unlisted", "unlisted", "LOW", true,
+                "HTTP", "https://example.org/tool", null, "{}", Set.of(), Set.of(), false, false);
 
-        assertThrows(IllegalArgumentException.class, () -> invoker.invoke(metadata, "{}"));
-        assertThrows(IllegalArgumentException.class, () -> invoker.invoke(unlisted, "{}"));
+        assertThrows(IllegalArgumentException.class, () -> invoker.invoke(new ToolExecutionSpec(metadata, null), "{}"));
+        assertThrows(IllegalArgumentException.class, () -> invoker.invoke(new ToolExecutionSpec(unlisted, null), "{}"));
     }
 
     @Test
@@ -203,11 +216,12 @@ class RefactorSecurityUnitTest {
         server.start();
         try {
             HttpToolInvoker invoker = new HttpToolInvoker(new ObjectMapper(), 500, true, "");
-            ToolDefinition tool = new ToolDefinition("write", "write", "HIGH", true, "HTTP",
-                    "http://127.0.0.1:" + server.getAddress().getPort() + "/tool", null, null, "{}",
-                    Set.of(), Set.of(), true);
-            assertThrows(IllegalArgumentException.class, () -> invoker.invoke(tool, "{}"));
-            assertEquals("ok", invoker.invoke(tool, "{}", "execution:action"));
+            ToolDescriptor tool = new ToolDescriptor("write", "write", "HIGH", true, "HTTP",
+                    "http://127.0.0.1:" + server.getAddress().getPort() + "/tool", null, "{}",
+                    Set.of(), Set.of(), true, false);
+            ToolExecutionSpec spec = new ToolExecutionSpec(tool, null);
+            assertThrows(IllegalArgumentException.class, () -> invoker.invoke(spec, "{}"));
+            assertEquals("ok", invoker.invoke(spec, "{}", "execution:action"));
             assertEquals("execution:action", key.get());
         } finally {
             server.stop(0);
@@ -273,7 +287,7 @@ class RefactorSecurityUnitTest {
     void activeAgentExecutionCanBeInterruptedImmediately() throws Exception {
         AgentExecutionRegistry executions = new AgentExecutionRegistry(
                 mock(org.springframework.jdbc.core.JdbcTemplate.class),
-                mock(com.modelrag.agent.tool.ResilientToolExecutor.class), mock(HttpToolInvoker.class),
+                mock(ToolExecutionCanceller.class),
                 mock(com.modelrag.api.ModelInvocationCanceller.class)) { };
         CountDownLatch started = new CountDownLatch(1);
         CountDownLatch interrupted = new CountDownLatch(1);

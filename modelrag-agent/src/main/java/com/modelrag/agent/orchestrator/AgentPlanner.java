@@ -2,9 +2,9 @@ package com.modelrag.agent.orchestrator;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.modelrag.agent.tool.ToolDefinition;
 import com.modelrag.api.UserModelProvider;
 import com.modelrag.common.model.ModelGateway;
+import com.modelrag.toolgateway.catalog.ToolDescriptor;
 
 import java.util.List;
 import java.util.Objects;
@@ -29,12 +29,12 @@ public class AgentPlanner {
     }
 
     public Plan reactStep(String query, List<String> observations, String fallbackTool, List<String> fallbackSubtasks,
-                          List<ToolDefinition> tools, int stepIndex) {
+                          List<ToolDescriptor> tools, int stepIndex) {
         return reactStep(null, query, observations, fallbackTool, fallbackSubtasks, tools, stepIndex);
     }
 
     public Plan reactStep(String userId, String query, List<String> observations, String fallbackTool,
-                          List<String> fallbackSubtasks, List<ToolDefinition> tools, int stepIndex) {
+                          List<String> fallbackSubtasks, List<ToolDescriptor> tools, int stepIndex) {
         String generated = null;
         UserModelProvider userModel = userModels.getIfAvailable();
         if (userId != null && !userId.isBlank() && userModel != null && userModel.configured(userId)) {
@@ -73,15 +73,15 @@ public class AgentPlanner {
         return new Plan(fallbackTool, List.of(subtasks.get(stepIndex)), "RULE_REACT");
     }
 
-    private String validTool(String requested, String fallbackTool, List<ToolDefinition> tools) {
+    private String validTool(String requested, String fallbackTool, List<ToolDescriptor> tools) {
         return tools.stream()
-                .map(ToolDefinition::name)
+                .map(ToolDescriptor::name)
                 .filter(name -> Objects.equals(name, requested))
                 .findFirst()
                 .orElse(fallbackTool);
     }
 
-    private String reactPrompt(String query, List<String> observations, List<ToolDefinition> tools, int stepIndex) {
+    private String reactPrompt(String query, List<String> observations, List<ToolDescriptor> tools, int stepIndex) {
         String toolText = tools.stream()
                 .map(tool -> "- " + tool.name() + " risk=" + tool.riskLevel() + " desc=" + tool.description())
                 .reduce("", (left, right) -> left + right + "\n");

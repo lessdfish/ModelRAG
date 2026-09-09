@@ -34,12 +34,7 @@ import com.modelrag.agent.intent.IntentTreeService;
 import com.modelrag.agent.memory.ConversationMemory;
 import com.modelrag.agent.memory.LongTermMemoryService;
 import com.modelrag.agent.safety.LoopDetector;
-import com.modelrag.agent.tool.HttpToolInvoker;
-import com.modelrag.agent.tool.ResilientToolExecutor;
-import com.modelrag.agent.tool.ToolDefinition;
-import com.modelrag.agent.tool.ToolRegistry;
 import com.modelrag.agent.trace.AgentStepTracer;
-import com.modelrag.agent.trace.ToolCallTracer;
 import com.modelrag.agent.retrieval.DocumentLexicalFindService;
 import com.modelrag.agent.retrieval.FollowReferencesAction;
 import com.modelrag.agent.retrieval.OpenNodeAction;
@@ -78,6 +73,12 @@ import com.modelrag.qa.dto.QaRequest;
 import com.modelrag.qa.dto.QaResult;
 import com.modelrag.common.operation.OperationGuard;
 import com.modelrag.common.sse.SseEmitterService;
+import com.modelrag.toolgateway.catalog.ToolCatalog;
+import com.modelrag.toolgateway.catalog.ToolDescriptor;
+import com.modelrag.toolgateway.execution.ToolGateway;
+import com.modelrag.toolgateway.execution.ToolInvocationResult;
+import com.modelrag.toolgateway.policy.ToolAccessPolicy;
+import com.modelrag.toolgateway.policy.ToolRiskPolicy;
 import com.modelrag.search.channel.v2.ElasticsearchRetrievalUnitSearch;
 import com.modelrag.search.config.V2EmbeddingProfileProvider;
 import com.modelrag.search.dto.RetrievalCandidate;
@@ -279,10 +280,10 @@ class G7AgenticRetrievalTest {
         when(router.route("查询订单")).thenReturn(RouteDecision.TOOL_AGENT);
         IntentTreeService intents = mock(IntentTreeService.class);
         when(intents.match(7, "查询订单")).thenReturn(Optional.empty());
-        ToolRegistry tools = mock(ToolRegistry.class);
+        ToolCatalog tools = mock(ToolCatalog.class);
         QaOrchestrator qa = mock(QaOrchestrator.class);
         AgentOrchestrator orchestrator = agentOrchestrator(router, intents, tools, mock(AgentPlanner.class),
-                mock(ResilientToolExecutor.class), qa);
+                mock(ToolGateway.class), qa);
 
         AgentResult result = orchestrator.execute(new QaRequest(7, "查询订单", null, "user", Set.of()),
                 "exec-unresolved-tool");
@@ -302,19 +303,19 @@ class G7AgenticRetrievalTest {
         IntentTreeService intents = mock(IntentTreeService.class);
         when(intents.match(7, "查询订单")).thenReturn(Optional.of(new IntentNode(1L, 7, null,
                 "查询订单", "ACTION", "TOOL", "order_lookup", "", 1, true)));
-        ToolRegistry tools = mock(ToolRegistry.class);
-        ToolDefinition definition = new ToolDefinition("order_lookup", "查询订单", "LOW", true);
+        ToolCatalog tools = mock(ToolCatalog.class);
+        ToolDescriptor definition = new ToolDescriptor("order_lookup", "查询订单", "LOW", true);
         when(tools.get("order_lookup")).thenReturn(definition);
         when(tools.listEnabled()).thenReturn(List.of(definition));
         AgentPlanner planner = mock(AgentPlanner.class);
         when(planner.reactStep(anyString(), anyString(), anyList(), eq("order_lookup"), anyList(), anyList(), anyInt()))
                 .thenReturn(new AgentPlanner.Plan("order_lookup", List.of("查询订单"), "test"))
                 .thenReturn(new AgentPlanner.Plan("order_lookup", List.of(), "test"));
-        ResilientToolExecutor executor = mock(ResilientToolExecutor.class);
-        when(executor.execute(any(ToolDefinition.class), anyString(), org.mockito.ArgumentMatchers.<Supplier<QaResult>>any()))
-                .thenReturn(new ResilientToolExecutor.Result<>(
-                        new QaResult("订单已找到", List.of(), .9, false, "trace"), 1, false));
-        AgentOrchestrator orchestrator = agentOrchestrator(router, intents, tools, planner, executor,
+        ToolGateway gateway = mock(ToolGateway.class);
+        when(gateway.invoke(any())).thenReturn(new ToolInvocationResult("order_lookup",
+                "{\"answer\":\"订单已找到\",\"citations\":[],\"confidence\":0.9,\"refused\":false,\"traceId\":\"trace\",\"degradedComponents\":[]}",
+                1, false, 1));
+        AgentOrchestrator orchestrator = agentOrchestrator(router, intents, tools, planner, gateway,
                 mock(QaOrchestrator.class));
 
         AgentResult result = orchestrator.execute(new QaRequest(7, "查询订单", null, "user", Set.of()),
@@ -322,8 +323,7 @@ class G7AgenticRetrievalTest {
 
         assertEquals("订单已找到", result.answer());
         verify(tools, atLeastOnce()).get("order_lookup");
-        verify(executor).execute(any(ToolDefinition.class), anyString(),
-                org.mockito.ArgumentMatchers.<Supplier<QaResult>>any());
+        verify(gateway).invoke(any());
     }
 
     @Test
@@ -433,14 +433,14 @@ class G7AgenticRetrievalTest {
     }
 
     private AgentOrchestrator agentOrchestrator(ComplexityRouter router, IntentTreeService intents,
-            ToolRegistry tools, AgentPlanner planner, ResilientToolExecutor executor, QaOrchestrator qa) {
+            ToolCatalog tools, AgentPlanner planner, ToolGateway gateway, QaOrchestrator qa) {
         @SuppressWarnings("unchecked")
         ObjectProvider<AgenticRetrievalOrchestrator> agentic = mock(ObjectProvider.class);
         when(agentic.getIfAvailable()).thenReturn(null);
-        return new AgentOrchestrator(router, qa, mock(ApprovalGate.class), tools, mock(LoopDetector.class),
+        return new AgentOrchestrator(router, qa, mock(ApprovalGate.class), tools, new ToolRiskPolicy(),
+                new ToolAccessPolicy(), gateway, mock(LoopDetector.class),
                 mock(ConversationMemory.class), mock(LongTermMemoryService.class), mock(SseEmitterService.class),
-                mock(ToolCallTracer.class), mock(AgentStepTracer.class), intents, executor,
-                mock(HttpToolInvoker.class), planner, mock(DatasetRepository.class),
+                mock(AgentStepTracer.class), intents, planner, mock(DatasetRepository.class),
                 mock(com.modelrag.agent.orchestrator.AgentExecutionRegistry.class), mock(OperationGuard.class),
                 agentic, 4, 5_000);
     }

@@ -1,4 +1,4 @@
-package com.modelrag.agent.tool;
+package com.modelrag.toolgateway.coordination;
 
 import java.time.Duration;
 

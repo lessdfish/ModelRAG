@@ -9,10 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.modelrag.agent.router.ComplexityRouter;
 import com.modelrag.agent.router.RouteDecision;
-import com.modelrag.agent.tool.ToolCallValidator;
-import com.modelrag.agent.tool.ToolDefinition;
-import com.modelrag.agent.tool.ToolSecretCipher;
 import com.modelrag.common.security.LocalAuthTokenService;
+import com.modelrag.toolgateway.catalog.ToolDescriptor;
+import com.modelrag.toolgateway.security.ToolCallValidator;
+import com.modelrag.toolgateway.security.ToolSecretCipher;
 import com.modelrag.knowledge.splitter.RecursiveCharSplitter;
 import com.modelrag.qa.sanitizer.OutputGuard;
 import com.modelrag.qa.sanitizer.PromptSanitizer;
@@ -125,15 +125,15 @@ class DesignContractMatrixTest {
 
     @ParameterizedTest(name = "tool validation: {0}")
     @MethodSource("invalidToolCalls")
-    void toolCallsFailClosed(String name, ToolDefinition tool, String params) {
+    void toolCallsFailClosed(String name, ToolDescriptor tool, String params) {
         assertThrows(IllegalArgumentException.class, () -> new ToolCallValidator().validate(tool, params));
     }
 
     static Stream<Arguments> invalidToolCalls() {
-        ToolDefinition http = tool("{}");
-        ToolDefinition required = tool("{\"type\":\"object\",\"required\":[\"orderId\"],"
+        ToolDescriptor http = tool("{}");
+        ToolDescriptor required = tool("{\"type\":\"object\",\"required\":[\"orderId\"],"
                 + "\"properties\":{\"orderId\":{\"type\":\"string\"}}}");
-        ToolDefinition integer = tool("{\"type\":\"object\",\"properties\":{\"count\":{\"type\":\"integer\"}}}");
+        ToolDescriptor integer = tool("{\"type\":\"object\",\"properties\":{\"count\":{\"type\":\"integer\"}}}");
         return Stream.of(
                 Arguments.of("null", http, null), Arguments.of("blank", http, " "),
                 Arguments.of("nul character", http, "bad\0value"),
@@ -207,9 +207,9 @@ class DesignContractMatrixTest {
         return Arguments.of(name, contract);
     }
 
-    private static ToolDefinition tool(String schema) {
-        return new ToolDefinition("http", "http", "LOW", true, "HTTP", "https://api.example.com/tool",
-                null, null, schema, Set.of(), Set.of(), false);
+    private static ToolDescriptor tool(String schema) {
+        return new ToolDescriptor("http", "http", "LOW", true, "HTTP", "https://api.example.com/tool",
+                null, schema, Set.of(), Set.of(), false, false);
     }
 
     private static Set<Long> setWithNull() {

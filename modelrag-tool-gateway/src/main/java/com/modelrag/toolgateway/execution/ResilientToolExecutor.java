@@ -1,19 +1,22 @@
-package com.modelrag.agent.tool;
+package com.modelrag.toolgateway.execution;
 
+import com.modelrag.toolgateway.catalog.ToolDescriptor;
+import com.modelrag.toolgateway.coordination.ToolCoordinationStore;
+import com.modelrag.toolgateway.policy.ToolRiskPolicy;
+import com.modelrag.toolgateway.security.ToolCallValidator;
 import java.time.Duration;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
-import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
-/** Bounded tool execution. Coordination state is delegated to Redis in production. */
+/** Bounded tool execution. Coordination remains externalized to Redis in production. */
 @Service
 @Profile("!test")
 public class ResilientToolExecutor {
@@ -22,44 +25,48 @@ public class ResilientToolExecutor {
 
     private final ToolCallValidator validator;
     private final ToolCoordinationStore coordination;
+    private final ToolRiskPolicy risk;
     private final long timeoutMillis;
     private final int failureThreshold;
     private final long openMillis;
     private final int perMinuteLimit;
     private final ConcurrentHashMap<Thread, Thread> activeWorkers = new ConcurrentHashMap<>();
 
-    /** Explicit constructor used by the test-profile replacement with a test coordination store. */
     public ResilientToolExecutor(ToolCallValidator validator, ToolCoordinationStore coordination) {
-        this(validator, coordination, 30_000, 3, 30_000, 60, true);
+        this(validator, coordination, new ToolRiskPolicy(), 30_000, 3, 30_000, 60);
+    }
+
+    /** Compatibility constructor for callers that provide explicit resilience limits. */
+    public ResilientToolExecutor(ToolCallValidator validator, ToolCoordinationStore coordination,
+            long timeoutMillis, int failureThreshold, long openMillis, int perMinuteLimit) {
+        this(validator, coordination, new ToolRiskPolicy(), timeoutMillis, failureThreshold, openMillis,
+                perMinuteLimit);
     }
 
     @Autowired
     public ResilientToolExecutor(ToolCallValidator validator, ToolCoordinationStore coordination,
+            ToolRiskPolicy risk,
             @Value("${modelrag.tools.timeout-ms:30000}") long timeoutMillis,
             @Value("${modelrag.tools.failure-threshold:3}") int failureThreshold,
             @Value("${modelrag.tools.open-ms:30000}") long openMillis,
             @Value("${modelrag.tools.per-minute-limit:60}") int perMinuteLimit) {
-        this(validator, coordination, timeoutMillis, failureThreshold, openMillis, perMinuteLimit, true);
-    }
-
-    private ResilientToolExecutor(ToolCallValidator validator, ToolCoordinationStore coordination,
-            long timeoutMillis, int failureThreshold, long openMillis, int perMinuteLimit, boolean initialized) {
         this.validator = validator;
         this.coordination = coordination;
+        this.risk = risk;
         this.timeoutMillis = Math.max(100, timeoutMillis);
         this.failureThreshold = Math.max(1, failureThreshold);
         this.openMillis = Math.max(0, openMillis);
         this.perMinuteLimit = Math.max(0, perMinuteLimit);
     }
 
-    public <T> Result<T> execute(ToolDefinition tool, String params, Supplier<T> action) {
+    public <T> Result<T> execute(ToolDescriptor tool, String params, Supplier<T> action) {
         validator.validate(tool, params);
         coordination.ensureAvailable();
         String name = tool == null ? "unknown" : tool.name();
         ensureClosed(name);
         rateLimit(name);
         RuntimeException failure = null;
-        int attempts = tool != null && (readOnly(tool) || tool.idempotent()) ? 2 : 1;
+        int attempts = risk.safeToRetry(tool) ? 2 : 1;
         for (int attempt = 1; attempt <= attempts; attempt++) {
             try {
                 T value = call(action);
@@ -79,7 +86,7 @@ public class ResilientToolExecutor {
         return circuit(toolName).state();
     }
 
-    /** Interrupts the currently executing tool worker owned by an Agent thread. */
+    /** Interrupts the currently executing worker owned by an Agent thread. */
     public boolean cancel(Thread owner) {
         Thread worker = activeWorker(owner);
         if (worker == null) return false;
@@ -158,10 +165,6 @@ public class ResilientToolExecutor {
         } finally {
             activeWorkers.remove(owner, worker);
         }
-    }
-
-    private boolean readOnly(ToolDefinition tool) {
-        return tool != null && "LOW".equalsIgnoreCase(tool.riskLevel()) && !tool.http();
     }
 
     private boolean retryable(RuntimeException error) {

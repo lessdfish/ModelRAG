@@ -14,9 +14,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-import com.modelrag.agent.tool.HttpToolInvoker;
-import com.modelrag.agent.tool.ResilientToolExecutor;
 import com.modelrag.api.ModelInvocationCanceller;
+import com.modelrag.toolgateway.execution.ToolExecutionCanceller;
 
 /**
  * Authorization for an Agent execution is persisted with its trace rows.
@@ -32,30 +31,28 @@ public class AgentExecutionRegistry {
     private final JdbcTemplate jdbc;
     private final ConcurrentHashMap<String, Thread> activeExecutions = new ConcurrentHashMap<>();
     private final Semaphore activeSlots = new Semaphore(MAX_ACTIVE_EXECUTIONS);
-    private final ResilientToolExecutor tools;
-    private final HttpToolInvoker httpTools;
+    private final ToolExecutionCanceller tools;
     private final ModelInvocationCanceller modelCalls;
     private final AgentExecutionRepository durableExecutions;
 
-    public AgentExecutionRegistry(JdbcTemplate jdbc, ResilientToolExecutor tools, HttpToolInvoker httpTools,
+    public AgentExecutionRegistry(JdbcTemplate jdbc, ToolExecutionCanceller tools,
                                   ModelInvocationCanceller modelCalls) {
-        this(jdbc, tools, httpTools, modelCalls, (AgentExecutionRepository) null);
+        this(jdbc, tools, modelCalls, (AgentExecutionRepository) null);
     }
 
-    public AgentExecutionRegistry(JdbcTemplate jdbc, ResilientToolExecutor tools, HttpToolInvoker httpTools,
+    public AgentExecutionRegistry(JdbcTemplate jdbc, ToolExecutionCanceller tools,
                                   ModelInvocationCanceller modelCalls, AgentExecutionRepository durableExecutions) {
         this.jdbc = jdbc;
         this.tools = tools;
-        this.httpTools = httpTools;
         this.modelCalls = modelCalls;
         this.durableExecutions = durableExecutions;
     }
 
     @Autowired
-    public AgentExecutionRegistry(JdbcTemplate jdbc, ResilientToolExecutor tools, HttpToolInvoker httpTools,
+    public AgentExecutionRegistry(JdbcTemplate jdbc, ToolExecutionCanceller tools,
                                   ModelInvocationCanceller modelCalls,
                                   ObjectProvider<AgentExecutionRepository> durableExecutions) {
-        this(jdbc, tools, httpTools, modelCalls,
+        this(jdbc, tools, modelCalls,
                 durableExecutions == null ? null : durableExecutions.getIfAvailable());
     }
 
@@ -145,8 +142,6 @@ public class AgentExecutionRegistry {
         Thread thread = activeExecutions.get(executionId);
         if (thread == null) return false;
         modelCalls.cancel(thread);
-        Thread toolWorker = tools.activeWorker(thread);
-        if (toolWorker != null) httpTools.cancel(toolWorker);
         tools.cancel(thread);
         thread.interrupt();
         return true;

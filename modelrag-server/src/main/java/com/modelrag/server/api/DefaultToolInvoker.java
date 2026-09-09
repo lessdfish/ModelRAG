@@ -1,16 +1,16 @@
 package com.modelrag.server.api;
 
 import com.modelrag.agent.approval.ApprovalGate;
-import com.modelrag.agent.tool.HttpToolInvoker;
-import com.modelrag.agent.tool.ResilientToolExecutor;
-import com.modelrag.agent.tool.ToolDefinition;
-import com.modelrag.agent.tool.ToolRegistry;
-import com.modelrag.agent.trace.ToolCallTrace;
-import com.modelrag.agent.trace.ToolCallTracer;
 import com.modelrag.api.ToolInvoker;
 import com.modelrag.common.exception.BusinessException;
 import com.modelrag.common.exception.ErrorCode;
 import com.modelrag.common.security.AccessControlService;
+import com.modelrag.toolgateway.catalog.ToolCatalog;
+import com.modelrag.toolgateway.catalog.ToolDescriptor;
+import com.modelrag.toolgateway.execution.ToolGateway;
+import com.modelrag.toolgateway.execution.ToolInvocation;
+import com.modelrag.toolgateway.policy.ToolAccessPolicy;
+import com.modelrag.toolgateway.policy.ToolRiskPolicy;
 import java.util.UUID;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
@@ -19,20 +19,20 @@ import org.springframework.stereotype.Service;
 @Service
 @Profile("!test")
 public class DefaultToolInvoker implements ToolInvoker {
-    private final ToolRegistry registry;
-    private final ResilientToolExecutor executor;
-    private final HttpToolInvoker http;
+    private final ToolCatalog registry;
+    private final ToolRiskPolicy risk;
+    private final ToolAccessPolicy toolAccess;
+    private final ToolGateway gateway;
     private final ApprovalGate approvals;
-    private final ToolCallTracer traces;
     private final AccessControlService access;
 
-    public DefaultToolInvoker(ToolRegistry registry, ResilientToolExecutor executor, HttpToolInvoker http,
-            ApprovalGate approvals, ToolCallTracer traces, AccessControlService access) {
+    public DefaultToolInvoker(ToolCatalog registry, ToolRiskPolicy risk, ToolAccessPolicy toolAccess,
+            ToolGateway gateway, ApprovalGate approvals, AccessControlService access) {
         this.registry = registry;
-        this.executor = executor;
-        this.http = http;
+        this.risk = risk;
+        this.toolAccess = toolAccess;
+        this.gateway = gateway;
         this.approvals = approvals;
-        this.traces = traces;
         this.access = access;
     }
 
@@ -47,11 +47,13 @@ public class DefaultToolInvoker implements ToolInvoker {
         if (!current.canAccess(datasetId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "用户无权访问知识库: " + datasetId);
         }
-        ToolDefinition registered = registry.get(requested.name());
+        ToolDescriptor registered = registry.get(requested.name());
         requireMatchingContract(requested, registered);
-        requireToolAccess(registered, current.roles(), datasetId);
+        if (!toolAccess.allowed(registered, current.id(), current.roles(), datasetId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "当前用户无权调用该工具");
+        }
         String executionId = UUID.randomUUID().toString();
-        if (!"LOW".equalsIgnoreCase(registered.riskLevel())) {
+        if (risk.requiresApproval(registered)) {
             var approval = approvals.request(executionId, registered.name(), parameters, current.id(), datasetId, null);
             return new ToolResult("WAITING_APPROVAL", "approvalId=" + approval.id(), executionId, true);
         }
@@ -61,22 +63,12 @@ public class DefaultToolInvoker implements ToolInvoker {
         }
         String stableKey = idempotencyKey == null || idempotencyKey.isBlank()
                 ? executionId + ":" + registered.name() : idempotencyKey;
-        long started = System.nanoTime();
-        try {
-            var result = executor.execute(registered, parameters,
-                    () -> http.invoke(registered, parameters, stableKey));
-            traces.record(new ToolCallTrace(executionId, registered.name(), parameters,
-                    "{\"status\":\"DONE\",\"attempts\":" + result.attempts() + "}", true, null,
-                    (System.nanoTime() - started) / 1_000_000));
-            return new ToolResult("DONE", limit(result.value()), executionId, false);
-        } catch (RuntimeException error) {
-            traces.record(new ToolCallTrace(executionId, registered.name(), parameters, "{}", false,
-                    error.getMessage(), (System.nanoTime() - started) / 1_000_000));
-            throw error;
-        }
+        var result = gateway.invoke(new ToolInvocation(executionId, executionId + ":action:1", registered.name(),
+                current.id(), current.roles(), datasetId, null, parameters, stableKey, executionId));
+        return new ToolResult("DONE", limit(result.output()), executionId, false);
     }
 
-    private void requireMatchingContract(com.modelrag.api.ToolDefinition requested, ToolDefinition registered) {
+    private void requireMatchingContract(com.modelrag.api.ToolDefinition requested, ToolDescriptor registered) {
         String risk = switch (requested.risk()) {
             case READ_ONLY -> "LOW";
             case WRITE -> "HIGH";
@@ -84,17 +76,6 @@ public class DefaultToolInvoker implements ToolInvoker {
         };
         if (!risk.equalsIgnoreCase(registered.riskLevel()) || requested.idempotent() != registered.idempotent()) {
             throw new BusinessException(ErrorCode.VALIDATION, "调用方工具契约与已注册工具不一致");
-        }
-    }
-
-    private void requireToolAccess(ToolDefinition tool, java.util.Set<String> roles, long datasetId) {
-        if (tool.allowedRoles() != null && !tool.allowedRoles().isEmpty()
-                && tool.allowedRoles().stream().noneMatch(roles::contains)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "当前用户角色无权调用该工具");
-        }
-        if (tool.allowedDatasetIds() != null && !tool.allowedDatasetIds().isEmpty()
-                && !tool.allowedDatasetIds().contains(datasetId)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "工具未授权给该知识库");
         }
     }
 

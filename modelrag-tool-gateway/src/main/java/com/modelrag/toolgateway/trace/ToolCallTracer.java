@@ -1,25 +1,33 @@
-package com.modelrag.agent.trace;
+package com.modelrag.toolgateway.trace;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Metrics;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
-/** PostgreSQL-backed tool audit; output is stored as structured JSON. */
+/** PostgreSQL-backed tool audit; plaintext inputs, outputs, and credentials are never stored. */
 @Service
 @Profile("!test")
 public class ToolCallTracer {
     private final JdbcTemplate jdbc;
     private final MeterRegistry metrics;
 
-    public ToolCallTracer(JdbcTemplate jdbc) { this(jdbc, Metrics.globalRegistry); }
-    @Autowired public ToolCallTracer(JdbcTemplate jdbc, MeterRegistry metrics) { this.jdbc = jdbc; this.metrics = metrics; }
+    public ToolCallTracer(JdbcTemplate jdbc) {
+        this(jdbc, Metrics.globalRegistry);
+    }
+
+    @Autowired
+    public ToolCallTracer(JdbcTemplate jdbc, MeterRegistry metrics) {
+        this.jdbc = jdbc;
+        this.metrics = metrics;
+    }
+
     public void record(ToolCallTrace trace) {
         metrics.counter("modelrag.tool.calls", "tool", trace.toolName(), "status", trace.success() ? "success" : "failure").increment();
         metrics.timer("modelrag.tool.latency", "tool", trace.toolName(), "status", trace.success() ? "success" : "failure")

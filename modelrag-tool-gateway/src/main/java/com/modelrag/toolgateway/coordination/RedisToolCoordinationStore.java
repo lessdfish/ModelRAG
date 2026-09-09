@@ -1,11 +1,11 @@
-package com.modelrag.agent.tool;
+package com.modelrag.toolgateway.coordination;
 
 import java.time.Duration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-/** Production coordination state; no business or tool fact is kept in the JVM. */
+/** Production coordination state; legacy Redis keys and TTLs are preserved. */
 @Service
 @Profile("!test")
 public class RedisToolCoordinationStore implements ToolCoordinationStore {

@@ -6,13 +6,14 @@ import com.modelrag.agent.approval.ApprovalSnapshot;
 import com.modelrag.agent.orchestrator.AgentOrchestrator;
 import com.modelrag.agent.orchestrator.AgentResult;
 import com.modelrag.qa.dto.QaRequest;
-import com.modelrag.agent.tool.ToolDefinition;
-import com.modelrag.agent.tool.ToolRegistry;
-import com.modelrag.agent.trace.ToolCallTrace;
-import com.modelrag.agent.trace.ToolCallTracer;
+import com.modelrag.toolgateway.trace.ToolCallTrace;
+import com.modelrag.toolgateway.trace.ToolCallTracer;
 import com.modelrag.common.dto.ApiResponse;
 import com.modelrag.common.security.AccessControlService;
 import com.modelrag.common.security.RequestUser;
+import com.modelrag.toolgateway.catalog.ToolCatalog;
+import com.modelrag.toolgateway.catalog.ToolDescriptor;
+import com.modelrag.toolgateway.catalog.ToolRegistrationCommand;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.util.List;
@@ -30,13 +31,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v2")
 public class ToolApprovalV2Controller {
-    private final ToolRegistry tools;
+    private final ToolCatalog tools;
     private final ApprovalGate approvals;
     private final AccessControlService access;
     private final AgentOrchestrator agent;
     private final ToolCallTracer traces;
 
-    public ToolApprovalV2Controller(ToolRegistry tools, ApprovalGate approvals, AccessControlService access,
+    public ToolApprovalV2Controller(ToolCatalog tools, ApprovalGate approvals, AccessControlService access,
             AgentOrchestrator agent, ToolCallTracer traces) {
         this.tools = tools;
         this.approvals = approvals;
@@ -67,10 +68,7 @@ public class ToolApprovalV2Controller {
     @PutMapping("/tools/{toolId}")
     public ApiResponse<ToolView> updateTool(@PathVariable String toolId, @Valid @RequestBody ToolRequest request) {
         access.requireRole("ADMIN");
-        ToolDefinition existing = tools.getAny(toolId);
-        return ApiResponse.success(view(tools.register(request.definition(toolId,
-                request.authHeaderValue() == null || request.authHeaderValue().isBlank()
-                        ? existing.authHeaderValue() : request.authHeaderValue()))));
+        return ApiResponse.success(view(tools.register(request.definition(toolId))));
     }
 
     @DeleteMapping("/tools/{toolId}")
@@ -128,13 +126,13 @@ public class ToolApprovalV2Controller {
                 user.id()));
     }
 
-    private ToolView view(ToolDefinition tool) {
+    private ToolView view(ToolDescriptor tool) {
         return new ToolView(tool.name(), tool.description(), tool.riskLevel(), tool.enabled(), tool.type(),
                 tool.endpoint(), tool.authHeaderName(), tool.jsonSchema(), tool.allowedRoles(),
-                tool.allowedDatasetIds(), tool.idempotent());
+                tool.allowedDatasetIds(), tool.idempotent(), tool.hasAuthSecret());
     }
 
-    private boolean allowed(ToolDefinition tool, RequestUser user) {
+    private boolean allowed(ToolDescriptor tool, RequestUser user) {
         boolean roleAllowed = tool.allowedRoles().isEmpty()
                 || tool.allowedRoles().stream().anyMatch(user::hasRole);
         boolean datasetAllowed = tool.allowedDatasetIds().isEmpty()
@@ -144,15 +142,15 @@ public class ToolApprovalV2Controller {
 
     public record ToolView(String name, String description, String riskLevel, boolean enabled, String type,
             String endpoint, String authHeaderName, String jsonSchema, Set<String> allowedRoles,
-            Set<Long> allowedDatasetIds, boolean idempotent) {}
+            Set<Long> allowedDatasetIds, boolean idempotent, boolean hasAuthSecret) {}
 
     public record ToolRequest(@NotBlank String name, String description, String riskLevel, boolean enabled,
             String type, String endpoint, String authHeaderName, String authHeaderValue, String jsonSchema,
             Set<String> allowedRoles, Set<Long> allowedDatasetIds, boolean idempotent) {
-        ToolDefinition definition() { return definition(name); }
-        ToolDefinition definition(String toolName) { return definition(toolName, authHeaderValue); }
-        ToolDefinition definition(String toolName, String secretValue) {
-            return new ToolDefinition(toolName, description, riskLevel, enabled, type, endpoint,
+        ToolRegistrationCommand definition() { return definition(name); }
+        ToolRegistrationCommand definition(String toolName) { return definition(toolName, authHeaderValue); }
+        ToolRegistrationCommand definition(String toolName, String secretValue) {
+            return new ToolRegistrationCommand(toolName, description, riskLevel, enabled, type, endpoint,
                     authHeaderName, secretValue, jsonSchema,
                     allowedRoles == null ? Set.of() : allowedRoles,
                     allowedDatasetIds == null ? Set.of() : allowedDatasetIds, idempotent);

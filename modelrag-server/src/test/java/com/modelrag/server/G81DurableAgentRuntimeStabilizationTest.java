@@ -48,14 +48,21 @@ import com.modelrag.agent.runtime.repository.AgentCheckpointRepository;
 import com.modelrag.agent.runtime.repository.AgentExecutionRecord;
 import com.modelrag.agent.runtime.repository.AgentExecutionRepository;
 import com.modelrag.agent.safety.LoopDetector;
-import com.modelrag.agent.tool.HttpToolInvoker;
-import com.modelrag.agent.tool.ResilientToolExecutor;
-import com.modelrag.agent.tool.ToolCallValidator;
-import com.modelrag.agent.tool.ToolCoordinationStore;
-import com.modelrag.agent.tool.ToolDefinition;
-import com.modelrag.agent.tool.ToolRegistry;
 import com.modelrag.agent.trace.AgentStepTracer;
-import com.modelrag.agent.trace.ToolCallTracer;
+import com.modelrag.toolgateway.catalog.ToolCatalog;
+import com.modelrag.toolgateway.catalog.ToolDescriptor;
+import com.modelrag.toolgateway.catalog.ToolRegistrationCommand;
+import com.modelrag.toolgateway.coordination.ToolCoordinationStore;
+import com.modelrag.toolgateway.execution.InternalToolHandlerRegistry;
+import com.modelrag.toolgateway.execution.ResilientToolExecutor;
+import com.modelrag.toolgateway.execution.ToolDispatcher;
+import com.modelrag.toolgateway.execution.ToolExecutionCanceller;
+import com.modelrag.toolgateway.execution.ToolGateway;
+import com.modelrag.toolgateway.http.HttpToolInvoker;
+import com.modelrag.toolgateway.policy.ToolAccessPolicy;
+import com.modelrag.toolgateway.policy.ToolRiskPolicy;
+import com.modelrag.toolgateway.security.ToolCallValidator;
+import com.modelrag.toolgateway.trace.ToolCallTracer;
 import com.modelrag.api.UserModelProvider;
 import com.modelrag.common.operation.OperationGuard;
 import com.modelrag.common.security.RequestUser;
@@ -217,11 +224,9 @@ class G81DurableAgentRuntimeStabilizationTest {
         server.start();
         try {
             String endpoint = "http://127.0.0.1:" + server.getAddress().getPort() + "/idempotent";
-            ToolDefinition definition = new ToolDefinition("idempotent-http", "safe read", "LOW", true,
-                    "HTTP", endpoint, null, null, "{}", Set.of(), Set.of(), true);
-            ToolRegistry tools = mock(ToolRegistry.class);
-            when(tools.get("idempotent-http")).thenReturn(definition);
-            when(tools.listEnabled()).thenReturn(List.of(definition));
+            TestPersistenceConfiguration.TestToolCatalog tools = new TestPersistenceConfiguration.TestToolCatalog();
+            tools.register(new ToolRegistrationCommand("idempotent-http", "safe read", "LOW", true,
+                    "HTTP", endpoint, null, null, "{}", Set.of(), Set.of(), true));
             AgentPlanner planner = mock(AgentPlanner.class);
             when(planner.reactStep(anyString(), anyString(), anyList(), eq("idempotent-http"), anyList(),
                     anyList(), anyInt())).thenReturn(
@@ -229,9 +234,10 @@ class G81DurableAgentRuntimeStabilizationTest {
                             new AgentPlanner.Plan("idempotent-http", List.of(), "test"));
             ResilientToolExecutor executor = new ResilientToolExecutor(new ToolCallValidator(json), coordination());
             HttpToolInvoker http = new HttpToolInvoker(json, 2_000, true, "");
-            ToolAgentModeHandler handler = new ToolAgentModeHandler(planner, tools, executor, http,
-                    mock(QaOrchestrator.class), mock(ToolCallTracer.class), mock(LoopDetector.class), json,
-                    (OperationGuard) () -> { });
+            ToolGateway gateway = new ToolGateway(tools, new ToolAccessPolicy(), executor,
+                    new ToolDispatcher(http, new InternalToolHandlerRegistry(List.of())), mock(ToolCallTracer.class));
+            ToolAgentModeHandler handler = new ToolAgentModeHandler(planner, tools, new ToolRiskPolicy(),
+                    new ToolAccessPolicy(), gateway, mock(LoopDetector.class), json, (OperationGuard) () -> { });
 
             Store store = new Store(new AgentStateCodec(json, 100_000));
             store.failSaveAt = 3; // initial, pending, then crash after the first HTTP 200
@@ -255,15 +261,14 @@ class G81DurableAgentRuntimeStabilizationTest {
 
     @Test
     void realToolAgentNonIdempotentRecoveryNeverInvokesTheExternalTool() {
-        ToolDefinition definition = new ToolDefinition("non-idempotent-http", "unsafe write", "HIGH", true,
-                "HTTP", "https://example.invalid/write", null, null, "{}", Set.of(), Set.of(), false);
-        ToolRegistry tools = mock(ToolRegistry.class);
+        ToolDescriptor definition = new ToolDescriptor("non-idempotent-http", "unsafe write", "HIGH", true,
+                "HTTP", "https://example.invalid/write", null, "{}", Set.of(), Set.of(), false, false);
+        ToolCatalog tools = mock(ToolCatalog.class);
         when(tools.get("non-idempotent-http")).thenReturn(definition);
-        ResilientToolExecutor executor = mock(ResilientToolExecutor.class);
-        HttpToolInvoker http = mock(HttpToolInvoker.class);
+        ToolGateway gateway = mock(ToolGateway.class);
         ToolAgentModeHandler handler = new ToolAgentModeHandler(mock(AgentPlanner.class), tools,
-                executor, http, mock(QaOrchestrator.class),
-                mock(ToolCallTracer.class), mock(LoopDetector.class), json, (OperationGuard) () -> { });
+                new ToolRiskPolicy(), new ToolAccessPolicy(), gateway, mock(LoopDetector.class), json,
+                (OperationGuard) () -> { });
         Store store = new Store(new AgentStateCodec(json, 100_000));
         AgentCheckpointService checkpoints = checkpoints(store);
         AgentRuntime runtime = runtime(checkpoints, store, handler, mock(ApprovalGate.class));
@@ -281,7 +286,7 @@ class G81DurableAgentRuntimeStabilizationTest {
         assertEquals("RECONCILIATION_REQUIRED", result.status());
         assertTrue(result.degradedComponents().contains("NON_IDEMPOTENT_ACTION_UNCERTAIN"));
         verify(tools, never()).get("non-idempotent-http");
-        verifyNoInteractions(executor, http);
+        verifyNoInteractions(gateway);
     }
 
     @Test
@@ -424,7 +429,7 @@ class G81DurableAgentRuntimeStabilizationTest {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.query(anyString(), ArgumentMatchers.<RowMapper<AgentExecutionRegistry.Scope>>any(), eq(executionId)))
                 .thenReturn(List.of(new AgentExecutionRegistry.Scope("user", 7, null)));
-        return new AgentExecutionRegistry(jdbc, mock(ResilientToolExecutor.class), mock(HttpToolInvoker.class),
+        return new AgentExecutionRegistry(jdbc, mock(ToolExecutionCanceller.class),
                 mock(com.modelrag.api.ModelInvocationCanceller.class), store);
     }
 

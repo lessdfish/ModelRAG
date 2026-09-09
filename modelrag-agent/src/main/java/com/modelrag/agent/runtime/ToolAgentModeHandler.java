@@ -3,17 +3,16 @@ package com.modelrag.agent.runtime;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.modelrag.agent.orchestrator.AgentPlanner;
 import com.modelrag.agent.safety.LoopDetector;
-import com.modelrag.agent.tool.HttpToolInvoker;
-import com.modelrag.agent.tool.ResilientToolExecutor;
-import com.modelrag.agent.tool.ToolDefinition;
-import com.modelrag.agent.tool.ToolRegistry;
-import com.modelrag.agent.trace.ToolCallTrace;
-import com.modelrag.agent.trace.ToolCallTracer;
 import com.modelrag.common.operation.OperationGuard;
+import com.modelrag.toolgateway.catalog.ToolCatalog;
+import com.modelrag.toolgateway.catalog.ToolDescriptor;
+import com.modelrag.toolgateway.execution.ToolGateway;
+import com.modelrag.toolgateway.execution.ToolInvocation;
+import com.modelrag.toolgateway.execution.ToolInvocationResult;
+import com.modelrag.toolgateway.policy.ToolAccessPolicy;
+import com.modelrag.toolgateway.policy.ToolRiskPolicy;
 import com.modelrag.qa.dto.Citation;
-import com.modelrag.qa.dto.QaRequest;
 import com.modelrag.qa.dto.QaResult;
-import com.modelrag.qa.orchestrator.QaOrchestrator;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -24,29 +23,27 @@ import java.util.Set;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
-/** Durable one-tool transition for the existing safeguarded TOOL_AGENT path. */
+    /** Durable one-tool transition for the existing safeguarded TOOL_AGENT path. */
 @Service
 @Profile("!test")
 public class ToolAgentModeHandler implements AgentModeHandler {
     private final AgentPlanner planner;
-    private final ToolRegistry tools;
-    private final ResilientToolExecutor executor;
-    private final HttpToolInvoker httpTools;
-    private final QaOrchestrator qa;
-    private final ToolCallTracer tracer;
+    private final ToolCatalog tools;
+    private final ToolRiskPolicy risk;
+    private final ToolAccessPolicy access;
+    private final ToolGateway gateway;
     private final LoopDetector loops;
     private final ObjectMapper json;
     private final OperationGuard operationGuard;
 
-    public ToolAgentModeHandler(AgentPlanner planner, ToolRegistry tools, ResilientToolExecutor executor,
-            HttpToolInvoker httpTools, QaOrchestrator qa, ToolCallTracer tracer, LoopDetector loops,
-            ObjectMapper json, OperationGuard operationGuard) {
+    public ToolAgentModeHandler(AgentPlanner planner, ToolCatalog tools, ToolRiskPolicy risk,
+            ToolAccessPolicy access, ToolGateway gateway, LoopDetector loops, ObjectMapper json,
+            OperationGuard operationGuard) {
         this.planner = planner;
         this.tools = tools;
-        this.executor = executor;
-        this.httpTools = httpTools;
-        this.qa = qa;
-        this.tracer = tracer;
+        this.risk = risk;
+        this.access = access;
+        this.gateway = gateway;
         this.loops = loops;
         this.json = json;
         this.operationGuard = operationGuard;
@@ -70,7 +67,7 @@ public class ToolAgentModeHandler implements AgentModeHandler {
         if ("knowledge_lookup".equals(toolName) && !"knowledge_lookup".equals(fallbackTool)) {
             return AgentModeDecision.terminal(unresolved(state));
         }
-        ToolDefinition definition;
+        ToolDescriptor definition;
         try { definition = tools.get(toolName); }
         catch (RuntimeException error) { return AgentModeDecision.terminal(unresolved(state)); }
         String fingerprint = normalize(toolName + ":" + subtask);
@@ -84,16 +81,18 @@ public class ToolAgentModeHandler implements AgentModeHandler {
         arguments.put("userId", state.userId());
         if (state.conversationId() != null) arguments.put("conversationId", state.conversationId());
         String actionId = state.executionId() + ":action:" + (state.currentStep() + 1);
-        boolean safeReplay = definition.idempotent()
-                || ("LOW".equalsIgnoreCase(definition.riskLevel()) && !definition.http());
+        boolean safeReplay = risk.safeToReplayAfterCrash(definition);
         return AgentModeDecision.action(new AgentPendingAction(actionId, AgentPendingActionKind.BUSINESS_TOOL,
-                toolName, arguments, actionId, requiresApproval(definition), safeReplay, Instant.now()));
+                toolName, arguments, actionId, risk.requiresApproval(definition), safeReplay, Instant.now()));
     }
 
     @Override
     public AgentState execute(AgentState state, AgentPendingAction action) {
-        ToolDefinition definition = tools.get(action.actionName());
-        if (!canUse(definition, state)) {
+        ToolDescriptor definition = tools.get(action.actionName());
+        ToolInvocation invocation = new ToolInvocation(state.executionId(), action.actionId(), definition.name(),
+                state.userId(), state.userRoles(), state.datasetId(), state.conversationId(),
+                writeParams(action.arguments()), action.idempotencyKey(), string(state.toolState().get("traceId")));
+        if (!access.allowed(definition, invocation)) {
             throw new IllegalStateException("用户无权调用工具: " + definition.name());
         }
         if (action.requiresApproval()) {
@@ -103,47 +102,35 @@ public class ToolAgentModeHandler implements AgentModeHandler {
                 operationGuard.claimSideEffect(action.idempotencyKey());
             }
         }
-        QaRequest request = new QaRequest(state.datasetId(), string(action.arguments().get("query")),
-                state.conversationId(), state.userId(), state.userRoles());
-        String params = writeParams(action.arguments());
-        long started = System.nanoTime();
-        try {
-            ResilientToolExecutor.Result<QaResult> result = executor.execute(definition, params,
-                    () -> executeTool(definition, request, action.idempotencyKey()));
-            QaResult value = result.value();
-            tracer.record(new ToolCallTrace(state.executionId(), definition.name(), params,
-                    output(value, result), true, null, elapsed(started)));
-            Map<String, Object> toolState = appendOutcome(state.toolState(), action, value);
-            return state.toBuilder().currentStep(state.currentStep() + 1)
-                    .budgets(state.budgets().consumeStep().consumeTool()).toolState(toolState)
-                    .pendingAction(null).build();
-        } catch (RuntimeException error) {
-            tracer.record(new ToolCallTrace(state.executionId(), definition.name(), params, "{}", false,
-                    error.getMessage(), elapsed(started)));
-            throw error;
-        }
+        ToolInvocationResult result = gateway.invoke(invocation);
+        QaResult value = toQaResult(definition, result.output());
+        Map<String, Object> toolState = appendOutcome(state.toolState(), action, value);
+        return state.toBuilder().currentStep(state.currentStep() + 1)
+                .budgets(state.budgets().consumeStep().consumeTool()).toolState(toolState)
+                .pendingAction(null).build();
     }
 
-    private QaResult executeTool(ToolDefinition definition, QaRequest request, String idempotencyKey) {
+    private QaResult toQaResult(ToolDescriptor definition, String output) {
         if (definition.http()) {
-            return new QaResult("结论：" + limit(httpTools.invoke(definition, request.query(), idempotencyKey), 500),
-                    List.of(), 1, false, null);
+            return new QaResult("结论：" + limit(output, 500), List.of(), 1, false, null);
         }
-        return qa.answer(request.withoutConversationMessage());
+        try {
+            return json.readValue(output, QaResult.class);
+        } catch (Exception error) {
+            return new QaResult("结论：" + limit(output, 500), List.of(), 1, false, null,
+                    List.of("internal-result-unstructured"));
+        }
     }
 
-    private List<ToolDefinition> availableTools(AgentState state, String fallbackTool) {
+    private List<ToolDescriptor> availableTools(AgentState state, String fallbackTool) {
         return tools.listEnabled().stream()
                 .filter(tool -> !"knowledge_lookup".equals(tool.name()) || "knowledge_lookup".equals(fallbackTool))
                 .filter(tool -> canUse(tool, state)).toList();
     }
 
-    private boolean canUse(ToolDefinition tool, AgentState state) {
-        boolean dataset = tool.allowedDatasetIds() == null || tool.allowedDatasetIds().isEmpty()
-                || tool.allowedDatasetIds().contains(state.datasetId());
-        Set<String> roles = state.userRoles() == null ? Set.of() : state.userRoles();
-        return dataset && (tool.allowedRoles() == null || tool.allowedRoles().isEmpty()
-                || roles.stream().anyMatch(tool.allowedRoles()::contains));
+    private boolean canUse(ToolDescriptor tool, AgentState state) {
+        return access.allowed(tool, new ToolInvocation(state.executionId(), "planning", tool.name(), state.userId(),
+                state.userRoles(), state.datasetId(), state.conversationId(), "planning", "planning", "planning"));
     }
 
     private AgentResultSnapshot finalResult(AgentState state) {
@@ -208,19 +195,13 @@ public class ToolAgentModeHandler implements AgentModeHandler {
         catch (Exception error) { throw new IllegalArgumentException("tool parameters cannot be serialized", error); }
     }
 
-    private String output(QaResult value, ResilientToolExecutor.Result<QaResult> execution) {
+    private String output(QaResult value, ToolInvocationResult execution) {
         return "{\"traceId\":\"" + string(value.traceId()) + "\",\"refused\":" + value.refused()
                 + ",\"attempts\":" + execution.attempts() + ",\"reused\":" + execution.reused() + "}";
     }
 
-    private boolean requiresApproval(ToolDefinition definition) {
-        return "HIGH".equalsIgnoreCase(definition.riskLevel())
-                || "EXTERNAL_SIDE_EFFECT".equalsIgnoreCase(definition.riskLevel());
-    }
-
     private static String normalize(String value) { return value == null ? "" : value.replaceAll("\\s+", "").toLowerCase(); }
     private static String limit(String value, int max) { String text = string(value); return text.length() <= max ? text : text.substring(0, max) + "…"; }
-    private static long elapsed(long started) { return Math.max(0, (System.nanoTime() - started) / 1_000_000); }
     private static String string(Object value) { return value == null ? "" : String.valueOf(value); }
     private static double number(Object value) { return value instanceof Number number ? number.doubleValue() : 0; }
     private static boolean bool(Object value) { return value instanceof Boolean flag && flag; }
