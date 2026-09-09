@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.modelrag.agent.approval.ApprovalGate;
 import com.modelrag.agent.approval.ApprovalRecord;
 import com.modelrag.agent.orchestrator.AgentResult;
+import com.modelrag.agent.trace.AgentStepTracer;
 import com.modelrag.agent.router.RouteDecision;
 import com.modelrag.common.operation.OperationGuard;
 import com.modelrag.qa.dto.Citation;
@@ -16,6 +17,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
@@ -24,6 +31,9 @@ import org.springframework.stereotype.Service;
 @Service
 @Profile("!test")
 public class AgentRuntime {
+    private static final ScheduledExecutorService LEASE_HEARTBEATS =
+            Executors.newSingleThreadScheduledExecutor(
+                    Thread.ofPlatform().daemon().name("modelrag-agent-lease-heartbeat").factory());
     private final AgentCheckpointService checkpoints;
     private final com.modelrag.agent.runtime.repository.AgentExecutionRepository executions;
     private final List<AgentModeHandler> handlers;
@@ -31,6 +41,7 @@ public class AgentRuntime {
     private final OperationGuard operationGuard;
     private final AgentRuntimeOwner owner;
     private final ObjectMapper json;
+    private final AgentStepTracer stepTracer;
     private final int maxSteps;
     private final long deadlineMs;
     private final int maxSearchActions;
@@ -40,7 +51,8 @@ public class AgentRuntime {
             com.modelrag.agent.runtime.repository.AgentExecutionRepository executions,
             List<AgentModeHandler> handlers, ApprovalGate approvals, OperationGuard operationGuard,
             ObjectMapper json, int maxSteps, long deadlineMs) {
-        this(checkpoints, executions, handlers, approvals, operationGuard, json, maxSteps, deadlineMs, 4, 12);
+        this(checkpoints, executions, handlers, approvals, operationGuard, json, maxSteps, deadlineMs, 4, 12,
+                null);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -50,7 +62,8 @@ public class AgentRuntime {
             ObjectMapper json, @Value("${modelrag.agent.max-steps:6}") int maxSteps,
             @Value("${modelrag.agent.deadline-ms:10000}") long deadlineMs,
             @Value("${modelrag.agent.retrieval.max-search-actions:4}") int maxSearchActions,
-            @Value("${modelrag.agent.retrieval.max-navigation-actions:12}") int maxNavigationActions) {
+            @Value("${modelrag.agent.retrieval.max-navigation-actions:12}") int maxNavigationActions,
+            AgentStepTracer stepTracer) {
         this.checkpoints = checkpoints;
         this.executions = executions;
         this.handlers = handlers == null ? List.of() : List.copyOf(handlers);
@@ -58,6 +71,7 @@ public class AgentRuntime {
         this.operationGuard = operationGuard;
         this.owner = new AgentRuntimeOwner();
         this.json = json;
+        this.stepTracer = stepTracer;
         this.maxSteps = Math.max(1, Math.min(10, maxSteps));
         this.deadlineMs = Math.max(500, Math.min(60_000, deadlineMs));
         this.maxSearchActions = Math.max(0, Math.min(100, maxSearchActions));
@@ -82,9 +96,10 @@ public class AgentRuntime {
             if (!checkpoints.tryClaim(command.executionId(), owner.value())) {
                 return running(command.executionId(), command.mode());
             }
-            state = checkpoints.checkpoint(state, owner.value());
+            state = checkpoint(state);
         } else {
             state = checkpoints.createAndCheckpoint(state, owner.value());
+            recordCheckpoint(state);
         }
         return run(state, false, command.events());
     }
@@ -97,6 +112,7 @@ public class AgentRuntime {
         if (terminal(row.status()) || "CANCEL_REQUESTED".equals(row.status())
                 || "WAITING_APPROVAL".equals(row.status())) return resultFrom(row, latest.get());
         if (!checkpoints.tryClaim(executionId, owner.value())) return running(executionId, latest.get().mode());
+        recordResume(executionId, latest.get(), reason);
         return run(latest.get(), true, com.modelrag.agent.orchestrator.AgenticRetrievalEventSink.NOOP);
     }
 
@@ -118,6 +134,9 @@ public class AgentRuntime {
         if (!checkpoints.tryClaimWaiting(approval.executionId(), owner.value())) {
             return resultFrom(row, state);
         }
+        ResumeReason resumeReason = "APPROVED".equals(approval.status())
+                ? ResumeReason.APPROVAL_APPROVED : ResumeReason.APPROVAL_REJECTED;
+        recordResume(approval.executionId(), state, resumeReason);
         if (!"APPROVED".equals(approval.status())) {
             AgentState terminal = state.toBuilder().status("TIMEOUT".equals(approval.status())
                             ? AgentRuntimeStatus.TIMEOUT : AgentRuntimeStatus.ERROR)
@@ -126,18 +145,20 @@ public class AgentRuntime {
                             string(state.toolState().get("traceId")), append(state.degradedComponents(),
                                     "approval-" + approval.status().toLowerCase())))
                     .build();
-            AgentState saved = checkpoints.checkpoint(terminal, owner.value());
+            AgentState saved = checkpoint(terminal);
             checkpoints.release(saved.executionId(), owner.value());
             return toResult(saved);
         }
         AgentState resumed = state.toBuilder().status(AgentRuntimeStatus.RUNNING).build();
-        resumed = checkpoints.checkpoint(resumed, owner.value());
+        resumed = checkpoint(resumed);
         return run(resumed, false, com.modelrag.agent.orchestrator.AgenticRetrievalEventSink.NOOP);
     }
 
     public List<AgentResult> recoverBatch(int batchSize) {
+        int boundedBatch = Math.max(1, Math.min(100, batchSize));
+        executions.finalizeExpiredCancellations(boundedBatch);
         List<AgentResult> results = new ArrayList<>();
-        for (String executionId : executions.findRecoverable(batchSize)) {
+        for (String executionId : executions.findRecoverable(boundedBatch)) {
             try { results.add(resume(executionId, ResumeReason.PROCESS_RECOVERY)); }
             catch (RuntimeException ignored) { }
         }
@@ -182,13 +203,24 @@ public class AgentRuntime {
             if (pending == null) {
                 AgentModeDecision decision;
                 try {
-                    decision = handler.decide(current);
+                    AgentState decisionState = current;
+                    decision = withLeaseHeartbeat(current.executionId(),
+                            () -> handler.decide(decisionState));
+                } catch (AgentCheckpointConflictException | AgentLeaseUnavailableException error) {
+                    return running(current.executionId(), current.mode());
                 } catch (RuntimeException error) {
-                    current = current.toBuilder().status(AgentRuntimeStatus.ERROR)
-                            .result(new AgentResultSnapshot("ERROR", "Agent 计划生成失败，请稍后重试。", List.of(), 0,
-                                    true, string(current.toolState().get("traceId")),
-                                    append(current.degradedComponents(), "agent-plan-error")))
-                            .build();
+                    if (cancelRequested(current.executionId())) {
+                        current = current.toBuilder().status(AgentRuntimeStatus.CANCELLED).pendingAction(null)
+                                .result(new AgentResultSnapshot("CANCELLED", "Agent 执行已取消。", List.of(), 0, true,
+                                        string(current.toolState().get("traceId")),
+                                        append(current.degradedComponents(), "cancelled"))).build();
+                    } else {
+                        current = current.toBuilder().status(AgentRuntimeStatus.ERROR)
+                                .result(new AgentResultSnapshot("ERROR", "Agent 计划生成失败，请稍后重试。", List.of(), 0,
+                                        true, string(current.toolState().get("traceId")),
+                                        append(current.degradedComponents(), "agent-plan-error")))
+                                .build();
+                    }
                     return persistTerminal(current, events);
                 }
                 if (decision.terminal()) {
@@ -207,12 +239,12 @@ public class AgentRuntime {
                             write(pending.arguments()), current.userId(), current.datasetId(), current.conversationId());
                     current = current.toBuilder().status(AgentRuntimeStatus.WAITING_APPROVAL)
                             .approvalId(approval.id()).build();
-                    current = checkpoints.checkpoint(current, owner.value());
+                    current = checkpoint(current);
                     checkpoints.release(current.executionId(), owner.value());
                     return toResult(current);
                 }
                 publish(events, "PLAN", pending, current);
-                current = checkpoints.checkpoint(current, owner.value());
+                current = checkpoint(current);
                 publish(events, "ACT", pending, current);
                 recovering = false;
             } else if (recovering && pending.kind() == AgentPendingActionKind.BUSINESS_TOOL
@@ -225,7 +257,10 @@ public class AgentRuntime {
                 return persistTerminal(current, events);
             }
             try {
-                AgentState outcome = handler.execute(current, pending);
+                AgentState actionState = current;
+                AgentPendingAction action = pending;
+                AgentState outcome = withLeaseHeartbeat(current.executionId(),
+                        () -> handler.execute(actionState, action));
                 if (cancelRequested(current.executionId())) {
                     current = current.toBuilder().status(AgentRuntimeStatus.CANCELLED).pendingAction(null)
                             .result(new AgentResultSnapshot("CANCELLED", "Agent 执行已取消。", List.of(), 0, true,
@@ -234,13 +269,15 @@ public class AgentRuntime {
                     return persistTerminal(current, events);
                 }
                 publish(events, "OBSERVE", pending, outcome);
-                current = checkpoints.checkpoint(outcome, owner.value());
+                current = checkpoint(outcome);
                 recovering = false;
                 if (terminal(current.status().name())) {
                     checkpoints.release(current.executionId(), owner.value());
                     publish(events, "DONE", null, current);
                     return toResult(current);
                 }
+            } catch (AgentCheckpointConflictException | AgentLeaseUnavailableException error) {
+                return running(current.executionId(), current.mode());
             } catch (RuntimeException error) {
                 if (cancelRequested(current.executionId())) {
                     current = current.toBuilder().status(AgentRuntimeStatus.CANCELLED).pendingAction(null)
@@ -266,7 +303,12 @@ public class AgentRuntime {
 
     private AgentResult persistTerminal(AgentState state,
             com.modelrag.agent.orchestrator.AgenticRetrievalEventSink events) {
-        AgentState saved = checkpoints.checkpoint(state, owner.value());
+        AgentState saved;
+        try {
+            saved = checkpoint(state);
+        } catch (AgentCheckpointConflictException | AgentLeaseUnavailableException error) {
+            return running(state.executionId(), state.mode());
+        }
         checkpoints.release(saved.executionId(), owner.value());
         publish(events, "DONE", null, saved);
         return toResult(saved);
@@ -277,6 +319,73 @@ public class AgentRuntime {
                 .result(new AgentResultSnapshot(status.name(), answer, List.of(), 0, true,
                         string(state.toolState().get("traceId")), append(state.degradedComponents(), degraded))).build();
         return persistTerminal(next, com.modelrag.agent.orchestrator.AgenticRetrievalEventSink.NOOP);
+    }
+
+    private AgentState checkpoint(AgentState state) {
+        AgentState saved = checkpoints.checkpoint(state, owner.value());
+        recordCheckpoint(saved);
+        return saved;
+    }
+
+    private <T> T withLeaseHeartbeat(String executionId, Supplier<T> action) {
+        renewForAction(executionId);
+        long periodMillis = Math.max(100, checkpoints.lease().toMillis() / 3);
+        AtomicBoolean leaseLost = new AtomicBoolean();
+        Thread caller = Thread.currentThread();
+        ScheduledFuture<?> heartbeat = LEASE_HEARTBEATS.scheduleAtFixedRate(() -> {
+            try {
+                if (!checkpoints.renew(executionId, owner.value())) {
+                    leaseLost.set(true);
+                    caller.interrupt();
+                }
+            } catch (RuntimeException error) {
+                leaseLost.set(true);
+                caller.interrupt();
+            }
+        }, periodMillis, periodMillis, TimeUnit.MILLISECONDS);
+        try {
+            T value = action.get();
+            if (leaseLost.get()) throw new AgentLeaseUnavailableException("agent execution lease is no longer owned");
+            return value;
+        } catch (RuntimeException error) {
+            if (leaseLost.get()) throw new AgentLeaseUnavailableException("agent execution lease is no longer owned");
+            throw error;
+        } finally {
+            heartbeat.cancel(false);
+            if (leaseLost.get()) Thread.interrupted();
+        }
+    }
+
+    private void renewForAction(String executionId) {
+        try {
+            if (!checkpoints.renew(executionId, owner.value())) {
+                throw new AgentLeaseUnavailableException("agent execution lease is no longer owned");
+            }
+        } catch (AgentLeaseUnavailableException error) {
+            throw error;
+        } catch (RuntimeException error) {
+            throw new AgentLeaseUnavailableException("agent execution lease cannot be renewed");
+        }
+    }
+
+    private void recordCheckpoint(AgentState state) {
+        recordTrace(state.executionId(), "CHECKPOINT", Map.of(
+                "checkpointSeq", state.checkpointSeq(),
+                "status", state.status().name(),
+                "currentStep", state.currentStep()));
+    }
+
+    private void recordResume(String executionId, AgentState state, ResumeReason reason) {
+        recordTrace(executionId, "RESUME", Map.of(
+                "checkpointSeq", state.checkpointSeq(),
+                "reason", reason == null ? ResumeReason.CLIENT_RETRY.name() : reason.name()));
+    }
+
+    private void recordTrace(String executionId, String phase, Map<String, Object> data) {
+        if (stepTracer == null) return;
+        try {
+            stepTracer.record(executionId, phase, "Durable agent runtime " + phase, data, 0);
+        } catch (RuntimeException ignored) { }
     }
 
     private AgentModeHandler handler(String mode) {

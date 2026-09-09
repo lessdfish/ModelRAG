@@ -64,6 +64,7 @@ modelrag:
   agent:
     max-steps: ${MODELRAG_AGENT_MAX_STEPS:6}
     deadline-ms: ${MODELRAG_AGENT_DEADLINE_MS:10000}
+    legacy-non-durable-fallback: ${MODELRAG_AGENT_LEGACY_NON_DURABLE_FALLBACK:false}
     runtime:
       max-checkpoint-bytes: ${MODELRAG_AGENT_MAX_CHECKPOINT_BYTES:1048576}
       max-checkpoint-evidence: ${MODELRAG_AGENT_MAX_CHECKPOINT_EVIDENCE:32}

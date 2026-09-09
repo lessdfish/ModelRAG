@@ -63,6 +63,7 @@ public class AgentOrchestrator {
     private final ObjectProvider<AgenticRetrievalOrchestrator> agenticRetrieval;
     private final int maxSteps;
     private final long deadlineMs;
+    private final boolean legacyNonDurableFallback;
     private AgentRuntime durableRuntime;
 
     public AgentOrchestrator(ComplexityRouter router, QaOrchestrator qa, ApprovalGate approvals,
@@ -74,6 +75,22 @@ public class AgentOrchestrator {
                              ObjectProvider<AgenticRetrievalOrchestrator> agenticRetrieval,
                              @Value("${modelrag.agent.max-steps:6}") int maxSteps,
                              @Value("${modelrag.agent.deadline-ms:10000}") long deadlineMs) {
+        this(router, qa, approvals, tools, loops, memory, longTermMemory, sse, tracer, stepTracer, intents,
+                executor, httpTools, planner, datasets, executions, operationGuard, agenticRetrieval,
+                maxSteps, deadlineMs, true);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public AgentOrchestrator(ComplexityRouter router, QaOrchestrator qa, ApprovalGate approvals,
+                             ToolRegistry tools, LoopDetector loops, ConversationMemory memory,
+                             LongTermMemoryService longTermMemory, SseEmitterService sse, ToolCallTracer tracer,
+                             AgentStepTracer stepTracer, IntentTreeService intents, ResilientToolExecutor executor,
+                             HttpToolInvoker httpTools, AgentPlanner planner, DatasetRepository datasets,
+                             AgentExecutionRegistry executions, OperationGuard operationGuard,
+                             ObjectProvider<AgenticRetrievalOrchestrator> agenticRetrieval,
+                             @Value("${modelrag.agent.max-steps:6}") int maxSteps,
+                             @Value("${modelrag.agent.deadline-ms:10000}") long deadlineMs,
+                             @Value("${modelrag.agent.legacy-non-durable-fallback:false}") boolean legacyNonDurableFallback) {
         this.router = router;
         this.qa = qa;
         this.approvals = approvals;
@@ -94,9 +111,10 @@ public class AgentOrchestrator {
         this.agenticRetrieval = agenticRetrieval;
         this.maxSteps = Math.max(1, Math.min(10, maxSteps));
         this.deadlineMs = Math.max(500, Math.min(60_000, deadlineMs));
+        this.legacyNonDurableFallback = legacyNonDurableFallback;
     }
 
-    /** Optional during migration; production provides the durable G8 runtime. */
+    /** Optional only for the explicit test compatibility profile; production fails closed when absent. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     public void setDurableRuntime(AgentRuntime durableRuntime) {
         this.durableRuntime = durableRuntime;
@@ -197,6 +215,7 @@ public class AgentOrchestrator {
             rememberDurableResult(request, result);
             return result;
         }
+        if (!legacyNonDurableFallback) return durableUnavailable(executionId, RouteDecision.TOOL_AGENT, request);
         List<String> steps = new ArrayList<>();
         steps.add("PLAN");
         publish(executionId, "PLAN", "已选择受限 Agent 执行", Map.of(
@@ -227,6 +246,7 @@ public class AgentOrchestrator {
             rememberDurableResult(request, result);
             return result;
         }
+        if (!legacyNonDurableFallback) return durableUnavailable(executionId, RouteDecision.AGENTIC_RAG, request);
         AgenticRetrievalOrchestrator orchestrator = agenticRetrieval.getIfAvailable();
         if (orchestrator == null) {
             String answer = "只读检索 Agent 当前不可用。";
@@ -481,6 +501,19 @@ public class AgentOrchestrator {
         executions.complete(executionId, "ERROR");
         return new AgentResult(executionId, RouteDecision.TOOL_AGENT, "ERROR", "tool-unresolved", null,
                 resultSteps, List.of(), 0, true, executionId, List.of("tool-unresolved"));
+    }
+
+    private AgentResult durableUnavailable(String executionId, RouteDecision route, QaRequest request) {
+        String answer = "durable-agent-runtime-unavailable";
+        try {
+            qa.recordAudit(request, answer, "[]", 0, true, executionId, route.name().toLowerCase());
+        } catch (RuntimeException ignored) { }
+        publish(executionId, "ERROR", "Durable Agent runtime unavailable", Map.of(
+                "route", route.name(), "reason", "durable-agent-runtime-unavailable"));
+        executions.complete(executionId, "ERROR");
+        return new AgentResult(executionId, route, "ERROR", answer, null,
+                List.of("ERROR"), List.of(), 0, true, executionId,
+                List.of("durable-agent-runtime-unavailable"));
     }
 
     private void requireToolAccess(ToolDefinition tool, QaRequest request) {

@@ -19,5 +19,14 @@ public interface AgentExecutionRepository {
 
     boolean release(String executionId, String owner);
 
+    /** Requests cancellation without inferring ownership from a local thread map. */
+    default boolean requestCancellation(String executionId) { return false; }
+
+    /** Finalizes a cancellation only when PostgreSQL says this execution is unowned. */
+    default boolean finalizeCancellationIfUnowned(String executionId) { return false; }
+
+    /** Finalizes a bounded batch of cancellation requests whose lease has expired. */
+    default int finalizeExpiredCancellations(int limit) { return 0; }
+
     List<String> findRecoverable(int limit);
 }

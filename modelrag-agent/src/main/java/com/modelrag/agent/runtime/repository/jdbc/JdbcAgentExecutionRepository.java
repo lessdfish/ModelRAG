@@ -110,6 +110,48 @@ public class JdbcAgentExecutionRepository implements AgentExecutionRepository {
     }
 
     @Override
+    public boolean requestCancellation(String executionId) {
+        return jdbc.update("""
+                UPDATE kb_agent_execution SET status='CANCEL_REQUESTED',update_time=NOW()
+                WHERE execution_id=? AND status IN ('RUNNING','WAITING_APPROVAL','CANCEL_REQUESTED')
+                """, executionId) == 1;
+    }
+
+    @Override
+    public boolean finalizeCancellationIfUnowned(String executionId) {
+        return jdbc.update("""
+                UPDATE kb_agent_execution
+                SET status='CANCELLED',lease_owner=NULL,lease_until=NULL,error_code='CANCELLED',
+                    error_msg='Agent execution cancelled',
+                    finished_at=COALESCE(finished_at,NOW()),update_time=NOW()
+                WHERE execution_id=? AND status='CANCEL_REQUESTED'
+                  AND (lease_owner IS NULL OR lease_until < NOW())
+                """, executionId) == 1;
+    }
+
+    @Override
+    public int finalizeExpiredCancellations(int limit) {
+        int bounded = Math.max(1, Math.min(100, limit));
+        return jdbc.update("""
+                WITH candidates AS (
+                    SELECT execution_id
+                    FROM kb_agent_execution
+                    WHERE status='CANCEL_REQUESTED'
+                      AND (lease_owner IS NULL OR lease_until < NOW())
+                    ORDER BY update_time
+                    LIMIT ?
+                    FOR UPDATE SKIP LOCKED
+                )
+                UPDATE kb_agent_execution execution
+                SET status='CANCELLED',lease_owner=NULL,lease_until=NULL,error_code='CANCELLED',
+                    error_msg='Agent execution cancelled',
+                    finished_at=COALESCE(execution.finished_at,NOW()),update_time=NOW()
+                FROM candidates
+                WHERE execution.execution_id=candidates.execution_id
+                """, bounded);
+    }
+
+    @Override
     public List<String> findRecoverable(int limit) {
         int bounded = Math.max(1, Math.min(100, limit));
         return jdbc.query("""
