@@ -45,9 +45,17 @@ public class AgentExecutionRegistry {
         jdbc.update("""
                 INSERT INTO kb_agent_execution(execution_id,user_id,dataset_id,conversation_id,status)
                 VALUES (?,?,?,?,'RUNNING')
-                ON CONFLICT(execution_id) DO UPDATE SET user_id=EXCLUDED.user_id,dataset_id=EXCLUDED.dataset_id,
-                conversation_id=EXCLUDED.conversation_id,status='RUNNING',update_time=NOW()
+                ON CONFLICT(execution_id) DO NOTHING
                 """, executionId, owner(requesterUserId), datasetId, conversationId);
+        Scope existing = jdbc.query("""
+                SELECT user_id,dataset_id,conversation_id FROM kb_agent_execution WHERE execution_id=?
+                """, (rs, n) -> new Scope(rs.getString("user_id"), rs.getLong("dataset_id"),
+                rs.getObject("conversation_id", Long.class)), executionId).stream().findFirst()
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "Agent 执行不存在: " + executionId));
+        if (!existing.requesterUserId().equals(owner(requesterUserId)) || existing.datasetId() != datasetId
+                || !java.util.Objects.equals(existing.conversationId(), conversationId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "Agent 执行标识已属于其他请求: " + executionId);
+        }
     }
 
     public void complete(String executionId, String status) {

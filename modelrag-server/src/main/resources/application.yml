@@ -64,6 +64,14 @@ modelrag:
   agent:
     max-steps: ${MODELRAG_AGENT_MAX_STEPS:6}
     deadline-ms: ${MODELRAG_AGENT_DEADLINE_MS:10000}
+    runtime:
+      max-checkpoint-bytes: ${MODELRAG_AGENT_MAX_CHECKPOINT_BYTES:1048576}
+      max-checkpoint-evidence: ${MODELRAG_AGENT_MAX_CHECKPOINT_EVIDENCE:32}
+      max-checkpoint-observations: ${MODELRAG_AGENT_MAX_CHECKPOINT_OBSERVATIONS:20}
+      max-checkpoint-excerpt-chars: ${MODELRAG_AGENT_MAX_CHECKPOINT_EXCERPT_CHARS:1000}
+      lease-seconds: ${MODELRAG_AGENT_LEASE_SECONDS:30}
+      recovery-poll-ms: ${MODELRAG_AGENT_RECOVERY_POLL_MS:5000}
+      recovery-batch-size: ${MODELRAG_AGENT_RECOVERY_BATCH_SIZE:20}
     retrieval:
       max-search-actions: ${MODELRAG_AGENT_RETRIEVAL_MAX_SEARCH_ACTIONS:4}
       max-navigation-actions: ${MODELRAG_AGENT_RETRIEVAL_MAX_NAVIGATION_ACTIONS:12}

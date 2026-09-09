@@ -8,6 +8,8 @@ import com.modelrag.agent.memory.ConversationMemory;
 import com.modelrag.agent.memory.LongTermMemoryService;
 import com.modelrag.agent.router.ComplexityRouter;
 import com.modelrag.agent.router.RouteDecision;
+import com.modelrag.agent.runtime.AgentRuntime;
+import com.modelrag.agent.runtime.AgentStartCommand;
 import com.modelrag.agent.safety.LoopDetector;
 import com.modelrag.agent.tool.HttpToolInvoker;
 import com.modelrag.agent.tool.ResilientToolExecutor;
@@ -61,6 +63,7 @@ public class AgentOrchestrator {
     private final ObjectProvider<AgenticRetrievalOrchestrator> agenticRetrieval;
     private final int maxSteps;
     private final long deadlineMs;
+    private AgentRuntime durableRuntime;
 
     public AgentOrchestrator(ComplexityRouter router, QaOrchestrator qa, ApprovalGate approvals,
                              ToolRegistry tools, LoopDetector loops, ConversationMemory memory,
@@ -91,6 +94,12 @@ public class AgentOrchestrator {
         this.agenticRetrieval = agenticRetrieval;
         this.maxSteps = Math.max(1, Math.min(10, maxSteps));
         this.deadlineMs = Math.max(500, Math.min(60_000, deadlineMs));
+    }
+
+    /** Optional during migration; production provides the durable G8 runtime. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setDurableRuntime(AgentRuntime durableRuntime) {
+        this.durableRuntime = durableRuntime;
     }
 
     public AgentResult execute(QaRequest request) {
@@ -182,6 +191,12 @@ public class AgentOrchestrator {
         } catch (RuntimeException error) {
             return unresolvedTool(executionId, request, new ArrayList<>());
         }
+        if (durableRuntime != null) {
+            AgentResult result = durableRuntime.start(new AgentStartCommand(request, executionId,
+                    "TOOL_AGENT", fallbackTool, (type, message, data) -> publish(executionId, type, message, data)));
+            rememberDurableResult(request, result);
+            return result;
+        }
         List<String> steps = new ArrayList<>();
         steps.add("PLAN");
         publish(executionId, "PLAN", "已选择受限 Agent 执行", Map.of(
@@ -206,6 +221,12 @@ public class AgentOrchestrator {
         rememberAgentQuestion(request);
         publish(executionId, "PLAN", "已选择只读 Agentic Retrieval", Map.of(
                 "route", "AGENTIC_RAG", "maxSteps", maxSteps));
+        if (durableRuntime != null) {
+            AgentResult result = durableRuntime.start(new AgentStartCommand(request, executionId,
+                    "AGENTIC_RAG", "", (type, message, data) -> publish(executionId, type, message, data)));
+            rememberDurableResult(request, result);
+            return result;
+        }
         AgenticRetrievalOrchestrator orchestrator = agenticRetrieval.getIfAvailable();
         if (orchestrator == null) {
             String answer = "只读检索 Agent 当前不可用。";
@@ -245,6 +266,11 @@ public class AgentOrchestrator {
     public AgentResult continueAfterApproval(String approvalId, QaRequest request, boolean approved,
                                              String approverId) {
         ApprovalRecord record = approvals.decide(approvalId, approved, approverId);
+        if (durableRuntime != null) {
+            AgentResult result = durableRuntime.resumeAfterApproval(approvalId);
+            rememberDurableResult(request, result);
+            return result;
+        }
         if (!"APPROVED".equals(record.status())) {
             String answer = "工具调用未获批准。";
             rememberApprovalDecision(request, answer, null);
@@ -586,6 +612,17 @@ public class AgentOrchestrator {
                 "[]", null, "agent", datasetName(request.datasetId()));
         memory.append(request.userId(), request.conversationId(), "assistant", answer, citationsJson(citations), traceId,
                 "agent", datasetName(request.datasetId()));
+    }
+
+    private void rememberDurableResult(QaRequest request, AgentResult result) {
+        if (result == null) return;
+        if ("WAITING_APPROVAL".equals(result.status())) {
+            if (result.approvalId() != null) rememberApprovalWait(request, result.approvalId());
+            return;
+        }
+        rememberAgentAnswer(request, result.answer(), result.traceId(), result.citations(), false);
+        qa.recordAudit(request, result.answer(), citationsJson(result.citations()), result.confidence(),
+                result.refused(), result.traceId(), result.route().name().toLowerCase());
     }
 
     private String citationsJson(List<Citation> citations) {

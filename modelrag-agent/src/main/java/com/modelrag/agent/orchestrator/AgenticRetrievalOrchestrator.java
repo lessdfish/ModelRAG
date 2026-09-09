@@ -29,10 +29,12 @@ import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 /** Bounded read-only agentic retrieval; it synthesizes only from the final EvidenceSet. */
 @Service
+@Profile("test")
 public class AgenticRetrievalOrchestrator {
     private final RetrievalActionRegistry actions;
     private final LlmAgentPolicy policy;

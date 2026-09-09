@@ -2904,8 +2904,24 @@ bounded observations/evidence and never call QA answer services. `AGENTIC_RAG`
 is read-only, uses observed source identifiers for navigation, and performs at
 most one final synthesis from a sufficient `EvidenceSet`; `TOOL_AGENT` retains
 the existing authorization, approval, idempotency, and side-effect guards.
-No durable agent state, checkpoint/resume flow, or G8 work is part of this
-implementation.
+
+G8 adds the durable runtime for the two non-direct modes. It introduces only
+`V64__agent_checkpoint.sql`; `V61`-`V63` remain reserved and `V1`-`V60` remain
+immutable. `AgentState` is the versioned, bounded, secret-free recovery document
+stored in PostgreSQL. `AgentCheckpointService` advances it with an optimistic
+checkpoint-sequence CAS while a PostgreSQL lease gives one runtime owner the
+right to execute a transition. `AgentExecutionRegistry` remains an ephemeral
+execution lookup and does not become the source of truth.
+
+`AgentRuntime` owns `AGENTIC_RAG` and `TOOL_AGENT` transitions, checkpoints a
+pending action before execution, preserves the absolute deadline and remaining
+budgets, and emits bounded PLAN/ACT/OBSERVE/DONE events. Read-only retrieval
+actions may replay after recovery. Idempotent HTTP actions replay with the
+persisted idempotency key; an uncertain non-idempotent action stops at
+`RECONCILIATION_REQUIRED` and is never auto-replayed. Approval resume reloads
+the persisted state before continuing. `DIRECT_RAG` remains unchanged, and
+the prior loop adapter is test-profile compatibility only. Tool Gateway
+extraction plus G9 are not part of this implementation.
 
 ---
 

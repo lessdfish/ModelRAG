@@ -58,6 +58,15 @@ public final class RetrievalToolContext {
         addIds(this.observedDocumentIds, observedDocumentIds);
     }
 
+    /** Rebuilds the capability map from the version-aware sources stored in a checkpoint. */
+    public RetrievalToolContext(String executionId, String userId, long datasetId, Long conversationId,
+            String originalQuery, Collection<ObservedSource> sources, int remainingSteps,
+            int remainingSearchActions, int remainingNavigationActions) {
+        this(executionId, userId, datasetId, conversationId, originalQuery, remainingSteps,
+                remainingSearchActions, remainingNavigationActions);
+        if (sources != null) sources.forEach(this::restore);
+    }
+
     public String executionId() { return executionId; }
     public String userId() { return userId; }
     public long datasetId() { return datasetId; }
@@ -110,6 +119,16 @@ public final class RetrievalToolContext {
         return sources.get(nodeId);
     }
 
+    public Collection<ObservedSource> sources() { return Collections.unmodifiableCollection(sources.values()); }
+
+    public void restore(ObservedSource source) {
+        if (source == null || source.nodeId() <= 0 || source.documentId() <= 0
+                || source.documentVersionId() <= 0) return;
+        observedNodeIds.add(source.nodeId());
+        observedDocumentIds.add(source.documentId());
+        sources.putIfAbsent(source.nodeId(), source);
+    }
+
     /** Records only bounded observation metadata and source capabilities. */
     public void observe(RetrievalObservation observation) {
         if (observation == null) return;
@@ -125,7 +144,7 @@ public final class RetrievalToolContext {
         if (evidence == null || evidence.datasetId() != datasetId) return;
         observedNodeIds.add(evidence.nodeId());
         observedDocumentIds.add(evidence.documentId());
-        sources.putIfAbsent(evidence.nodeId(), new ObservedSource(evidence.documentId(),
+        sources.putIfAbsent(evidence.nodeId(), new ObservedSource(evidence.nodeId(), evidence.documentId(),
                 evidence.documentVersionId(), evidence.indexBuildId(), evidence.documentName(),
                 evidence.titlePath(), evidence.nodeType(), evidence.score()));
     }
@@ -135,7 +154,7 @@ public final class RetrievalToolContext {
         if (item.documentId() <= 0 || item.nodeId() <= 0) return;
         observedNodeIds.add(item.nodeId());
         observedDocumentIds.add(item.documentId());
-        sources.putIfAbsent(item.nodeId(), new ObservedSource(item.documentId(), item.documentVersionId(),
+        sources.putIfAbsent(item.nodeId(), new ObservedSource(item.nodeId(), item.documentId(), item.documentVersionId(),
                 item.indexBuildId(), "", item.titlePath(), item.nodeType(), item.score()));
     }
 
@@ -144,7 +163,14 @@ public final class RetrievalToolContext {
         for (Long value : values) if (value != null && value > 0) target.add(value);
     }
 
-    public record ObservedSource(long documentId, long documentVersionId, Long indexBuildId,
+    public record ObservedSource(long nodeId, long documentId, long documentVersionId, Long indexBuildId,
             String documentName, String titlePath, com.modelrag.knowledge.model.NodeType nodeType,
-            double score) { }
+            double score) {
+        /** Compatibility constructor for the pre-G8 document-scoped source shape. */
+        public ObservedSource(long documentId, long documentVersionId, Long indexBuildId,
+                String documentName, String titlePath, com.modelrag.knowledge.model.NodeType nodeType,
+                double score) {
+            this(0, documentId, documentVersionId, indexBuildId, documentName, titlePath, nodeType, score);
+        }
+    }
 }
