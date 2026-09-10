@@ -24,11 +24,6 @@
         </dependency>
         <dependency>
             <groupId>com.modelrag</groupId>
-            <artifactId>modelrag-indexing</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.modelrag</groupId>
             <artifactId>modelrag-knowledge</artifactId>
             <version>${project.version}</version>
         </dependency>

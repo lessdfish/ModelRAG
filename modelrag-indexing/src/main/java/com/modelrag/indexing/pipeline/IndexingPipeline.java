@@ -31,7 +31,7 @@ public class IndexingPipeline {
             com.modelrag.knowledge.repository.DocumentRepository documents,
             com.modelrag.knowledge.repository.ChunkRepository chunks,
             com.modelrag.knowledge.repository.IndexVersionRepository versions,
-            com.modelrag.indexing.service.EmbeddingService embed,
+            com.modelrag.api.TextEmbeddingProvider embed,
             com.modelrag.common.vector.VectorStore vectors,
             org.springframework.context.ApplicationEventPublisher events,
             com.modelrag.common.sse.SseEmitterService sse,

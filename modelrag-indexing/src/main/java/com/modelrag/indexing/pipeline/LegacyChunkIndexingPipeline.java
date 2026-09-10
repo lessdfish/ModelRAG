@@ -6,7 +6,7 @@ import com.modelrag.common.exception.SafeErrorSummary;
 import com.modelrag.common.outbox.IndexOutbox;
 import com.modelrag.common.vector.VectorDocument;
 import com.modelrag.common.vector.VectorStore;
-import com.modelrag.indexing.service.EmbeddingService;
+import com.modelrag.api.TextEmbeddingProvider;
 import com.modelrag.knowledge.model.Chunk;
 import com.modelrag.knowledge.model.Dataset;
 import com.modelrag.knowledge.model.Document;
@@ -39,7 +39,7 @@ public class LegacyChunkIndexingPipeline {
     private final DocumentRepository documents;
     private final ChunkRepository chunks;
     private final IndexVersionRepository versions;
-    private final EmbeddingService embed;
+    private final TextEmbeddingProvider embed;
     private final VectorStore vectors;
     private final org.springframework.context.ApplicationEventPublisher events;
     private final com.modelrag.common.sse.SseEmitterService sse;
@@ -50,7 +50,7 @@ public class LegacyChunkIndexingPipeline {
     private final RecursiveCharSplitter splitter = new RecursiveCharSplitter();
 
     public LegacyChunkIndexingPipeline(DatasetRepository datasets, DocumentRepository documents, ChunkRepository chunks,
-            IndexVersionRepository versions, EmbeddingService embed, VectorStore vectors,
+            IndexVersionRepository versions, TextEmbeddingProvider embed, VectorStore vectors,
             org.springframework.context.ApplicationEventPublisher events,
             com.modelrag.common.sse.SseEmitterService sse, IndexOutbox outbox, ObjectStorageService storage,
             TransactionOperations transaction,

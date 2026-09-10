@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <parent><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-parent</artifactId><version>4.1.0</version></parent>
   <groupId>com.modelrag</groupId><artifactId>modelrag</artifactId><version>1.0.0-SNAPSHOT</version><packaging>pom</packaging>
-  <modules><module>modelrag-api</module><module>modelrag-common</module><module>modelrag-knowledge</module><module>modelrag-indexing</module><module>modelrag-search</module><module>modelrag-qa</module><module>modelrag-tool-gateway</module><module>modelrag-agent</module><module>modelrag-server</module></modules>
+  <modules><module>modelrag-api</module><module>modelrag-common</module><module>modelrag-knowledge</module><module>modelrag-inference-client</module><module>modelrag-indexing</module><module>modelrag-search</module><module>modelrag-qa</module><module>modelrag-tool-gateway</module><module>modelrag-agent</module><module>modelrag-server</module></modules>
   <properties><java.version>21</java.version><maven.compiler.release>21</maven.compiler.release><spring-ai.version>2.0.0</spring-ai.version><aws-sdk.version>2.31.38</aws-sdk.version><testcontainers.version>1.21.4</testcontainers.version><bouncycastle.version>1.84</bouncycastle.version></properties>
   <dependencyManagement>
     <dependencies>

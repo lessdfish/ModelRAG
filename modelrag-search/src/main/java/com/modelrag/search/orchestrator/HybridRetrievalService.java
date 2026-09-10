@@ -1,6 +1,6 @@
 package com.modelrag.search.orchestrator;
 
-import com.modelrag.indexing.service.EmbeddingService;
+import com.modelrag.api.TextEmbeddingProvider;
 import com.modelrag.search.channel.v2.ActiveBuildScope;
 import com.modelrag.search.channel.v2.ActiveBuildScopeResolver;
 import com.modelrag.search.channel.v2.LexicalSearchPort;
@@ -42,7 +42,7 @@ public class HybridRetrievalService {
 
     private final SemanticSearchPort semantic;
     private final LexicalSearchPort lexical;
-    private final EmbeddingService embeddings;
+    private final TextEmbeddingProvider embeddings;
     private final QueryRewriter rewriter;
     private final Reranker reranker;
     private final RetrievalCandidateReranker candidateReranker;
@@ -58,7 +58,7 @@ public class HybridRetrievalService {
 
     @Autowired
     public HybridRetrievalService(SemanticSearchPort semantic, LexicalSearchPort lexical,
-            EmbeddingService embeddings, QueryRewriter rewriter, Reranker reranker,
+            TextEmbeddingProvider embeddings, QueryRewriter rewriter, Reranker reranker,
             ActiveBuildScopeResolver activeBuilds,
             @org.springframework.beans.factory.annotation.Value("${modelrag.search.rrf-vector-weight:.7}") double semanticWeight,
             @org.springframework.beans.factory.annotation.Value("${modelrag.search.rrf-bm25-weight:.3}") double lexicalWeight,

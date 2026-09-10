@@ -1,6 +1,6 @@
 package com.modelrag.agent.memory;
 
-import com.modelrag.indexing.service.EmbeddingService;
+import com.modelrag.api.TextEmbeddingProvider;
 import com.modelrag.common.exception.BusinessException;
 import com.modelrag.common.exception.ErrorCode;
 import java.time.Instant;
@@ -34,9 +34,9 @@ public class LongTermMemoryService {
     }
 
     private final JdbcTemplate jdbc;
-    private final EmbeddingService embeddings;
+    private final TextEmbeddingProvider embeddings;
 
-    public LongTermMemoryService(JdbcTemplate jdbc, EmbeddingService embeddings) {
+    public LongTermMemoryService(JdbcTemplate jdbc, TextEmbeddingProvider embeddings) {
         this.jdbc = jdbc;
         this.embeddings = embeddings;
     }

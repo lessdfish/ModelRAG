@@ -1,42 +1,58 @@
 package com.modelrag.search.reranker;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.modelrag.common.metrics.TokenUsageTracker;
 import com.modelrag.common.model.ModelHealthRegistry;
+import com.modelrag.inference.rerank.RerankComputeProvider;
+import com.modelrag.inference.rerank.RerankDocument;
+import com.modelrag.inference.rerank.RerankScore;
 import com.modelrag.search.dto.ScoredChunk;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.IntStream;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-/** Calls an optional local cross-encoder runtime; RRF order remains the degraded path. */
+/** Applies the optional remote cross-encoder and retains the local degraded path. */
 @Service
 public class HttpReranker implements Reranker {
     private static final Pattern FAQ = Pattern.compile("问[:：]\\s*([^？?\\n]+)[？?]\\s*答[:：]\\s*([^。！？\\n]+)");
     private static final Pattern TOKEN = Pattern.compile("[a-zA-Z0-9_\\-]{2,}|\\d+");
+    private static final int MAX_CANDIDATES = 100;
     private final boolean enabled;
-    private final String url;
-    private final ObjectMapper json;
+    private final String model;
+    private final long remoteTimeoutMs;
+    private final RerankComputeProvider compute;
     private final TokenUsageTracker tokens;
     private final ObjectProvider<ModelHealthRegistry> health;
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(200)).build();
 
+    @Autowired
     public HttpReranker(@Value("${modelrag.reranker.enabled:false}") boolean enabled,
-            @Value("${modelrag.reranker.url:http://127.0.0.1:18080}") String url, ObjectMapper json,
+            @Value("${modelrag.reranker.model:configured-reranker-profile}") String model,
+            @Value("${modelrag.reranker.remote-timeout-ms:30000}") long remoteTimeoutMs,
+            RerankComputeProvider compute,
             TokenUsageTracker tokens, ObjectProvider<ModelHealthRegistry> health) {
-        this.enabled = enabled; this.url = url.replaceAll("/$", ""); this.json = json; this.tokens = tokens; this.health = health;
+        this.enabled = enabled;
+        this.model = model == null || model.isBlank() ? "configured-reranker-profile" : model.trim();
+        this.remoteTimeoutMs = Math.max(1, remoteTimeoutMs);
+        this.compute = compute;
+        this.tokens = tokens;
+        this.health = health;
+    }
+
+    /** Compatibility constructor retained for callers that used the pre-G10 HTTP adapter. */
+    public HttpReranker(boolean enabled, String ignoredUrl, ObjectMapper ignoredJson,
+            TokenUsageTracker tokens, ObjectProvider<ModelHealthRegistry> health) {
+        this(enabled, "configured-reranker-profile", 500,
+                (ignoredModel, ignoredQuery, ignoredDocuments, ignoredTimeout) -> {
+                    throw new IllegalStateException("remote reranker is not configured");
+                }, tokens, health);
     }
 
     @Override public List<ScoredChunk> rerank(long datasetId, String query, List<ScoredChunk> candidates) {
@@ -45,35 +61,63 @@ public class HttpReranker implements Reranker {
 
     @Override public List<ScoredChunk> rerank(long datasetId, String query, List<ScoredChunk> candidates,
             Duration timeout) {
-        if (candidates.isEmpty()) return candidates;
+        if (candidates == null || candidates.isEmpty()) return candidates == null ? List.of() : candidates;
         if (!enabled) return localRerank(query, candidates);
-        String modelName = "http-reranker-" + url;
+        if (candidates.size() > MAX_CANDIDATES) return localRerank(query, candidates);
+        String modelName = "remote-reranker-" + model;
         ModelHealthRegistry registry = health.getIfAvailable();
         if (registry != null && !registry.available("RERANK", modelName)) return localRerank(query, candidates);
         try {
-            String request = json.writeValueAsString(Map.of("query", query,
-                    "documents", candidates.stream().map(ScoredChunk::content).toList()));
-            long timeoutMillis = timeout == null ? 500 : Math.max(50, Math.min(500, timeout.toMillis()));
-            HttpResponse<String> response = http.send(HttpRequest.newBuilder(URI.create(url + "/rerank"))
-                    .timeout(Duration.ofMillis(timeoutMillis)).header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(request)).build(), HttpResponse.BodyHandlers.ofString());
-            JsonNode scores = json.readTree(response.body()).path("scores");
-            if (response.statusCode() / 100 != 2 || scores.size() != candidates.size()) {
-                if (registry != null) registry.failure("RERANK", modelName);
-                return localRerank(query, candidates);
-            }
+            Duration effectiveTimeout = effectiveTimeout(timeout);
+            List<RerankDocument> documents = IntStream.range(0, candidates.size())
+                    .mapToObj(index -> new RerankDocument(Integer.toString(index), candidates.get(index).content()))
+                    .toList();
+            List<RerankScore> scores = compute.rerank(model, query, documents, effectiveTimeout);
+            MapScores mapped = validateScores(scores, candidates.size());
             tokens.recordRerank(datasetId);
             if (registry != null) registry.success("RERANK", modelName);
             return IntStream.range(0, candidates.size()).mapToObj(index -> {
                 ScoredChunk candidate = candidates.get(index);
-                return new ScoredChunk(candidate.chunkId(), candidate.content(), scores.get(index).asDouble(), "rerank", 0);
+                return new ScoredChunk(candidate.chunkId(), candidate.content(), mapped.scores()[index], "rerank", 0);
             }).sorted(java.util.Comparator.comparingDouble(ScoredChunk::score).reversed()).toList();
-        } catch (Exception ignored) {
+        } catch (RuntimeException ignored) {
             if (registry != null) registry.failure("RERANK", modelName);
             return localRerank(query, candidates);
         }
     }
     @Override public boolean enabled(){return enabled;}
+
+    private Duration effectiveTimeout(Duration requested) {
+        long requestedMs = requested == null ? remoteTimeoutMs : requested.toMillis();
+        if (requestedMs <= 0) return Duration.ofMillis(1);
+        return Duration.ofMillis(Math.max(1, Math.min(remoteTimeoutMs, requestedMs)));
+    }
+
+    private MapScores validateScores(List<RerankScore> scores, int expected) {
+        if (scores == null || scores.size() != expected) throw new IllegalArgumentException("rerank response shape is invalid");
+        double[] values = new double[expected];
+        boolean[] seen = new boolean[expected];
+        for (RerankScore score : scores) {
+            if (score == null || score.id() == null || !Double.isFinite(score.score())) {
+                throw new IllegalArgumentException("rerank response score is invalid");
+            }
+            int index;
+            try {
+                index = Integer.parseInt(score.id());
+            } catch (NumberFormatException error) {
+                throw new IllegalArgumentException("rerank response id is invalid");
+            }
+            if (index < 0 || index >= expected || seen[index]) {
+                throw new IllegalArgumentException("rerank response id is invalid");
+            }
+            seen[index] = true;
+            values[index] = score.score();
+        }
+        for (boolean value : seen) if (!value) throw new IllegalArgumentException("rerank response is incomplete");
+        return new MapScores(values);
+    }
+
+    private record MapScores(double[] scores) { }
 
     private List<ScoredChunk> localRerank(String query, List<ScoredChunk> candidates) {
         double max = candidates.stream().mapToDouble(ScoredChunk::score).max().orElse(1);

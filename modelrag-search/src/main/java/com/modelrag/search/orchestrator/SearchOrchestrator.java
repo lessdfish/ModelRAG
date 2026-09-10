@@ -3,7 +3,7 @@ package com.modelrag.search.orchestrator;
 import com.modelrag.common.vector.SearchRequest;
 import com.modelrag.common.vector.SearchResult;
 import com.modelrag.common.vector.VectorStore;
-import com.modelrag.indexing.service.EmbeddingService;
+import com.modelrag.api.TextEmbeddingProvider;
 import com.modelrag.knowledge.repository.IndexVersionRepository;
 import com.modelrag.search.channel.Bm25Search;
 import com.modelrag.search.dto.HybridSearchRequest;
@@ -36,7 +36,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class SearchOrchestrator implements SearchFacade {
     private final VectorStore vectors;
-    private final EmbeddingService embeddings;
+    private final TextEmbeddingProvider embeddings;
     private final Bm25Search bm25;
     private final Reranker reranker;
     private final QueryRewriter rewriter;
@@ -53,7 +53,7 @@ public class SearchOrchestrator implements SearchFacade {
     private final long channelTimeoutMs;
     private final long rerankTimeoutMs;
 
-    public SearchOrchestrator(VectorStore vectors, EmbeddingService embeddings, Bm25Search bm25,
+    public SearchOrchestrator(VectorStore vectors, TextEmbeddingProvider embeddings, Bm25Search bm25,
             Reranker reranker, QueryRewriter rewriter,
             IndexVersionRepository versions,
             @Value("${modelrag.search.rrf-vector-weight:.7}") double vectorWeight,
@@ -84,7 +84,7 @@ public class SearchOrchestrator implements SearchFacade {
     }
 
     @Autowired
-    public SearchOrchestrator(VectorStore vectors, EmbeddingService embeddings, Bm25Search bm25,
+    public SearchOrchestrator(VectorStore vectors, TextEmbeddingProvider embeddings, Bm25Search bm25,
             Reranker reranker, QueryRewriter rewriter,
             IndexVersionRepository versions,
             @Value("${modelrag.search.rrf-vector-weight:.7}") double vectorWeight,

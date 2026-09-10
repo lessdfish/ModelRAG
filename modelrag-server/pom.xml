@@ -10,6 +10,7 @@
         <dependency><groupId>com.modelrag</groupId><artifactId>modelrag-api</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.modelrag</groupId><artifactId>modelrag-knowledge</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.modelrag</groupId><artifactId>modelrag-indexing</artifactId><version>${project.version}</version></dependency>
+        <dependency><groupId>com.modelrag</groupId><artifactId>modelrag-inference-client</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.modelrag</groupId><artifactId>modelrag-qa</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.modelrag</groupId><artifactId>modelrag-tool-gateway</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.modelrag</groupId><artifactId>modelrag-agent</artifactId><version>${project.version}</version></dependency>

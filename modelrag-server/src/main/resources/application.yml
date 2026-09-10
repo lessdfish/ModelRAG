@@ -29,6 +29,21 @@ modelrag:
   indexing.async: true
   chunk-size: 600
   chunk-overlap: 80
+  inference:
+    enabled: ${MODELRAG_INFERENCE_ENABLED:false}
+    base-url: ${MODELRAG_INFERENCE_BASE_URL:http://127.0.0.1:18180}
+    auth-token: ${MODELRAG_AI_AUTH_TOKEN:}
+    connect-timeout-ms: ${MODELRAG_AI_CONNECT_TIMEOUT_MS:500}
+    request-timeout-ms: ${MODELRAG_AI_REQUEST_TIMEOUT_MS:30000}
+    max-concurrent-requests: ${MODELRAG_AI_MAX_CONCURRENT_REQUESTS:32}
+    max-json-response-bytes: ${MODELRAG_AI_MAX_JSON_RESPONSE_BYTES:16777216}
+    max-upload-bytes: ${MODELRAG_AI_MAX_UPLOAD_BYTES:52428800}
+    embedding-profile: ${MODELRAG_AI_EMBEDDING_PROFILE:Qwen3-Embedding-0.6B}
+    document-ai:
+      enabled: ${MODELRAG_DOCUMENT_AI_ENABLED:false}
+      pdf-mode: ${MODELRAG_DOCUMENT_AI_PDF_MODE:REMOTE_FIRST}
+      docx-mode: ${MODELRAG_DOCUMENT_AI_DOCX_MODE:LOCAL_FIRST}
+      timeout-seconds: ${MODELRAG_DOCUMENT_AI_TIMEOUT_SECONDS:120}
   index:
     v2:
       shadow-enabled: ${MODELRAG_INDEX_V2_SHADOW_ENABLED:false}
@@ -93,6 +108,8 @@ modelrag:
   reranker:
     enabled: ${MODELRAG_RERANKER_ENABLED:false}
     url: ${MODELRAG_RERANKER_URL:http://127.0.0.1:18080}
+    model: ${MODELRAG_RERANKER_MODEL:configured-reranker-profile}
+    remote-timeout-ms: ${MODELRAG_RERANKER_TIMEOUT_MS:30000}
   storage:
     endpoint: ${MODELRAG_S3_ENDPOINT:http://localhost:19000}
     bucket: ${MODELRAG_S3_BUCKET:modelrag}

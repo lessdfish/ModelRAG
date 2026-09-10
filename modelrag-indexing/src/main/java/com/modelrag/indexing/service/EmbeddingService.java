@@ -4,17 +4,15 @@ import com.modelrag.api.TextEmbeddingProvider;
 import com.modelrag.common.cache.EmbeddingCache;
 import com.modelrag.common.metrics.TokenUsageTracker;
 import com.modelrag.common.model.ModelHealthRegistry;
+import com.modelrag.inference.embedding.EmbeddingComputeProvider;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.ai.embedding.EmbeddingModel;
-import org.springframework.ai.ollama.OllamaEmbeddingModel;
-import org.springframework.ai.ollama.api.OllamaApi;
-import org.springframework.ai.ollama.api.OllamaEmbeddingOptions;
-import org.springframework.ai.ollama.management.ModelManagementOptions;
+import java.time.Duration;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
@@ -24,32 +22,34 @@ import org.springframework.stereotype.Service;
 public class EmbeddingService implements TextEmbeddingProvider {
     private static final int DIMENSIONS = 1024;
     private static final String REQUIRED_MODEL = "Qwen3-Embedding-0.6B";
-    private static final String OLLAMA_MODEL = "qwen3-embedding:0.6b";
     private final EmbeddingCache cache;
-    private final boolean enabled;
     private final String model;
     private final TokenUsageTracker tokens;
     private final ObjectProvider<ModelHealthRegistry> health;
-    private final EmbeddingModel embedding;
+    private final EmbeddingComputeProvider computeProvider;
+    private final Duration timeout;
 
+    @Autowired
     public EmbeddingService(EmbeddingCache cache,
-            @Value("${modelrag.ollama.enabled:false}") boolean enabled,
-            @Value("${modelrag.ollama.url:http://127.0.0.1:11434}") String url,
-            @Value("${modelrag.ollama.embedding-model:Qwen3-Embedding-0.6B}") String model,
+            EmbeddingComputeProvider computeProvider,
+            @Value("${modelrag.inference.embedding-profile:Qwen3-Embedding-0.6B}") String model,
+            @Value("${modelrag.inference.request-timeout-ms:30000}") long timeoutMs,
             TokenUsageTracker tokens, ObjectProvider<ModelHealthRegistry> health) {
         if (!REQUIRED_MODEL.equals(model)) {
             throw new IllegalStateException("生产 Embedding 只允许 " + REQUIRED_MODEL);
         }
         this.cache = cache;
-        this.enabled = enabled;
         this.model = model;
         this.tokens = tokens;
         this.health = health;
-        this.embedding = OllamaEmbeddingModel.builder()
-                .ollamaApi(OllamaApi.builder().baseUrl(normalizeUrl(url)).build())
-                .options(OllamaEmbeddingOptions.builder().model(OLLAMA_MODEL).dimensions(DIMENSIONS).build())
-                .modelManagementOptions(ModelManagementOptions.defaults())
-                .build();
+        this.computeProvider = java.util.Objects.requireNonNull(computeProvider, "Embedding 计算提供方不能为空");
+        this.timeout = Duration.ofMillis(Math.max(1, Math.min(600_000, timeoutMs)));
+    }
+
+    /** Source-compatible constructor for test doubles and legacy direct callers. */
+    public EmbeddingService(EmbeddingCache cache, boolean ignoredEnabled, String ignoredUrl, String model,
+            TokenUsageTracker tokens, ObjectProvider<ModelHealthRegistry> health) {
+        this(cache, new DisabledEmbeddingProvider(), model, 30_000, tokens, health);
     }
 
     public float[] embed(String text) { return embed(0, text); }
@@ -57,10 +57,12 @@ public class EmbeddingService implements TextEmbeddingProvider {
     @Override
     public float[] embed(long datasetId, String text) {
         if (text == null || text.isBlank()) throw new IllegalArgumentException("Embedding 文本不能为空");
-        return cache.get(cacheKey(text), ignored -> {
+        float[] value = cache.get(cacheKey(text), ignored -> {
             if (datasetId > 0) tokens.recordEmbedding(datasetId, text);
             return compute(text);
         });
+        validateVector(value);
+        return value;
     }
 
     /** Provider requests are capped at 32 inputs while preserving one cache entry per text. */
@@ -89,6 +91,7 @@ public class EmbeddingService implements TextEmbeddingProvider {
                 for (Integer position : missing.get(value)) result.set(position, vector);
             }
         }
+        result.forEach(this::validateVector);
         return List.copyOf(result);
     }
 
@@ -97,30 +100,41 @@ public class EmbeddingService implements TextEmbeddingProvider {
     }
 
     private List<float[]> computeBatch(List<String> texts) {
-        String modelName = "ollama-embedding-" + OLLAMA_MODEL;
-        if (!enabled) throw new IllegalStateException("Ollama Embedding 未启用，无法生成真实向量");
+        String modelName = "remote-embedding-" + model;
         ModelHealthRegistry registry = health.getIfAvailable();
         if (registry != null && !registry.available("EMBEDDING", modelName)) {
             throw new IllegalStateException("Embedding 模型暂时熔断: " + model);
         }
         try {
-            List<float[]> values = embedding.embed(texts);
-            if (values.size() != texts.size() || values.stream().anyMatch(value -> value == null || value.length != DIMENSIONS)) {
-                throw new IllegalStateException("Embedding 期望 1024 维");
-            }
+            List<float[]> values = computeProvider.embed(model, DIMENSIONS, texts, timeout);
+            validateBatch(values, texts.size());
             if (registry != null) registry.success("EMBEDDING", modelName);
             return values;
         } catch (RuntimeException error) {
             if (registry != null) registry.failure("EMBEDDING", modelName);
-            throw new IllegalStateException("Ollama Embedding 调用失败", error);
+            if (error instanceof IllegalStateException state && state.getMessage() != null
+                    && state.getMessage().startsWith("Embedding")) throw state;
+            throw new IllegalStateException("Embedding 计算调用失败", error);
+        }
+    }
+
+    private void validateBatch(List<float[]> values, int expected) {
+        if (values == null || values.size() != expected) throw new IllegalStateException("Embedding 返回数量不匹配");
+        values.forEach(this::validateVector);
+    }
+
+    private void validateVector(float[] value) {
+        if (value == null || value.length != DIMENSIONS) throw new IllegalStateException("Embedding 期望 1024 维");
+        for (float component : value) {
+            if (!Float.isFinite(component)) throw new IllegalStateException("Embedding 向量包含无效数值");
         }
     }
 
     private String cacheKey(String text) { return model + ":" + DIMENSIONS + "\n" + text; }
 
-    private String normalizeUrl(String value) {
-        String text = value == null || value.isBlank() ? "http://127.0.0.1:11434" : value.trim();
-        if (!text.startsWith("http://") && !text.startsWith("https://")) text = "http://" + text;
-        return text.replaceAll("/$", "");
+    private static final class DisabledEmbeddingProvider implements EmbeddingComputeProvider {
+        @Override public List<float[]> embed(String profile, int dimensions, List<String> texts, Duration timeout) {
+            throw new IllegalStateException("Embedding 计算服务未启用");
+        }
     }
 }
