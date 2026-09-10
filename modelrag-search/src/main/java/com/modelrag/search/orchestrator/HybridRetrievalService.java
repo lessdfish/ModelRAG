@@ -1,6 +1,11 @@
 package com.modelrag.search.orchestrator;
 
 import com.modelrag.api.TextEmbeddingProvider;
+import com.modelrag.common.observability.RetrievalMetrics;
+import com.modelrag.common.observability.RetrievalTraceContext;
+import com.modelrag.common.observability.RetrievalTraceSession;
+import com.modelrag.common.observability.RetrievalTraceSink;
+import com.modelrag.common.observability.TraceCorrelation;
 import com.modelrag.search.channel.v2.ActiveBuildScope;
 import com.modelrag.search.channel.v2.ActiveBuildScopeResolver;
 import com.modelrag.search.channel.v2.LexicalSearchPort;
@@ -55,6 +60,8 @@ public class HybridRetrievalService {
     private final Executor semanticExecutor;
     private final Executor lexicalExecutor;
     private final Executor rerankExecutor;
+    private final RetrievalMetrics retrievalMetrics;
+    private volatile RetrievalTraceSink traceSink = RetrievalTraceSink.NOOP;
 
     @Autowired
     public HybridRetrievalService(SemanticSearchPort semantic, LexicalSearchPort lexical,
@@ -82,9 +89,37 @@ public class HybridRetrievalService {
         this.semanticExecutor = semanticExecutor;
         this.lexicalExecutor = lexicalExecutor;
         this.rerankExecutor = rerankExecutor;
+        this.retrievalMetrics = new RetrievalMetrics(metrics);
+    }
+
+    @Autowired(required = false)
+    public void setRetrievalTraceSink(RetrievalTraceSink traceSink) {
+        this.traceSink = traceSink == null ? RetrievalTraceSink.NOOP : traceSink;
     }
 
     public RetrievalV2Stages inspect(RetrievalV2Request request) {
+        RetrievalTraceContext context = TraceCorrelation.current();
+        if (context == null) context = RetrievalTraceContext.create("V2", request.datasetId(), null,
+                request.embeddingProfile());
+        RetrievalTraceSession session = TraceCorrelation.currentSession();
+        boolean ownsSession = session == null;
+        if (ownsSession) session = RetrievalTraceSession.start(traceSink, context, "redacted");
+        try (TraceCorrelation.Scope ignored = TraceCorrelation.bind(context, session)) {
+            RetrievalV2Stages result = inspectInternal(request);
+            String status = result.degradedComponents().isEmpty() ? "success" : "degraded";
+            retrievalMetrics.request(context, status);
+            retrievalMetrics.latency(context, status, result.latencyMs().getOrDefault("total", 0L));
+            if (!result.degradedComponents().isEmpty()) retrievalMetrics.degraded(context);
+            if (ownsSession) session.complete(false, result.degradedComponents());
+            return result;
+        } catch (RuntimeException error) {
+            retrievalMetrics.failure(context);
+            if (ownsSession) session.fail("retrieval-failure", List.of("RETRIEVAL_FAILURE"));
+            throw error;
+        }
+    }
+
+    private RetrievalV2Stages inspectInternal(RetrievalV2Request request) {
         long started = System.nanoTime();
         var expanded = rewriter.expand(request.query());
         Queue<String> degraded = new ConcurrentLinkedQueue<>();
@@ -102,6 +137,7 @@ public class HybridRetrievalService {
         CompletableFuture<List<RetrievalCandidate>> lexicalFuture;
         if (scope.overflow()) {
             degrade("active_build_scope", degraded);
+            degraded.add("ACTIVE_BUILD_FILTER_LIMIT");
             degrade("lexical", degraded);
             lexicalFuture = CompletableFuture.completedFuture(List.of());
         } else {
@@ -110,6 +146,20 @@ public class HybridRetrievalService {
 
         List<RetrievalCandidate> semanticCandidates = semanticFuture.join();
         List<RetrievalCandidate> lexicalCandidates = lexicalFuture.join();
+        RetrievalTraceContext traceContext = TraceCorrelation.current();
+        RetrievalTraceSession traceSession = TraceCorrelation.currentSession();
+        traceAction(traceSession, "SEMANTIC_SEARCH", "semantic", Map.of("stage", "semantic", "topK", request.topK()),
+                Map.of("candidateCount", semanticCandidates.size()), latency.getOrDefault("semantic", 0L),
+                semanticCandidates.size(), degraded.contains("semantic"), degraded);
+        traceAction(traceSession, "LEXICAL_SEARCH", "lexical", Map.of("stage", "lexical", "topK", request.topK()),
+                Map.of("candidateCount", lexicalCandidates.size()), latency.getOrDefault("lexical", 0L),
+                lexicalCandidates.size(), degraded.contains("lexical"), degraded);
+        retrievalMetrics.stage(traceContext, "semantic", "semantic",
+                degraded.contains("semantic") ? "degraded" : "success", latency.getOrDefault("semantic", 0L));
+        retrievalMetrics.stage(traceContext, "lexical", "lexical",
+                degraded.contains("lexical") ? "degraded" : "success", latency.getOrDefault("lexical", 0L));
+        retrievalMetrics.candidates(traceContext, "semantic", semanticCandidates.size());
+        retrievalMetrics.candidates(traceContext, "lexical", lexicalCandidates.size());
         long fusionStarted = System.nanoTime();
         List<RetrievalCandidate> fused = fuse(dedupe(semanticCandidates), dedupe(lexicalCandidates), request.topK());
         latency.put("fusion", elapsed(fusionStarted));
@@ -117,6 +167,9 @@ public class HybridRetrievalService {
         record("semantic", semanticCandidates.size());
         record("lexical", lexicalCandidates.size());
         record("fused", fused.size());
+        traceAction(traceSession, "HYBRID_FUSION", "hybrid", Map.of("stage", "fusion", "topK", request.topK()),
+                Map.of("candidateCount", fused.size()), latency.get("fusion"), fused.size(), false, degraded);
+        retrievalMetrics.candidates(traceContext, "hybrid", fused.size());
 
         boolean rerankApplied = false;
         List<RetrievalCandidate> reranked = List.of();
@@ -131,7 +184,8 @@ public class HybridRetrievalService {
             long rerankStarted = System.nanoTime();
             try {
                 RetrievalCandidateReranker.RerankResult result = CompletableFuture
-                        .supplyAsync(() -> candidateReranker.rerank(request.datasetId(), expanded.rerankQuery(), fused), rerankExecutor)
+                        .supplyAsync(() -> TraceCorrelation.call(traceContext, traceSession,
+                                () -> candidateReranker.rerank(request.datasetId(), expanded.rerankQuery(), fused)), rerankExecutor)
                         .orTimeout(rerankTimeoutMs, TimeUnit.MILLISECONDS).join();
                 reranked = result.candidates();
                 ranked = reranked;
@@ -144,22 +198,41 @@ public class HybridRetrievalService {
                 long duration = elapsed(rerankStarted);
                 latency.put("rerank", duration);
                 recordDuration("rerank", duration);
+                traceAction(traceSession, "RERANK", "rerank", Map.of("stage", "rerank", "topK", request.topK()),
+                        Map.of("candidateCount", reranked.size()), duration, reranked.size(),
+                        degraded.contains("reranker"), degraded);
+                retrievalMetrics.stage(traceContext, "rerank", "rerank",
+                        degraded.contains("reranker") ? "degraded" : "success", duration);
             }
         }
         List<RetrievalCandidate> finalCandidates = select(threshold(ranked, request.threshold(), rerankApplied), request.topK());
         long totalDuration = elapsed(started);
         latency.put("total", totalDuration);
         recordDuration("total", totalDuration);
+        traceAction(traceSession, "EVIDENCE_SELECT", "context", Map.of("stage", "context", "topK", request.topK()),
+                Map.of("candidateCount", finalCandidates.size()), totalDuration, finalCandidates.size(),
+                !degraded.isEmpty(), degraded);
+        retrievalMetrics.candidates(traceContext, "context", finalCandidates.size());
         return new RetrievalV2Stages(expanded.rewrittenQuery(), expanded.searchQueries(), expanded.rerankQuery(),
                 semanticCandidates, lexicalCandidates, fused, reranked, finalCandidates, rerankApplied,
                 degraded.stream().distinct().toList(), latency);
     }
 
+    private void traceAction(RetrievalTraceSession trace, String actionType, String channel,
+            Map<String, ?> requestSummary, Map<String, ?> resultSummary, long latencyMs, int candidateCount,
+            boolean degraded, Queue<String> degradedComponents) {
+        if (trace == null) return;
+        trace.action(actionType, channel, requestSummary, resultSummary, latencyMs, candidateCount, degraded,
+                degradedComponents == null ? List.of() : degradedComponents.stream().distinct().toList());
+    }
+
     private CompletableFuture<List<RetrievalCandidate>> submitSemantic(RetrievalV2Request request,
             List<String> queries, int recall, Queue<String> degraded, Map<String, Long> latency) {
+        final RetrievalTraceContext context = TraceCorrelation.current();
+        final RetrievalTraceSession session = TraceCorrelation.currentSession();
         try {
-            return CompletableFuture.supplyAsync(() -> timed("semantic", latency,
-                    () -> retrieveSemantic(request, queries, recall)), semanticExecutor)
+            return CompletableFuture.supplyAsync(() -> TraceCorrelation.call(context, session,
+                    () -> timed("semantic", latency, () -> retrieveSemantic(request, queries, recall))), semanticExecutor)
                     .orTimeout(channelTimeoutMs, TimeUnit.MILLISECONDS)
                     .exceptionally(error -> failed("semantic", degraded, latency));
         } catch (RejectedExecutionException rejected) {
@@ -170,9 +243,11 @@ public class HybridRetrievalService {
     private CompletableFuture<List<RetrievalCandidate>> submitLexical(RetrievalV2Request request,
             List<String> queries, ActiveBuildScope scope, int recall, Queue<String> degraded,
             Map<String, Long> latency) {
+        final RetrievalTraceContext context = TraceCorrelation.current();
+        final RetrievalTraceSession session = TraceCorrelation.currentSession();
         try {
-            return CompletableFuture.supplyAsync(() -> timed("lexical", latency,
-                    () -> retrieveLexical(request, queries, scope, recall)), lexicalExecutor)
+            return CompletableFuture.supplyAsync(() -> TraceCorrelation.call(context, session,
+                    () -> timed("lexical", latency, () -> retrieveLexical(request, queries, scope, recall))), lexicalExecutor)
                     .orTimeout(channelTimeoutMs, TimeUnit.MILLISECONDS)
                     .exceptionally(error -> failed("lexical", degraded, latency));
         } catch (RejectedExecutionException rejected) {
@@ -306,7 +381,7 @@ public class HybridRetrievalService {
 
     private void degrade(String component, Queue<String> degraded) {
         degraded.add(component);
-        metrics.counter("modelrag.retrieval.v2.degraded", "component", component).increment();
+        metrics.counter("modelrag.retrieval.v2.degraded", "stage", component).increment();
     }
 
     private void record(String channel, int count) {

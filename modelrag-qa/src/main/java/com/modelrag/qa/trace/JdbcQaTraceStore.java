@@ -35,6 +35,20 @@ public class JdbcQaTraceStore implements QaTraceStore {
                 VALUES (?,?,?,?,CAST(? AS jsonb),?,CAST(? AS jsonb),CAST(? AS jsonb),CAST(? AS jsonb),
                     CAST(? AS jsonb),?,CAST(? AS jsonb),CAST(? AS jsonb),CAST(? AS jsonb),CAST(? AS jsonb),
                     ?,?,?,?,?,?,?,?,CAST(? AS jsonb),CAST(? AS jsonb))
+                ON CONFLICT (trace_id) WHERE trace_id IS NOT NULL DO UPDATE SET
+                    dataset_id=EXCLUDED.dataset_id,query_original=EXCLUDED.query_original,
+                    query_rewritten=EXCLUDED.query_rewritten,search_queries=EXCLUDED.search_queries,
+                    rerank_query=EXCLUDED.rerank_query,vector_results=EXCLUDED.vector_results,
+                    bm25_results=EXCLUDED.bm25_results,fused_results=EXCLUDED.fused_results,
+                    rerank_results=EXCLUDED.rerank_results,rerank_applied=EXCLUDED.rerank_applied,
+                    mmr_results=EXCLUDED.mmr_results,small_to_big_context=EXCLUDED.small_to_big_context,
+                    context_chunks=EXCLUDED.context_chunks,ab_variants=EXCLUDED.ab_variants,
+                    final_prompt=EXCLUDED.final_prompt,prompt_context=EXCLUDED.prompt_context,
+                    context_max_tokens=EXCLUDED.context_max_tokens,answer_source=EXCLUDED.answer_source,
+                    model_output=EXCLUDED.model_output,confidence=EXCLUDED.confidence,refused=EXCLUDED.refused,
+                    latency_ms=EXCLUDED.latency_ms,degraded_components=EXCLUDED.degraded_components,
+                    retrieval_latency_ms=EXCLUDED.retrieval_latency_ms,status=CASE WHEN EXCLUDED.refused
+                        THEN 'REFUSED' ELSE 'DONE' END,completed_at=NOW()
                 """, value(trace, "traceId"), number(trace, "datasetId"), value(trace, "query"),
                 value(trace, "rewrittenQuery"), jsonArray(trace.get("searchQueries")), value(trace, "rerankQuery"),
                 jsonArray(trace.get("vectorResults")), jsonArray(trace.get("bm25Results")),

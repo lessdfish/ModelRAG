@@ -2923,6 +2923,28 @@ the persisted state before continuing. `DIRECT_RAG` remains unchanged, and
 the prior loop adapter is test-profile compatibility only. Tool Gateway
 extraction plus G9 are not part of this implementation.
 
+## G11 implementation status
+
+G11 adds bounded retrieval observability, the opt-in retrieval-scale benchmark
+harness, and canonical V1/V2 evaluation. `V1` remains the production/default
+read path and `modelrag.retrieval.v2.enabled` / `modelrag.qa.v2.enabled` remain
+unchanged by this phase. `V1` evaluation preserves chunk labels while resolving
+document identities; `V2` evaluation reports document, node, retrieval-unit and
+evidence-group identities through separate adapters. Missing or legacy labels
+are reported explicitly instead of being converted into synthetic V2 labels.
+
+`V64__agent_checkpoint.sql` is already shipped. The earlier `V61`-`V63`
+numbers are reserved historical slots and are intentionally unmaterialized in
+this checkout; they must not be back-filled or enabled with Flyway
+`outOfOrder`. Forward schema changes therefore continue with
+`V65__retrieval_observability.sql` and `V66__evaluation_v2_labels.sql`.
+
+The benchmark's full mode requires a real runtime and a real fixture with at
+least one million active retrieval units, 20,000 active documents, 1024-d
+vectors, stale builds, and active-build overflow. If that infrastructure is
+not available, the harness reports `NOT RUN` and produces no fabricated
+measurements.
+
 ---
 
 # 49. Recommended Task Numbers

@@ -3,6 +3,11 @@ package com.modelrag.qa.orchestrator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.modelrag.common.event.QaAnsweredEvent;
 import com.modelrag.common.metrics.TokenUsageTracker;
+import com.modelrag.common.observability.RetrievalMetrics;
+import com.modelrag.common.observability.RetrievalTraceContext;
+import com.modelrag.common.observability.RetrievalTraceSession;
+import com.modelrag.common.observability.RetrievalTraceSink;
+import com.modelrag.common.observability.TraceCorrelation;
 import com.modelrag.api.ConversationContextBuilder;
 import com.modelrag.api.ConversationRepository;
 import com.modelrag.common.rate.DatasetRateLimiter;
@@ -35,6 +40,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -63,6 +69,8 @@ public class QaOrchestrator {
     private final boolean qaV2Enabled;
     private final int contextMaxTokens;
     private final ObjectMapper json = new ObjectMapper();
+    private final RetrievalMetrics retrievalMetrics;
+    private volatile RetrievalTraceSink traceSink = RetrievalTraceSink.NOOP;
 
     public QaOrchestrator(
             DatasetRepository datasets,
@@ -103,6 +111,12 @@ public class QaOrchestrator {
         this.contextMaxTokens = contextMaxTokens;
         this.qaV2 = qaV2;
         this.qaV2Enabled = qaV2Enabled;
+        this.retrievalMetrics = new RetrievalMetrics(m);
+    }
+
+    @Autowired(required = false)
+    public void setRetrievalTraceSink(RetrievalTraceSink traceSink) {
+        this.traceSink = traceSink == null ? RetrievalTraceSink.NOOP : traceSink;
     }
 
     public QaResult answer(QaRequest request) {
@@ -110,6 +124,30 @@ public class QaOrchestrator {
     }
 
     public QaResult answer(QaRequest request, Consumer<String> tokenConsumer) {
+        boolean v2 = qaV2Enabled && !isDatasetOverviewQuery(request.query());
+        RetrievalTraceContext context = TraceCorrelation.current();
+        if (context == null) context = RetrievalTraceContext.create(v2 ? "V2" : "V1", request.datasetId(),
+                request.userId(), v2 ? "qwen3-v1" : "legacy");
+        RetrievalTraceSession session = TraceCorrelation.currentSession();
+        boolean ownsSession = session == null;
+        if (ownsSession) session = RetrievalTraceSession.start(traceSink, context, "redacted");
+        long started = System.nanoTime();
+        try (TraceCorrelation.Scope ignored = TraceCorrelation.bind(context, session)) {
+            QaResult result = answerInternal(request, tokenConsumer);
+            String status = result.refused() ? "refused" : (result.degradedComponents().isEmpty() ? "success" : "degraded");
+            retrievalMetrics.request(context, status);
+            retrievalMetrics.latency(context, status, (System.nanoTime() - started) / 1_000_000L);
+            if (!result.degradedComponents().isEmpty()) retrievalMetrics.degraded(context);
+            if (ownsSession) session.complete(result.refused(), result.degradedComponents());
+            return result;
+        } catch (RuntimeException error) {
+            retrievalMetrics.failure(context);
+            if (ownsSession) session.fail("qa-failure", List.of("QA_FAILURE"));
+            throw error;
+        }
+    }
+
+    private QaResult answerInternal(QaRequest request, Consumer<String> tokenConsumer) {
         if (request.query() == null || request.query().isBlank()) throw new IllegalArgumentException("问题不能为空");
         limiter.check(request.datasetId());
         Dataset dataset = datasets.findById(request.datasetId());
@@ -155,7 +193,7 @@ public class QaOrchestrator {
         SearchStages stages = retrievalResult.stages();
         List<ScoredChunk> results = retrievalResult.selected();
         List<ScoredChunk> contextChunks = retrievalResult.contextChunks();
-        String traceId = UUID.randomUUID().toString();
+        String traceId = currentTraceId();
         double rawVectorScore = stages.vectorResults().isEmpty() ? 0 : stages.vectorResults().get(0).score();
         double confidence = Math.max(0, Math.min(1, rawVectorScore));
         int evidenceScore = results.stream().mapToInt(result -> relevance(query, result.content())).max().orElse(0);
@@ -173,6 +211,7 @@ public class QaOrchestrator {
         List<Citation> citations = refused ? List.of() : citations(request.datasetId(), results, 2);
         AnswerApplicationService.AnswerDraft draft = answerApplication.answer(request.userId(), query,
                 compactEvidence(query, results), refused, conversationContext, contextChunks, tokenConsumer);
+        recordV1Evidence(request.datasetId(), results, refused, degradedComponents(stages, draft.answerSource()));
         Map<String, Object> trace = new LinkedHashMap<>();
         trace.put("traceId", traceId);
         trace.put("datasetId", request.datasetId());
@@ -223,13 +262,14 @@ public class QaOrchestrator {
                 .limit(5)
                 .map(chunk -> new ScoredChunk(chunk.id(), chunk.content(), 1, "dataset-overview", chunk.index() + 1))
                 .toList();
-        String traceId = UUID.randomUUID().toString();
+        String traceId = currentTraceId();
         List<Citation> citations = citations(request.datasetId(), contextChunks, 2);
         String answer = overviewAnswer(dataset, documentsForDataset, chunksForDataset);
         SearchStages emptyStages = new SearchStages(query, List.of(query), query, List.of(), List.of(), contextChunks, List.of(), false, contextChunks);
         AnswerApplicationService.AnswerDraft draft = new AnswerApplicationService.AnswerDraft(answer, "",
                 contextWindow.fit(contextChunks.stream().map(ScoredChunk::content).toList(), contextMaxTokens),
                 "dataset-overview", "");
+        recordV1Evidence(request.datasetId(), contextChunks, false, List.of());
         Map<String, Object> trace = new LinkedHashMap<>();
         trace.put("traceId", traceId);
         trace.put("datasetId", request.datasetId());
@@ -556,6 +596,52 @@ public class QaOrchestrator {
 
     private void persistTrace(Map<String, Object> trace) {
         answerTraceRepository.saveTrace(trace);
+    }
+
+    private String currentTraceId() {
+        RetrievalTraceContext context = TraceCorrelation.current();
+        return context == null ? UUID.randomUUID().toString() : context.traceId();
+    }
+
+    private List<String> degradedComponents(SearchStages stages, String answerSource) {
+        return answerDegradation(stages == null ? List.of() : stages.degradedComponents(), answerSource);
+    }
+
+    private void recordV1Evidence(long datasetId, List<ScoredChunk> selected, boolean refused,
+            List<String> degradedComponents) {
+        RetrievalTraceSession trace = TraceCorrelation.currentSession();
+        if (trace == null) return;
+        List<ScoredChunk> values = selected == null ? List.of() : selected.stream().filter(java.util.Objects::nonNull)
+                .limit(64).toList();
+        long actionId = trace.action("EVIDENCE_CAPTURE", "v1", Map.of("stage", "evidence", "selectedCount", values.size()),
+                Map.of("evidenceCount", values.size(), "refused", refused), 0, values.size(),
+                !degradedComponents.isEmpty(), degradedComponents);
+        Map<Long, Chunk> resolved = chunks.findActiveByIds(datasetId, values.stream().map(ScoredChunk::chunkId).toList())
+                .stream().collect(Collectors.toMap(Chunk::id, value -> value, (left, right) -> left));
+        for (ScoredChunk value : values) {
+            Chunk chunk = resolved.get(value.chunkId());
+            Long documentId = chunk == null ? null : chunk.documentId();
+            Long versionId = chunk == null ? null : longValue(chunk.metadata().get("version"));
+            Map<String, Object> locator = new LinkedHashMap<>();
+            if (chunk != null) {
+                copyLocator(locator, "page", chunk.metadata().get("page"));
+                copyLocator(locator, "titlePath", chunk.metadata().get("titlePath"));
+            }
+            trace.evidence(actionId, new RetrievalTraceSink.Evidence(0, datasetId, documentId, versionId, null, null,
+                    value.channel(), value.score(), value.rank(), true, value.content(), locator));
+        }
+        trace.action("ANSWER_GENERATE", "answer", Map.of("stage", "answer"),
+                Map.of("refused", refused), 0, 0, false, degradedComponents);
+    }
+
+    private Long longValue(Object value) {
+        if (value instanceof Number number) return number.longValue();
+        try { return value == null ? null : Long.valueOf(String.valueOf(value)); }
+        catch (NumberFormatException ignored) { return null; }
+    }
+
+    private void copyLocator(Map<String, Object> target, String key, Object value) {
+        if (value != null && !String.valueOf(value).isBlank()) target.put(key, String.valueOf(value));
     }
 
     private int intValue(Object value, int fallback) {

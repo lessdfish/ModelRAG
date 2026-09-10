@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.modelrag.common.exception.BusinessException;
 import com.modelrag.common.exception.ErrorCode;
 import com.modelrag.knowledge.model.RetrievalUnit;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.ResultSet;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -28,12 +29,16 @@ public class PostgresRetrievalProjectionOutbox implements RetrievalProjectionOut
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
+    private volatile MeterRegistry metrics;
 
     @Autowired
     public PostgresRetrievalProjectionOutbox(JdbcTemplate jdbc, ObjectMapper json) {
         this.jdbc = jdbc;
         this.json = json;
     }
+
+    @Autowired(required = false)
+    public void setMetrics(MeterRegistry metrics) { this.metrics = metrics; }
 
     @Override
     public void appendBatch(long buildId, List<RetrievalUnit> units) {
@@ -59,7 +64,7 @@ public class PostgresRetrievalProjectionOutbox implements RetrievalProjectionOut
     public List<RetrievalProjectionOutboxEvent> claimDue(int limit) {
         int boundedLimit = Math.min(MAX_CLAIM, Math.max(0, limit));
         if (boundedLimit == 0) return List.of();
-        return jdbc.query("""
+        List<RetrievalProjectionOutboxEvent> claimed = jdbc.query("""
                 WITH claimed AS (
                     SELECT id
                     FROM kb_retrieval_projection_outbox
@@ -78,6 +83,8 @@ public class PostgresRetrievalProjectionOutbox implements RetrievalProjectionOut
                           o.index_build_id,o.retrieval_unit_id,o.payload,o.status,o.retry_count,
                           o.next_retry_at,o.lease_until,o.dead_letter,o.error_msg,o.idempotency_key
                 """, (rs, row) -> event(rs), boundedLimit);
+        recordOutboxMetrics();
+        return claimed;
     }
 
     @Override
@@ -161,5 +168,27 @@ public class PostgresRetrievalProjectionOutbox implements RetrievalProjectionOut
     private Instant instant(ResultSet rs, String column) throws java.sql.SQLException {
         Timestamp value = rs.getTimestamp(column);
         return value == null ? null : value.toInstant();
+    }
+
+    private void recordOutboxMetrics() {
+        MeterRegistry registry = metrics;
+        if (registry == null) return;
+        try {
+            Number backlog = jdbc.queryForObject("SELECT COUNT(*) FROM kb_retrieval_projection_outbox "
+                    + "WHERE dead_letter=FALSE AND status IN ('PENDING','PROCESSING')", Number.class);
+            Number dead = jdbc.queryForObject("SELECT COUNT(*) FROM kb_retrieval_projection_outbox WHERE dead_letter=TRUE",
+                    Number.class);
+            Number oldest = jdbc.queryForObject("SELECT COALESCE(EXTRACT(EPOCH FROM (NOW()-MIN(create_time))),0) "
+                    + "FROM kb_retrieval_projection_outbox WHERE dead_letter=FALSE AND status IN ('PENDING','PROCESSING')",
+                    Number.class);
+            registry.summary("modelrag.outbox.backlog", "channel", "v2")
+                    .record(backlog == null ? 0 : backlog.longValue());
+            registry.summary("modelrag.outbox.dead_letter", "channel", "v2")
+                    .record(dead == null ? 0 : dead.longValue());
+            registry.summary("modelrag.outbox.oldest_age", "channel", "v2")
+                    .record(oldest == null ? 0 : Math.max(0, oldest.doubleValue()));
+        } catch (RuntimeException ignored) {
+            // Metrics must not interfere with outbox delivery.
+        }
     }
 }

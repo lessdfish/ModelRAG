@@ -122,6 +122,22 @@ modelrag:
     url: ${MODELRAG_INTENT_URL:http://127.0.0.1:18080}
   eval:
     llm-judge-enabled: ${MODELRAG_EVAL_LLM_JUDGE_ENABLED:false}
+    base-commit: ${MODELRAG_EVAL_BASE_COMMIT:unknown}
+    full-scale-benchmark-run: ${MODELRAG_EVAL_FULL_SCALE_BENCHMARK_RUN:false}
+    quality-regression-tolerance: ${MODELRAG_EVAL_QUALITY_REGRESSION_TOLERANCE:0.0}
+    error-rate-tolerance: ${MODELRAG_EVAL_ERROR_RATE_TOLERANCE:0.0}
+    degraded-rate-tolerance: ${MODELRAG_EVAL_DEGRADED_RATE_TOLERANCE:0.0}
+    benchmark:
+      active-retrieval-units: ${MODELRAG_EVAL_BENCHMARK_ACTIVE_RETRIEVAL_UNITS:0}
+      active-documents: ${MODELRAG_EVAL_BENCHMARK_ACTIVE_DOCUMENTS:0}
+      stale-retrieval-units: ${MODELRAG_EVAL_BENCHMARK_STALE_RETRIEVAL_UNITS:0}
+      active-build-count: ${MODELRAG_EVAL_BENCHMARK_ACTIVE_BUILD_COUNT:0}
+      active-build-filter-limit: ${MODELRAG_EVAL_BENCHMARK_ACTIVE_BUILD_FILTER_LIMIT:10000}
+      no-acl-leakage: ${MODELRAG_EVAL_BENCHMARK_NO_ACL_LEAKAGE:false}
+      no-stale-build-leakage: ${MODELRAG_EVAL_BENCHMARK_NO_STALE_BUILD_LEAKAGE:false}
+      no-active-build-truncation: ${MODELRAG_EVAL_BENCHMARK_NO_ACTIVE_BUILD_TRUNCATION:false}
+      bounded-results: ${MODELRAG_EVAL_BENCHMARK_BOUNDED_RESULTS:false}
+      valid-evidence: ${MODELRAG_EVAL_BENCHMARK_VALID_EVIDENCE:false}
   security:
     token-secret: ${MODELRAG_TOKEN_SECRET}
     secret-root-key: ${MODELRAG_SECRET_ROOT_KEY}

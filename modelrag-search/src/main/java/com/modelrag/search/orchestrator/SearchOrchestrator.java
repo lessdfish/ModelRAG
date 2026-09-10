@@ -3,6 +3,11 @@ package com.modelrag.search.orchestrator;
 import com.modelrag.common.vector.SearchRequest;
 import com.modelrag.common.vector.SearchResult;
 import com.modelrag.common.vector.VectorStore;
+import com.modelrag.common.observability.RetrievalMetrics;
+import com.modelrag.common.observability.RetrievalTraceContext;
+import com.modelrag.common.observability.RetrievalTraceSession;
+import com.modelrag.common.observability.RetrievalTraceSink;
+import com.modelrag.common.observability.TraceCorrelation;
 import com.modelrag.api.TextEmbeddingProvider;
 import com.modelrag.knowledge.repository.IndexVersionRepository;
 import com.modelrag.search.channel.Bm25Search;
@@ -52,6 +57,8 @@ public class SearchOrchestrator implements SearchFacade {
     private final boolean shadowEnabled;
     private final long channelTimeoutMs;
     private final long rerankTimeoutMs;
+    private final RetrievalMetrics retrievalMetrics;
+    private volatile RetrievalTraceSink traceSink = RetrievalTraceSink.NOOP;
 
     public SearchOrchestrator(VectorStore vectors, TextEmbeddingProvider embeddings, Bm25Search bm25,
             Reranker reranker, QueryRewriter rewriter,
@@ -81,6 +88,7 @@ public class SearchOrchestrator implements SearchFacade {
         this.shadowExecutor = Runnable::run;
         this.shadowComparator = null;
         this.shadowEnabled = false;
+        this.retrievalMetrics = new RetrievalMetrics(metrics);
     }
 
     @Autowired
@@ -115,10 +123,37 @@ public class SearchOrchestrator implements SearchFacade {
         this.shadowExecutor = shadowExecutor;
         this.shadowComparator = shadowComparator;
         this.shadowEnabled = shadowEnabled;
+        this.retrievalMetrics = new RetrievalMetrics(metrics);
+    }
+
+    @Autowired(required = false)
+    public void setRetrievalTraceSink(RetrievalTraceSink traceSink) {
+        this.traceSink = traceSink == null ? RetrievalTraceSink.NOOP : traceSink;
     }
 
     @Override
     public SearchStages inspect(HybridSearchRequest request) {
+        RetrievalTraceContext context = TraceCorrelation.current();
+        if (context == null) context = RetrievalTraceContext.create("V1", request.datasetId(), null, "legacy");
+        RetrievalTraceSession session = TraceCorrelation.currentSession();
+        boolean ownsSession = session == null;
+        if (ownsSession) session = RetrievalTraceSession.start(traceSink, context, "redacted");
+        try (TraceCorrelation.Scope ignored = TraceCorrelation.bind(context, session)) {
+            SearchStages result = inspectInternal(request);
+            String status = result.degradedComponents().isEmpty() ? "success" : "degraded";
+            retrievalMetrics.request(context, status);
+            retrievalMetrics.latency(context, status, result.latencyMs().getOrDefault("total", 0L));
+            if (!result.degradedComponents().isEmpty()) retrievalMetrics.degraded(context);
+            if (ownsSession) session.complete(false, result.degradedComponents());
+            return result;
+        } catch (RuntimeException error) {
+            retrievalMetrics.failure(context);
+            if (ownsSession) session.fail("retrieval-failure", List.of("RETRIEVAL_FAILURE"));
+            throw error;
+        }
+    }
+
+    private SearchStages inspectInternal(HybridSearchRequest request) {
         final HybridSearchRequest scopedRequest = request.withActiveIndexVersions(
                 versions.findActiveByDatasetId(request.datasetId()));
         long started = System.nanoTime();
@@ -127,18 +162,34 @@ public class SearchOrchestrator implements SearchFacade {
         var expanded = rewriter.expand(request.query());
         Queue<String> degraded = new ConcurrentLinkedQueue<>();
         Map<String, Long> latency = new ConcurrentHashMap<>();
+        final RetrievalTraceContext traceContext = TraceCorrelation.current();
+        final RetrievalTraceSession traceSession = TraceCorrelation.currentSession();
 
         CompletableFuture<ChannelResult> vectorFuture = CompletableFuture
-                .supplyAsync(() -> timed("pgvector", () -> retrieveVector(scopedRequest.datasetId(), expanded.searchQueries(), recall), latency), vectorExecutor)
+                .supplyAsync(() -> TraceCorrelation.call(traceContext, traceSession,
+                        () -> timed("pgvector", () -> retrieveVector(scopedRequest.datasetId(), expanded.searchQueries(), recall), latency)), vectorExecutor)
                 .orTimeout(channelTimeoutMs, TimeUnit.MILLISECONDS)
                 .exceptionally(error -> failed("pgvector", error, degraded, latency));
         CompletableFuture<ChannelResult> bm25Future = CompletableFuture
-                .supplyAsync(() -> timed("elasticsearch", () -> retrieveBm25(scopedRequest, expanded.searchQueries(), topK, recall), latency), bm25Executor)
+                .supplyAsync(() -> TraceCorrelation.call(traceContext, traceSession,
+                        () -> timed("elasticsearch", () -> retrieveBm25(scopedRequest, expanded.searchQueries(), topK, recall), latency)), bm25Executor)
                 .orTimeout(channelTimeoutMs, TimeUnit.MILLISECONDS)
                 .exceptionally(error -> failed("elasticsearch", error, degraded, latency));
 
         List<ScoredChunk> vector = vectorFuture.join().results();
         List<ScoredChunk> lexical = bm25Future.join().results();
+        traceAction(traceSession, "SEMANTIC_SEARCH", "vector", Map.of("stage", "semantic", "topK", topK),
+                Map.of("candidateCount", vector.size()), latency.getOrDefault("pgvector", 0L), vector.size(),
+                degraded.contains("pgvector"), degraded);
+        traceAction(traceSession, "LEXICAL_SEARCH", "lexical", Map.of("stage", "lexical", "topK", topK),
+                Map.of("candidateCount", lexical.size()), latency.getOrDefault("elasticsearch", 0L), lexical.size(),
+                degraded.contains("elasticsearch"), degraded);
+        retrievalMetrics.stage(traceContext, "semantic", "vector", degraded.contains("pgvector") ? "degraded" : "success",
+                latency.getOrDefault("pgvector", 0L));
+        retrievalMetrics.stage(traceContext, "lexical", "lexical", degraded.contains("elasticsearch") ? "degraded" : "success",
+                latency.getOrDefault("elasticsearch", 0L));
+        retrievalMetrics.candidates(traceContext, "vector", vector.size());
+        retrievalMetrics.candidates(traceContext, "lexical", lexical.size());
         Map<Long, Double> fusedScores = new HashMap<>();
         Map<Long, String> text = new HashMap<>();
         add(fusedScores, text, vector, vectorWeight);
@@ -148,6 +199,9 @@ public class SearchOrchestrator implements SearchFacade {
                 .sorted(Comparator.comparingDouble(ScoredChunk::score).reversed())
                 .limit(20)
                 .toList());
+        traceAction(traceSession, "HYBRID_FUSION", "hybrid", Map.of("stage", "fusion", "topK", topK),
+                Map.of("candidateCount", fused.size()), 0, fused.size(), false, degraded);
+        retrievalMetrics.candidates(traceContext, "hybrid", fused.size());
 
         boolean shouldRerank = reranker.enabled() && shouldRerank(vector, lexical, fused, scopedRequest.query());
         List<ScoredChunk> reranked = fused;
@@ -161,14 +215,19 @@ public class SearchOrchestrator implements SearchFacade {
                 rerankApplied = true;
                 if (reranked.stream().anyMatch(item -> "local-rerank".equals(item.channel()))) {
                     degraded.add("reranker");
-                    metrics.counter("modelrag.retrieval.degraded", "component", "reranker").increment();
+                    metrics.counter("modelrag.retrieval.v1.degraded", "stage", "reranker").increment();
                 }
             } catch (RuntimeException error) {
                 degraded.add("reranker");
-                metrics.counter("modelrag.retrieval.degraded", "component", "reranker").increment();
+                metrics.counter("modelrag.retrieval.v1.degraded", "stage", "reranker").increment();
             } finally {
                 latency.put("reranker", (System.nanoTime() - rerankStarted) / 1_000_000);
             }
+            traceAction(traceSession, "RERANK", "rerank", Map.of("stage", "rerank", "topK", topK),
+                    Map.of("candidateCount", reranked.size()), latency.getOrDefault("reranker", 0L), reranked.size(),
+                    degraded.contains("reranker"), degraded);
+            retrievalMetrics.stage(traceContext, "rerank", "rerank", degraded.contains("reranker") ? "degraded" : "success",
+                    latency.getOrDefault("reranker", 0L));
         }
         List<ScoredChunk> thresholded = threshold(reranked, scopedRequest.threshold(), rerankApplied);
         List<ScoredChunk> finalResults = rank(selectContext(thresholded, topK, rerankApplied));
@@ -179,10 +238,22 @@ public class SearchOrchestrator implements SearchFacade {
         record("threshold", thresholded.size());
         record("context", finalResults.size());
         latency.putIfAbsent("total", (System.nanoTime() - started) / 1_000_000);
+        traceAction(traceSession, "EVIDENCE_SELECT", "context", Map.of("stage", "context", "topK", topK),
+                Map.of("candidateCount", finalResults.size()), latency.getOrDefault("total", 0L), finalResults.size(),
+                !degraded.isEmpty(), degraded);
+        retrievalMetrics.candidates(traceContext, "context", finalResults.size());
         submitShadow(request, finalResults, latency.getOrDefault("total", 0L));
         return new SearchStages(expanded.rewrittenQuery(), expanded.searchQueries(), expanded.rerankQuery(),
                 vector, lexical, fused, rerankApplied ? reranked : List.of(), rerankApplied, finalResults,
                 degraded.stream().distinct().toList(), latency);
+    }
+
+    private void traceAction(RetrievalTraceSession trace, String actionType, String channel,
+            Map<String, ?> requestSummary, Map<String, ?> resultSummary, long latencyMs, int candidateCount,
+            boolean degraded, Queue<String> degradedComponents) {
+        if (trace == null) return;
+        trace.action(actionType, channel, requestSummary, resultSummary, latencyMs, candidateCount, degraded,
+                degradedComponents == null ? List.of() : degradedComponents.stream().distinct().toList());
     }
 
     private ChannelResult timed(String component, ChannelSupplier supplier, Map<String, Long> latency) {
@@ -196,7 +267,7 @@ public class SearchOrchestrator implements SearchFacade {
 
     private ChannelResult failed(String component, Throwable error, Queue<String> degraded, Map<String, Long> latency) {
         degraded.add(component);
-        metrics.counter("modelrag.retrieval.degraded", "component", component).increment();
+        metrics.counter("modelrag.retrieval.v1.degraded", "stage", component).increment();
         latency.putIfAbsent(component, channelTimeoutMs);
         return new ChannelResult(List.of());
     }
@@ -288,8 +359,8 @@ public class SearchOrchestrator implements SearchFacade {
     }
 
     private void record(String stage, int count) {
-        metrics.counter("modelrag.retrieval.candidates", "stage", stage).increment(count);
-        if (count == 0) metrics.counter("modelrag.retrieval.empty", "stage", stage).increment();
+        metrics.counter("modelrag.retrieval.v1.candidates", "stage", stage).increment(count);
+        if (count == 0) metrics.counter("modelrag.retrieval.v1.empty", "stage", stage).increment();
     }
 
     private record ChannelResult(List<ScoredChunk> results) {}

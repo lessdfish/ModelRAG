@@ -15,6 +15,7 @@ import com.modelrag.indexing.pipeline.stage.LexicalProjectionStage;
 import com.modelrag.indexing.pipeline.stage.RetrievalUnitBuildStage;
 import com.modelrag.indexing.pipeline.stage.StructurePersistStage;
 import com.modelrag.indexing.pipeline.stage.VectorProjectionStage;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -34,6 +35,7 @@ public class IndexBuildCoordinator {
     private final LexicalProjectionStage lexical;
     private final String embeddingProfile;
     private final String rerankProfile;
+    private volatile MeterRegistry metrics;
 
     @Autowired
     public IndexBuildCoordinator(DocumentRepository documents, DocumentVersionRepository versions,
@@ -57,8 +59,12 @@ public class IndexBuildCoordinator {
         this.rerankProfile = rerankProfile;
     }
 
+    @Autowired(required = false)
+    public void setMetrics(MeterRegistry metrics) { this.metrics = metrics; }
+
     /** Starts V2 from the current immutable version and leaves lexical delivery to the async worker. */
     public IndexBuild start(long documentId) {
+        long started = System.nanoTime();
         Document document = documents.findById(documentId);
         DocumentVersion version = activeVersion(document);
         IndexBuild build = lifecycle.createBuild(document.datasetId(), document.id(), version.id(),
@@ -86,6 +92,10 @@ public class IndexBuildCoordinator {
             lexical.project(context.withCounts(nodeCount, unitCount, vectorCount, 0));
         } catch (Exception error) {
             lifecycle.fail(build.id(), SafeErrorSummary.of(error));
+            if (metrics != null) metrics.counter("modelrag.index.build.failures", "stage", "pipeline").increment();
+        } finally {
+            if (metrics != null) metrics.timer("modelrag.index.build.latency", "stage", "pipeline")
+                    .record(System.nanoTime() - started, java.util.concurrent.TimeUnit.NANOSECONDS);
         }
         return builds.findById(build.id()).orElse(build);
     }

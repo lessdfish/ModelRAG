@@ -10,6 +10,10 @@ import com.modelrag.agent.retrieval.RetrievalActionRequest;
 import com.modelrag.agent.retrieval.RetrievalObservation;
 import com.modelrag.agent.retrieval.RetrievalToolContext;
 import com.modelrag.api.ConversationContextBuilder.ConversationContext;
+import com.modelrag.common.observability.RetrievalTraceContext;
+import com.modelrag.common.observability.RetrievalTraceSession;
+import com.modelrag.common.observability.RetrievalTraceSink;
+import com.modelrag.common.observability.TraceCorrelation;
 import com.modelrag.qa.dto.Citation;
 import com.modelrag.qa.dto.QaRequest;
 import com.modelrag.qa.evidence.AnswerSynthesizer;
@@ -49,6 +53,7 @@ public class AgenticRetrievalOrchestrator {
     private final int maxSearchActions;
     private final int maxNavigationActions;
     private final int maxObservationItems;
+    private volatile RetrievalTraceSink traceSink = RetrievalTraceSink.NOOP;
 
     public AgenticRetrievalOrchestrator(RetrievalActionRegistry actions, LlmAgentPolicy policy,
             AgentDecisionValidator validator, EvidenceSelector evidenceSelector,
@@ -83,6 +88,11 @@ public class AgenticRetrievalOrchestrator {
         this.maxObservationItems = Math.max(1, Math.min(RetrievalObservation.MAX_ITEMS, maxObservationItems));
     }
 
+    @Autowired(required = false)
+    public void setRetrievalTraceSink(RetrievalTraceSink traceSink) {
+        this.traceSink = traceSink == null ? RetrievalTraceSink.NOOP : traceSink;
+    }
+
     public AgenticRetrievalResult execute(QaRequest request, String executionId) {
         return execute(request, executionId, () -> false, AgenticRetrievalEventSink.NOOP);
     }
@@ -96,8 +106,31 @@ public class AgenticRetrievalOrchestrator {
         if (request == null || executionId == null || executionId.isBlank()) {
             throw new IllegalArgumentException("request/executionId is required");
         }
+        RetrievalTraceContext traceContext = TraceCorrelation.current();
+        if (traceContext == null) traceContext = RetrievalTraceContext.create("AGENTIC_RAG", request.datasetId(),
+                request.userId(), "qwen3-v1");
+        traceContext = traceContext.withExecutionId(executionId);
+        RetrievalTraceSession trace = TraceCorrelation.currentSession();
+        boolean ownsTrace = trace == null;
+        if (ownsTrace) trace = RetrievalTraceSession.start(traceSink, traceContext, "redacted");
+        try (TraceCorrelation.Scope ignored = TraceCorrelation.bind(traceContext, trace)) {
+            AgenticRetrievalResult result = executeInternal(request, executionId, cancelled, eventSink, trace);
+            if (ownsTrace) trace.complete(result.refused(), result.degradedComponents());
+            return result;
+        } catch (RuntimeException error) {
+            if (ownsTrace) trace.fail("agent-retrieval-failure", List.of("AGENT_RETRIEVAL_FAILURE"));
+            throw error;
+        }
+    }
+
+    private AgenticRetrievalResult executeInternal(QaRequest request, String executionId, BooleanSupplier cancelled,
+            AgenticRetrievalEventSink eventSink, RetrievalTraceSession trace) {
+        if (request == null || executionId == null || executionId.isBlank()) {
+            throw new IllegalArgumentException("request/executionId is required");
+        }
         AgenticRetrievalEventSink events = eventSink == null ? AgenticRetrievalEventSink.NOOP : eventSink;
-        String traceId = UUID.randomUUID().toString();
+        String traceId = TraceCorrelation.current() == null ? UUID.randomUUID().toString()
+                : TraceCorrelation.current().traceId();
         long started = System.nanoTime();
         RetrievalToolContext context = new RetrievalToolContext(executionId, request.userId(), request.datasetId(),
                 request.conversationId(), request.query(), maxSteps, maxSearchActions, maxNavigationActions);
@@ -150,6 +183,20 @@ public class AgenticRetrievalOrchestrator {
                 RetrievalObservation observation = actions.execute(new RetrievalActionRequest(validated.action(),
                         validated.arguments()), context);
                 if (observation != null) {
+                    long traceAction = trace.action(validated.action().name(), "agent",
+                            Map.of("stage", "agent-action"),
+                            Map.of("itemCount", observation.items().size(),
+                                    "newEvidenceCount", observation.newEvidence().size(),
+                                    "navigationActions", context.consumedNavigationActions()),
+                            observation.latencyMs(), observation.items().size(),
+                            !observation.degradedComponents().isEmpty(), observation.degradedComponents());
+                    int evidenceRank = 0;
+                    for (Evidence value : observation.newEvidence().stream().limit(EvidenceSet.MAX_EVIDENCE).toList()) {
+                        trace.evidence(traceAction, new RetrievalTraceSink.Evidence(0, value.datasetId(),
+                                value.documentId(), value.documentVersionId(), value.nodeId(), value.retrievalUnitId(),
+                                value.channel() == null ? "unknown" : value.channel().name(), value.score(), ++evidenceRank,
+                                value.primary(), value.content(), Map.of("titlePath", value.titlePath())));
+                    }
                     observations.add(observation);
                     if (observations.size() > AgentPolicyInput.MAX_OBSERVATIONS) observations.remove(0);
                     accumulated.addAll(observation.newEvidence().stream().limit(maxObservationItems).toList());
@@ -207,6 +254,8 @@ public class AgenticRetrievalOrchestrator {
                 List.copyOf(degraded),
                 elapsed(started), context.consumedNavigationActions());
         if (stopped || !sufficiency.sufficient()) {
+            trace.action("ANSWER_GENERATE", "answer", Map.of("stage", "answer"),
+                    Map.of("refused", true), 0, 0, false, evidenceSet.degradedComponents());
             metrics.counter("modelrag.agent.retrieval.refused").increment();
             return new AgenticRetrievalResult(executionId, stopped ? stopStatus : "DONE",
                     AnswerSynthesizer.INSUFFICIENT_EVIDENCE, List.of(), sufficiency.confidence(), true,
@@ -217,6 +266,8 @@ public class AgenticRetrievalOrchestrator {
                 evidenceSet, null);
         metrics.counter("modelrag.agent.retrieval.synthesis.calls").increment();
         List<Citation> citations = selected.stream().filter(Evidence::primary).map(Citation::fromEvidence).toList();
+        trace.action("ANSWER_GENERATE", "answer", Map.of("stage", "answer"),
+                Map.of("refused", false), 0, 0, false, evidenceSet.degradedComponents());
         steps.add("ANSWER");
         metrics.counter("modelrag.agent.retrieval.completed").increment();
         return new AgenticRetrievalResult(executionId, "DONE", draft.answer(), citations,

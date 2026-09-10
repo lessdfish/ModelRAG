@@ -11,6 +11,9 @@ import com.modelrag.agent.retrieval.RetrievalActionRequest;
 import com.modelrag.agent.retrieval.RetrievalObservation;
 import com.modelrag.agent.retrieval.RetrievalToolContext;
 import com.modelrag.api.ConversationContextBuilder.ConversationContext;
+import com.modelrag.common.observability.RetrievalTraceContext;
+import com.modelrag.common.observability.RetrievalTraceSink;
+import com.modelrag.common.observability.TraceCorrelation;
 import com.modelrag.qa.dto.QaRequest;
 import com.modelrag.qa.evidence.AnswerSynthesizer;
 import com.modelrag.qa.evidence.Evidence;
@@ -49,6 +52,7 @@ public class AgenticRagModeHandler implements AgentModeHandler {
     private final ContextAssembler contexts;
     private final MeterRegistry metrics;
     private final int maxObservationItems;
+    private volatile RetrievalTraceSink traceSink = RetrievalTraceSink.NOOP;
 
     public AgenticRagModeHandler(RetrievalActionRegistry actions, LlmAgentPolicy policy,
             AgentDecisionValidator validator, EvidenceSelector evidenceSelector,
@@ -64,6 +68,11 @@ public class AgenticRagModeHandler implements AgentModeHandler {
         this.contexts = contexts;
         this.metrics = metrics;
         this.maxObservationItems = Math.max(1, Math.min(RetrievalObservation.MAX_ITEMS, maxObservationItems));
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setRetrievalTraceSink(RetrievalTraceSink traceSink) {
+        this.traceSink = traceSink == null ? RetrievalTraceSink.NOOP : traceSink;
     }
 
     @Override public String mode() { return "AGENTIC_RAG"; }
@@ -107,6 +116,7 @@ public class AgenticRagModeHandler implements AgentModeHandler {
         }
         RetrievalToolContext context = context(state);
         RetrievalObservation observation = actions.execute(new RetrievalActionRequest(name, action.arguments()), context);
+        recordAction(state, name, observation);
         context.observe(observation);
         AgentBudgetState budgets = state.budgets().consumeStep();
         if (isSearch(name)) budgets = budgets.consumeSearch();
@@ -139,6 +149,7 @@ public class AgenticRagModeHandler implements AgentModeHandler {
         List<Evidence> selected = select(state);
         EvidenceSufficiency sufficiency = sufficiencyPolicy.evaluate(state.goal(), selected);
         if (!sufficiency.sufficient()) {
+            recordAnswer(state, true, state.degradedComponents(), state.currentStep(), state.evidence().size());
             return state.toBuilder().status(AgentRuntimeStatus.DONE).pendingAction(null)
                     .result(result(state, AnswerSynthesizer.INSUFFICIENT_EVIDENCE, List.of(),
                             sufficiency.confidence(), true)).build();
@@ -155,6 +166,7 @@ public class AgenticRagModeHandler implements AgentModeHandler {
         AnswerSynthesizer.AnswerDraft draft = synthesizer.synthesize(state.userId(), state.goal(), conversation, set, null);
         List<com.modelrag.qa.dto.Citation> citations = selected.stream().filter(Evidence::primary)
                 .map(com.modelrag.qa.dto.Citation::fromEvidence).toList();
+        recordAnswer(state, false, state.degradedComponents(), state.currentStep(), selected.size());
         return state.toBuilder().status(AgentRuntimeStatus.DONE).pendingAction(null)
                 .result(result(state, draft.answer(), citations, sufficiency.confidence(), false))
                 .toolState(withSteps(state.toolState(), List.of("ANSWER"))).build();
@@ -280,4 +292,51 @@ public class AgenticRagModeHandler implements AgentModeHandler {
     }
 
     private static String stringValue(Object value) { return value == null ? "" : String.valueOf(value); }
+
+    private void recordAction(AgentState state, RetrievalActionName name, RetrievalObservation observation) {
+        if (observation == null) return;
+        RetrievalTraceContext context = traceContext(state);
+        try {
+            traceSink.start(context, "redacted");
+            long actionId = traceSink.recordAction(context, new RetrievalTraceSink.Action(
+                    state.currentStep() + 1, name.name(), "agent", Map.of("stage", "agent-action"),
+                    Map.of("itemCount", observation.items().size(), "newEvidenceCount", observation.newEvidence().size(),
+                            "navigationActions", state.budgets().remainingNavigationActions()), observation.latencyMs(),
+                    observation.items().size(), !observation.degradedComponents().isEmpty(),
+                    observation.degradedComponents()));
+            int rank = 0;
+            for (Evidence value : observation.newEvidence().stream().limit(EvidenceSet.MAX_EVIDENCE).toList()) {
+                traceSink.recordEvidence(context, new RetrievalTraceSink.Evidence(actionId, value.datasetId(),
+                        value.documentId(), value.documentVersionId(), value.nodeId(), value.retrievalUnitId(),
+                        value.channel() == null ? "unknown" : value.channel().name(), value.score(), ++rank,
+                        value.primary(), value.content(), Map.of("titlePath", value.titlePath())));
+            }
+        } catch (RuntimeException ignored) {
+            // Trace persistence is secondary to the durable action transition.
+        }
+    }
+
+    private void recordAnswer(AgentState state, boolean refused, List<String> degraded,
+            long totalActions, long totalEvidence) {
+        RetrievalTraceContext context = traceContext(state);
+        try {
+            traceSink.start(context, "redacted");
+            traceSink.recordAction(context, new RetrievalTraceSink.Action((int) Math.min(Integer.MAX_VALUE,
+                    totalActions + 1), "ANSWER_GENERATE", "answer", Map.of("stage", "answer"),
+                    Map.of("refused", refused), 0, 0, false, degraded));
+            traceSink.complete(context, new RetrievalTraceSink.Completion(totalActions + 1, totalEvidence,
+                    0, refused, degraded));
+        } catch (RuntimeException ignored) {
+            // Trace persistence must not change the terminal agent result.
+        }
+    }
+
+    private RetrievalTraceContext traceContext(AgentState state) {
+        String requestId = stringValue(state.toolState().get("requestId"));
+        if (requestId.isBlank()) requestId = TraceCorrelation.currentRequestId();
+        String traceId = stringValue(state.toolState().get("traceId"));
+        if (traceId.isBlank()) traceId = UUID.randomUUID().toString();
+        return new RetrievalTraceContext(requestId, traceId, state.executionId(),
+                "AGENTIC_RAG", state.datasetId(), state.userId(), "qwen3-v1");
+    }
 }

@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -45,11 +46,22 @@ public class EvalController {
     private final AccessControlService access;
     private final ObjectProvider<ModelGateway> models;
     private final boolean llmJudgeEnabled;
+    private final EvaluationRunner evaluationRunner;
 
+    /** Compatibility constructor retained for the test persistence configuration. */
     public EvalController(QaOrchestrator qa, SearchFacade search, DatasetRepository datasets,
             ChunkRepository chunks, JdbcTemplate jdbc,
             ObjectMapper json, AccessControlService access, ObjectProvider<ModelGateway> models,
             @Value("${modelrag.eval.llm-judge-enabled:false}") boolean llmJudgeEnabled) {
+        this(qa, search, datasets, chunks, jdbc, json, access, models, llmJudgeEnabled, null);
+    }
+
+    @Autowired
+    public EvalController(QaOrchestrator qa, SearchFacade search, DatasetRepository datasets,
+            ChunkRepository chunks, JdbcTemplate jdbc,
+            ObjectMapper json, AccessControlService access, ObjectProvider<ModelGateway> models,
+            @Value("${modelrag.eval.llm-judge-enabled:false}") boolean llmJudgeEnabled,
+            EvaluationRunner evaluationRunner) {
         this.qa = qa;
         this.search = search;
         this.datasets = datasets;
@@ -59,18 +71,23 @@ public class EvalController {
         this.access = access;
         this.models = models;
         this.llmJudgeEnabled = llmJudgeEnabled;
+        this.evaluationRunner = evaluationRunner;
     }
 
     @PostMapping({"", "/run"})
     public ApiResponse<EvalReport> run(@RequestParam long datasetId, @RequestBody List<EvalItem> items) {
         access.requireDatasetAccess(datasetId);
-        return ApiResponse.success(runItems(datasetId, items));
+        return ApiResponse.success(evaluationRunner == null ? runItems(datasetId, items)
+                : evaluationRunner.run(datasetId, items));
     }
 
     @PostMapping("/compare")
     public ApiResponse<List<EvalComparisonView>> compare(@RequestParam long datasetId,
             @Valid @RequestBody EvalCompareRequest request) {
         access.requireDatasetAccess(datasetId);
+        if (evaluationRunner != null) {
+            return ApiResponse.success(evaluationRunner.compare(datasetId, request.safeItems(), request.safeTopKs()));
+        }
         return ApiResponse.success(request.safeTopKs().stream()
                 .map(topK -> compareTopK(datasetId, request.safeItems(), Math.max(1, Math.min(20, topK))))
                 .toList());
@@ -100,10 +117,13 @@ public class EvalController {
     public ApiResponse<List<EvalItem>> datasets(@RequestParam long datasetId) {
         access.requireDatasetAccess(datasetId);
         return ApiResponse.success(jdbc.query(
-                "SELECT id,question,expected_chunks::text,expected_answer,should_refuse,category,source_trace_id,failure_stage FROM kb_eval_dataset WHERE dataset_id=? ORDER BY id",
+                "SELECT id,question,expected_chunks::text,expected_document_ids::text,expected_node_ids::text,"
+                        + "expected_evidence_groups::text,expected_answer,should_refuse,category,source_trace_id,failure_stage "
+                        + "FROM kb_eval_dataset WHERE dataset_id=? ORDER BY id",
                 (rs, n) -> new EvalItem(rs.getLong(1), rs.getString(2), read(rs.getString(3)),
-                        rs.getString(4), rs.getObject(5, Boolean.class), rs.getString(6), rs.getString(7),
-                        rs.getString(8)), datasetId));
+                        read(rs.getString(4)), read(rs.getString(5)), readGroups(rs.getString(6)),
+                        rs.getString(7), rs.getObject(8, Boolean.class), rs.getString(9), rs.getString(10),
+                        rs.getString(11)), datasetId));
     }
 
     @PostMapping("/bootstrap")
@@ -125,7 +145,8 @@ public class EvalController {
     public ApiResponse<EvalTaskView> runSaved(@RequestParam long datasetId) {
         access.requireDatasetAccess(datasetId);
         List<EvalItem> items = datasets(datasetId).data();
-        EvalReport report = runItems(datasetId, items);
+        EvalReport report = evaluationRunner == null ? runItems(datasetId, items)
+                : evaluationRunner.run(datasetId, items);
         long id = jdbc.queryForObject(
                 "INSERT INTO kb_eval_task(dataset_id,status,report) VALUES (?,'DONE',CAST(? AS jsonb)) RETURNING id",
                 Long.class, datasetId, write(report));
@@ -157,6 +178,17 @@ public class EvalController {
         return report(id);
     }
 
+    @PostMapping("/readiness")
+    public ApiResponse<V2CutoverReadinessReport> readiness(@RequestParam long datasetId,
+            @RequestParam(defaultValue = "unspecified") String benchmarkIdentity,
+            @RequestBody List<EvalItem> items) {
+        access.requireDatasetAccess(datasetId);
+        if (evaluationRunner == null) {
+            return ApiResponse.success(V2CutoverReadinessReport.notReady("production evaluation runner unavailable"));
+        }
+        return ApiResponse.success(evaluationRunner.readiness(datasetId, items, benchmarkIdentity));
+    }
+
     @PostMapping("/from-trace/{traceId}")
     public ApiResponse<Long> createFromTrace(@PathVariable String traceId,
             @RequestParam(defaultValue = "bad-case") String category) {
@@ -165,8 +197,7 @@ public class EvalController {
         if (!replay.found()) throw new IllegalArgumentException("Trace 不存在");
         List<Long> expected = contextChunkIds(replay.contextChunks());
         if (expected.isEmpty()) throw new IllegalArgumentException("Trace 没有最终上下文，无法生成评测样本");
-        return ApiResponse.success(saveItem(replay.datasetId(), new EvalItem(null, replay.query(), expected,
-                replay.answer(), replay.refused(), category, traceId, replay.failureStage())));
+        return ApiResponse.success(saveItem(replay.datasetId(), traceItem(replay, expected, category, traceId)));
     }
 
     private EvalReport runItems(long datasetId, List<EvalItem> items) {
@@ -470,16 +501,23 @@ public class EvalController {
     private long saveItem(long datasetId, EvalItem item) {
         validate(item);
         return jdbc.queryForObject(
-                "INSERT INTO kb_eval_dataset(dataset_id,question,expected_chunks,expected_answer,should_refuse,category,source_trace_id,failure_stage) VALUES (?,?,CAST(? AS jsonb),?,?,?,?,?) RETURNING id",
-                Long.class, datasetId, item.question(), write(item.expectedChunkIds()), item.expectedAnswer(),
+                "INSERT INTO kb_eval_dataset(dataset_id,question,expected_chunks,expected_document_ids,expected_node_ids,"
+                        + "expected_evidence_groups,expected_answer,should_refuse,category,source_trace_id,failure_stage) "
+                        + "VALUES (?,?,CAST(? AS jsonb),CAST(? AS jsonb),CAST(? AS jsonb),CAST(? AS jsonb),?,?,?,?,?) RETURNING id",
+                Long.class, datasetId, item.question(), write(item.expectedChunkIds()), write(item.expectedDocumentIds()),
+                write(item.expectedNodeIds()), write(item.expectedEvidenceGroups()), item.expectedAnswer(),
                 Boolean.TRUE.equals(item.shouldRefuse()), item.category(), item.sourceTraceId(), item.failureStage());
     }
 
     private void updateItem(long id, EvalItem item) {
         validate(item);
         int updated = jdbc.update(
-                "UPDATE kb_eval_dataset SET question=?,expected_chunks=CAST(? AS jsonb),expected_answer=?,should_refuse=?,category=?,source_trace_id=?,failure_stage=? WHERE id=?",
-                item.question(), write(item.expectedChunkIds()), item.expectedAnswer(), Boolean.TRUE.equals(item.shouldRefuse()),
+                "UPDATE kb_eval_dataset SET question=?,expected_chunks=CAST(? AS jsonb),"
+                        + "expected_document_ids=CAST(? AS jsonb),expected_node_ids=CAST(? AS jsonb),"
+                        + "expected_evidence_groups=CAST(? AS jsonb),expected_answer=?,should_refuse=?,category=?,"
+                        + "source_trace_id=?,failure_stage=? WHERE id=?",
+                item.question(), write(item.expectedChunkIds()), write(item.expectedDocumentIds()), write(item.expectedNodeIds()),
+                write(item.expectedEvidenceGroups()), item.expectedAnswer(), Boolean.TRUE.equals(item.shouldRefuse()),
                 item.category(), item.sourceTraceId(), item.failureStage(), id);
         if (updated == 0) throw new IllegalArgumentException("评测样本不存在: " + id);
     }
@@ -602,12 +640,30 @@ public class EvalController {
         catch (Exception error) { throw new IllegalStateException("评测数据无法读取", error); }
     }
 
+    private List<EvalEvidenceGroup> readGroups(String value) {
+        try { return json.readValue(value, new TypeReference<List<EvalEvidenceGroup>>() { }); }
+        catch (Exception error) { throw new IllegalStateException("证据组标签无法读取", error); }
+    }
+
+    private EvalItem traceItem(QaTraceView replay, List<Long> expectedChunks, String category, String traceId) {
+        return new EvalItem(null, replay.query(), expectedChunks, contextIds(replay.contextChunks(), "documentId"),
+                contextIds(replay.contextChunks(), "nodeId"), List.of(), replay.answer(), replay.refused(), category,
+                traceId, replay.failureStage());
+    }
+
     private List<Long> contextChunkIds(String value) {
+        return contextIds(value, "chunkId");
+    }
+
+    private List<Long> contextIds(String value, String field) {
         try {
             JsonNode nodes = json.readTree(value == null || value.isBlank() ? "[]" : value);
             if (nodes == null || !nodes.isArray()) return List.of();
             List<Long> ids = new ArrayList<>();
-            for (JsonNode node : nodes) if (node.has("chunkId")) ids.add(node.path("chunkId").asLong());
+            for (JsonNode node : nodes) {
+                JsonNode id = node.get(field);
+                if (id != null && id.canConvertToLong() && id.asLong() > 0) ids.add(id.asLong());
+            }
             return ids;
         } catch (Exception error) {
             return List.of();

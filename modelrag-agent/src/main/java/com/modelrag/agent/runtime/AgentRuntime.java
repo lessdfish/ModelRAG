@@ -7,8 +7,10 @@ import com.modelrag.agent.orchestrator.AgentResult;
 import com.modelrag.agent.trace.AgentStepTracer;
 import com.modelrag.agent.router.RouteDecision;
 import com.modelrag.common.operation.OperationGuard;
+import com.modelrag.common.observability.TraceCorrelation;
 import com.modelrag.qa.dto.Citation;
 import com.modelrag.qa.dto.QaRequest;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -17,6 +19,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -46,6 +49,7 @@ public class AgentRuntime {
     private final long deadlineMs;
     private final int maxSearchActions;
     private final int maxNavigationActions;
+    private volatile MeterRegistry metrics;
 
     public AgentRuntime(AgentCheckpointService checkpoints,
             com.modelrag.agent.runtime.repository.AgentExecutionRepository executions,
@@ -78,6 +82,9 @@ public class AgentRuntime {
         this.maxNavigationActions = Math.max(0, Math.min(100, maxNavigationActions));
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setMetrics(MeterRegistry metrics) { this.metrics = metrics; }
+
     public AgentResult start(AgentStartCommand command) {
         AgentState state = initial(command);
         Optional<com.modelrag.agent.runtime.repository.AgentExecutionRecord> existing =
@@ -96,6 +103,7 @@ public class AgentRuntime {
             if (!checkpoints.tryClaim(command.executionId(), owner.value())) {
                 return running(command.executionId(), command.mode());
             }
+            metric("modelrag.agent.lease_takeover");
             state = checkpoint(state);
         } else {
             state = checkpoints.createAndCheckpoint(state, owner.value());
@@ -112,6 +120,7 @@ public class AgentRuntime {
         if (terminal(row.status()) || "CANCEL_REQUESTED".equals(row.status())
                 || "WAITING_APPROVAL".equals(row.status())) return resultFrom(row, latest.get());
         if (!checkpoints.tryClaim(executionId, owner.value())) return running(executionId, latest.get().mode());
+        metric("modelrag.agent.lease_takeover");
         recordResume(executionId, latest.get(), reason);
         return run(latest.get(), true, com.modelrag.agent.orchestrator.AgenticRetrievalEventSink.NOOP);
     }
@@ -167,6 +176,11 @@ public class AgentRuntime {
 
     public String ownerId() { return owner.value(); }
 
+    private void metric(String name) {
+        MeterRegistry registry = metrics;
+        if (registry != null) registry.counter(name).increment();
+    }
+
     private AgentState initial(AgentStartCommand command) {
         QaRequest request = command.request();
         AgentBudgetState budget = switch (command.mode()) {
@@ -175,7 +189,8 @@ public class AgentRuntime {
             default -> throw new IllegalArgumentException("unsupported durable agent mode");
         };
         Map<String, Object> toolState = new LinkedHashMap<>();
-        toolState.put("traceId", command.executionId());
+        toolState.put("requestId", TraceCorrelation.currentRequestId());
+        toolState.put("traceId", UUID.randomUUID().toString());
         toolState.put("steps", List.of("PLAN"));
         if (!command.fallbackTool().isBlank()) toolState.put("fallbackTool", command.fallbackTool());
         toolState.put("parts", parts(request.query()));
@@ -254,6 +269,7 @@ public class AgentRuntime {
                                 "非幂等工具调用结果未知，需要人工核对。", List.of(), 0, true,
                                 string(current.toolState().get("traceId")), append(current.degradedComponents(),
                                         "NON_IDEMPOTENT_ACTION_UNCERTAIN"))).build();
+                metric("modelrag.agent.reconciliation_required");
                 return persistTerminal(current, events);
             }
             try {
@@ -290,6 +306,7 @@ public class AgentRuntime {
                                     "非幂等工具调用结果未知，需要人工核对。", List.of(), 0, true,
                                     string(current.toolState().get("traceId")), append(current.degradedComponents(),
                                             "NON_IDEMPOTENT_ACTION_UNCERTAIN"))).build();
+                    metric("modelrag.agent.reconciliation_required");
                 } else {
                     current = current.toBuilder().status(AgentRuntimeStatus.ERROR).pendingAction(null)
                             .result(new AgentResultSnapshot("ERROR", "Agent 执行失败，请稍后重试。", List.of(), 0, true,

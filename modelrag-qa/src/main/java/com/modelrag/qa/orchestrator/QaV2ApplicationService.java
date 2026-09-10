@@ -1,6 +1,10 @@
 package com.modelrag.qa.orchestrator;
 
 import com.modelrag.api.ConversationContextBuilder.ConversationContext;
+import com.modelrag.common.observability.RetrievalTraceContext;
+import com.modelrag.common.observability.RetrievalTraceSession;
+import com.modelrag.common.observability.RetrievalTraceSink;
+import com.modelrag.common.observability.TraceCorrelation;
 import com.modelrag.knowledge.model.Dataset;
 import com.modelrag.knowledge.repository.DatasetRepository;
 import com.modelrag.qa.dto.Citation;
@@ -47,6 +51,7 @@ public class QaV2ApplicationService {
     private final AnswerSynthesizer synthesizer;
     private final AnswerTraceRepository traces;
     private final MeterRegistry metrics;
+    private volatile RetrievalTraceSink traceSink = RetrievalTraceSink.NOOP;
 
     public QaV2ApplicationService(DatasetRepository datasets, PromptSanitizer sanitizer,
             ContextAssembler contextAssembler, V2EmbeddingProfileProvider embeddingProfiles,
@@ -68,9 +73,15 @@ public class QaV2ApplicationService {
         this.metrics = metrics;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setRetrievalTraceSink(RetrievalTraceSink traceSink) {
+        this.traceSink = traceSink == null ? RetrievalTraceSink.NOOP : traceSink;
+    }
+
     public QaResult answer(QaRequest request, Consumer<String> tokenConsumer) {
         long started = System.nanoTime();
-        String traceId = UUID.randomUUID().toString();
+        RetrievalTraceContext traceContext = TraceCorrelation.current();
+        String traceId = traceContext == null ? UUID.randomUUID().toString() : traceContext.traceId();
         String query = sanitizer.sanitize(request.query());
         String retrievalQuery = query;
         try {
@@ -95,6 +106,7 @@ public class QaV2ApplicationService {
             if (!sufficiency.sufficient()) {
                 QaResult result = new QaResult(AnswerSynthesizer.INSUFFICIENT_EVIDENCE, List.of(),
                         sufficiency.confidence(), true, traceId, degraded);
+                recordV2Evidence(selected, true, degraded, expanded.navigationActions());
                 persistTraceSafely(request, traceId, retrievalQuery, stages, evidenceSet, null,
                         true, started);
                 return result;
@@ -106,6 +118,7 @@ public class QaV2ApplicationService {
             List<String> answerDegraded = answerDegraded(degraded, draft.answerSource());
             QaResult result = new QaResult(draft.answer(), citations, sufficiency.confidence(), false,
                     traceId, answerDegraded);
+            recordV2Evidence(selected, false, answerDegraded, expanded.navigationActions());
             persistTraceSafely(request, traceId, retrievalQuery, stages, evidenceSet, draft,
                     false, started);
             return result;
@@ -115,6 +128,7 @@ public class QaV2ApplicationService {
             EvidenceSet empty = new EvidenceSet(traceId, query, List.of(), sufficiency, degraded,
                     elapsed(started), 0);
             metricEvidence(empty);
+            recordV2Evidence(List.of(), true, degraded, 0);
             persistTraceSafely(request, traceId, retrievalQuery, null, empty, null, true, started);
             return new QaResult(AnswerSynthesizer.INSUFFICIENT_EVIDENCE, List.of(), 0, true,
                     traceId, degraded);
@@ -139,6 +153,38 @@ public class QaV2ApplicationService {
         metrics.summary("modelrag.qa.v2.evidence.coverage").record(evidenceSet.sufficiency().coverage());
         if (evidenceSet.sufficiency().sufficient()) metrics.counter("modelrag.qa.v2.evidence.sufficient").increment();
         else metrics.counter("modelrag.qa.v2.refused").increment();
+    }
+
+    private void recordV2Evidence(List<Evidence> selected, boolean refused, List<String> degraded,
+            int navigationActions) {
+        RetrievalTraceSession trace = TraceCorrelation.currentSession();
+        if (trace == null) return;
+        List<Evidence> values = selected == null ? List.of() : selected.stream().filter(java.util.Objects::nonNull)
+                .limit(EvidenceSet.MAX_EVIDENCE).toList();
+        long actionId = trace.action("EVIDENCE_CAPTURE", "v2",
+                Map.of("stage", "evidence", "selectedCount", values.size(), "navigationActions", navigationActions),
+                Map.of("evidenceCount", values.size(), "refused", refused), 0, values.size(),
+                degraded != null && !degraded.isEmpty(), degraded);
+        int rank = 0;
+        for (Evidence value : values) {
+            rank++;
+            Map<String, Object> locator = new java.util.LinkedHashMap<>();
+            locator.put("titlePath", value.titlePath());
+            if (value.locator().pageFrom() != null) {
+                locator.put("pageFrom", value.locator().pageFrom());
+                locator.put("pageTo", value.locator().pageTo());
+            }
+            if (value.locator().charStart() != null) {
+                locator.put("charStart", value.locator().charStart());
+                locator.put("charEnd", value.locator().charEnd());
+            }
+            trace.evidence(actionId, new RetrievalTraceSink.Evidence(0, value.datasetId(), value.documentId(),
+                    value.documentVersionId(), value.nodeId(), value.retrievalUnitId(),
+                    value.channel() == null ? "unknown" : value.channel().name(), value.score(), rank, value.primary(),
+                    value.content(), locator));
+        }
+        trace.action("ANSWER_GENERATE", "answer", Map.of("stage", "answer"),
+                Map.of("refused", refused), 0, 0, false, degraded);
     }
 
     private List<String> answerDegraded(List<String> existing, String source) {
