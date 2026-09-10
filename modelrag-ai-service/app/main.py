@@ -4,8 +4,7 @@ import json
 import math
 import re
 import uuid
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -21,24 +20,16 @@ from .api_models import (
     ParsedNode,
     RerankRequest,
     RerankResponse,
-    RerankScore,
 )
 from .auth import require_internal_auth
 from .config import EMBEDDING_DIMENSIONS, EMBEDDING_PROFILE, Settings
-from .engines.document_ai import DocumentAiEngine, UnavailableDocumentAiEngine
-from .engines.embedding import EmbeddingEngine, UnavailableEmbeddingEngine
-from .engines.ocr import OcrEngine, UnavailableOcrEngine
-from .engines.reranker import RerankEngine, UnavailableRerankEngine
+from .engine_factory import EngineBundle, build_engine_bundle
+from .engines.document_ai import UnavailableDocumentAiEngine
+from .engines.embedding import UnavailableEmbeddingEngine
+from .engines.ocr import UnavailableOcrEngine
+from .engines.reranker import UnavailableRerankEngine
 from .limits import EngineUnavailable, LimitViolation, acquire_slot, spool_upload
 from .metrics import SafeMetrics
-
-
-@dataclass(frozen=True)
-class EngineBundle:
-    embedding: EmbeddingEngine
-    reranker: RerankEngine
-    document_ai: DocumentAiEngine
-    ocr: OcrEngine
 
 
 def _coerce_engines(engines: EngineBundle | Mapping[str, Any] | None) -> EngineBundle:
@@ -267,17 +258,34 @@ def create_app(settings: Settings | None = None,
 
     @app.get("/health/ready")
     async def ready() -> JSONResponse:
-        engines_ready = True
-        for engine in (bundle.embedding, bundle.reranker, bundle.document_ai, bundle.ocr):
+        capability_engines = {
+            "embedding": bundle.embedding,
+            "rerank": bundle.reranker,
+            "document_ai": bundle.document_ai,
+            "ocr": bundle.ocr,
+        }
+        capabilities: dict[str, str] = {}
+        required_unavailable = False
+        for name, engine in capability_engines.items():
+            capability = settings.capability(name)
+            if not capability.enabled:
+                capabilities[name] = "DISABLED"
+                continue
             try:
-                ready_check = engine.ready()
-                if inspect.isawaitable(ready_check):
-                    ready_check = await ready_check
-                engines_ready = engines_ready and bool(ready_check)
+                ready_callable = engine.ready
+                if inspect.iscoroutinefunction(ready_callable):
+                    ready_check = await ready_callable()
+                else:
+                    ready_check = await asyncio.to_thread(ready_callable)
             except Exception:
-                engines_ready = False
-        body = {"status": "UP" if engines_ready else "DOWN"}
-        return JSONResponse(status_code=200 if engines_ready else 503, content=body)
+                ready_check = False
+            if ready_check:
+                capabilities[name] = "UP"
+            else:
+                capabilities[name] = "DOWN" if capability.required else "UNAVAILABLE"
+                required_unavailable = required_unavailable or capability.required
+        body = {"status": "DOWN" if required_unavailable else "UP", "capabilities": capabilities}
+        return JSONResponse(status_code=503 if required_unavailable else 200, content=body)
 
     @app.post("/v1/embeddings", response_model=EmbeddingResponse, dependencies=[Depends(auth_guard)])
     async def embeddings(payload: EmbeddingRequest,
@@ -381,4 +389,9 @@ def create_app(settings: Settings | None = None,
     return app
 
 
-app = create_app()
+def create_production_app() -> FastAPI:
+    settings = Settings.from_env()
+    return create_app(settings, build_engine_bundle(settings))
+
+
+app = create_production_app()

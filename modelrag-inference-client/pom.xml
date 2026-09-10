@@ -9,11 +9,6 @@
     <dependencies>
         <dependency>
             <groupId>com.modelrag</groupId>
-            <artifactId>modelrag-api</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.modelrag</groupId>
             <artifactId>modelrag-common</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -40,4 +35,37 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>inference-client-dependency-boundary</id>
+                        <phase>validate</phase>
+                        <goals><goal>enforce</goal></goals>
+                        <configuration>
+                            <rules>
+                                <bannedDependencies>
+                                    <searchTransitive>true</searchTransitive>
+                                    <excludes>
+                                        <exclude>com.modelrag:modelrag-indexing</exclude>
+                                        <exclude>com.modelrag:modelrag-search</exclude>
+                                        <exclude>com.modelrag:modelrag-qa</exclude>
+                                        <exclude>com.modelrag:modelrag-agent</exclude>
+                                        <exclude>com.modelrag:modelrag-tool-gateway</exclude>
+                                        <exclude>com.modelrag:modelrag-server</exclude>
+                                    </excludes>
+                                    <message>modelrag-inference-client must not depend on downstream ModelRAG modules</message>
+                                </bannedDependencies>
+                            </rules>
+                            <fail>true</fail>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>
