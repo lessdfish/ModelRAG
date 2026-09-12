@@ -31,7 +31,8 @@ class Connection:
 def manifest():
     return {"fixtureIdentity": "fixture-a", "activeRetrievalUnits": 1_000_000,
             "activeDocuments": 20_001, "activeBuildCount": 20_001,
-            "staleRetrievalUnits": 10_000, "vectorDimension": 1024}
+            "staleRetrievalUnits": 10_000, "vectorDimension": 1024,
+            "activeBuildSentinel": "G11_ACTIVE_BUILD_SENTINEL_20001"}
 
 
 def install_psycopg(monkeypatch, values):
@@ -57,3 +58,22 @@ def test_postgres_and_elasticsearch_fixture_identity_mismatch_is_not_runnable(mo
 
     assert any("fixtureIdentity" in error for error in errors)
     assert any("Elasticsearch fixture count" in error for error in errors)
+
+
+def test_high_active_build_workload_queries_real_sentinel_and_captures_server_java(monkeypatch):
+    seen = {}
+
+    def response(_target, body, _timeout, _headers):
+        seen.update(body)
+        return 200, {"candidateCount": 1, "boundedResults": True, "evidenceValid": True,
+                     "serverJavaVersion": "21.0.8"}, 0.01
+
+    monkeypatch.setattr(benchmark, "http_json", response)
+    workload = {"name": "high-active-build-count", "mode": "lexical",
+                "querySource": "activeBuildSentinel", "activeBuildOverflow": True}
+
+    result = benchmark.request_once("http://server", workload, 0, 1, manifest(), 1)
+
+    assert seen["query"] == "G11_ACTIVE_BUILD_SENTINEL_20001"
+    assert result["serverJavaVersion"] == "21.0.8"
+    assert "aclLeakage" not in result

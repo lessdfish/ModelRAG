@@ -58,11 +58,17 @@ public class ElasticsearchRetrievalUnitSearch implements LexicalSearchPort {
     @Override
     public List<RetrievalCandidate> search(LexicalSearchRequest request) {
         if (request.activeIndexBuildIds().isEmpty()) return List.of();
-        return search(request.query(), request.datasetId(), null, request.activeIndexBuildIds(), request.limit(), false);
+        return search(request.query(), request.datasetId(), null, request.activeIndexBuildIds(), request.limit(), false)
+                .candidates();
     }
 
     @Override
     public List<RetrievalCandidate> searchActiveValidated(LexicalSearchRequest request) {
+        return searchActiveValidatedResult(request).candidates();
+    }
+
+    @Override
+    public ActiveValidatedResult searchActiveValidatedResult(LexicalSearchRequest request) {
         return search(request.query(), request.datasetId(), null, List.of(), request.limit(), true);
     }
 
@@ -70,10 +76,10 @@ public class ElasticsearchRetrievalUnitSearch implements LexicalSearchPort {
     public List<RetrievalCandidate> findInDocument(DocumentLexicalSearchRequest request) {
         if (request.activeIndexBuildIds().isEmpty()) return List.of();
         return search(request.query(), request.datasetId(), request.documentId(),
-                request.activeIndexBuildIds(), request.limit(), false);
+                request.activeIndexBuildIds(), request.limit(), false).candidates();
     }
 
-    private List<RetrievalCandidate> search(String query, long datasetId, Long documentId,
+    private ActiveValidatedResult search(String query, long datasetId, Long documentId,
             List<Long> activeBuildIds, int limit, boolean overflow) {
         try {
             int pageSize = overflow ? Math.min(LexicalSearchRequest.MAX_LIMIT, Math.max(50, limit * 2)) : limit;
@@ -83,6 +89,7 @@ public class ElasticsearchRetrievalUnitSearch implements LexicalSearchPort {
             List<RetrievalCandidate> retained = new ArrayList<>();
             int pages = 0;
             int inspected = 0;
+            boolean moreHitsAvailable = false;
             while (retained.size() < limit && inspected < candidateBudget && pages < MAX_OVERFLOW_PAGES) {
                 int size = Math.min(pageSize, candidateBudget - inspected);
                 HttpResponse<String> response = http.send(HttpRequest.newBuilder(
@@ -104,15 +111,21 @@ public class ElasticsearchRetrievalUnitSearch implements LexicalSearchPort {
                 inspected += hits.size();
                 retained.addAll(validateActive(datasetId, activeBuildIds, documentId, page, hits.size()));
                 pages++;
-                if (!overflow || hits.size() < size || hits.isEmpty()) break;
+                moreHitsAvailable = overflow && hits.size() == size && !hits.isEmpty();
+                if (!moreHitsAvailable) break;
                 JsonNode sort = hits.get(hits.size() - 1).path("sort");
-                if (!sort.isArray() || sort.isEmpty()) break;
+                if (!sort.isArray() || sort.isEmpty()) {
+                    moreHitsAvailable = false;
+                    break;
+                }
                 searchAfter = (ArrayNode) sort.deepCopy();
             }
             List<RetrievalCandidate> result = retained.stream().limit(limit).toList();
             List<RetrievalCandidate> ranked = new ArrayList<>(result.size());
             for (RetrievalCandidate candidate : result) ranked.add(copy(candidate, ranked.size() + 1));
-            return List.copyOf(ranked);
+            boolean truncated = overflow && ranked.size() < limit && moreHitsAvailable
+                    && (inspected >= candidateBudget || pages >= MAX_OVERFLOW_PAGES);
+            return new ActiveValidatedResult(ranked, truncated);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("V2 Elasticsearch 词法检索被中断", interrupted);

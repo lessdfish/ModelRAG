@@ -52,6 +52,7 @@ def write_fixture(options: argparse.Namespace) -> dict:
     if build_count != document_count:
         raise SystemExit("active-builds must equal documents because each active build belongs to one document")
     stale_units = max(1, options.stale_units if options.stale_units is not None else max(100, unit_count // 100))
+    active_build_sentinel = f"G11_ACTIVE_BUILD_SENTINEL_{build_count}"
     if is_full and (unit_count < FULL_UNITS or document_count < FULL_DOCUMENTS
                     or build_count <= ACTIVE_BUILD_FILTER_LIMIT or build_count > document_count):
         raise SystemExit(
@@ -80,6 +81,8 @@ def write_fixture(options: argparse.Namespace) -> dict:
         for unit_id in range(1, unit_count + 1):
             document_id = (unit_id - 1) % document_count + 1
             build_id = document_id
+            content = (active_build_sentinel if unit_id == document_count
+                       else f"deterministic retrieval unit {unit_id} document {document_id}")
             row = {
                 "retrievalUnitId": unit_id,
                 "datasetId": 1,
@@ -90,7 +93,7 @@ def write_fixture(options: argparse.Namespace) -> dict:
                 "active": True,
                 "indexName": SHARED_INDEX,
                 "embeddingDimension": VECTOR_DIMENSION,
-                "content": f"deterministic retrieval unit {unit_id} document {document_id}",
+                "content": content,
             }
             if options.include_vectors:
                 row["embedding"] = vector(options.seed, unit_id)
@@ -129,6 +132,10 @@ def write_fixture(options: argparse.Namespace) -> dict:
         "vectorsMaterialized": bool(options.include_vectors),
         "sharedV2Index": SHARED_INDEX,
         "hasStaleBuilds": True,
+        "activeBuildSentinel": active_build_sentinel,
+        "activeBuildSentinelBuildId": build_count,
+        "activeBuildSentinelDocumentId": document_count,
+        "activeBuildSentinelRetrievalUnitId": document_count,
         "files": {"documents": documents_path.name, "retrievalUnits": units_path.name},
     }
     identity = json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode("utf-8")

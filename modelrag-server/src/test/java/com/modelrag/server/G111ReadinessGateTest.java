@@ -42,6 +42,25 @@ class G111ReadinessGateTest {
                 evaluator.decision(gates));
     }
 
+    @Test
+    void categorySampleCountCannotReplaceRequiredMetricLabels() {
+        EvalReport report = report(1, 100);
+        Map<String, Map<String, String>> statuses = new LinkedHashMap<>(report.categoryMetricStatus());
+        Map<String, String> crossDocument = new LinkedHashMap<>(statuses.get("CROSS_DOCUMENT"));
+        crossDocument.put("completeEvidenceRecall", "INSUFFICIENT_LABELS");
+        statuses.put("CROSS_DOCUMENT", crossDocument);
+        EvalReport unlabeled = new EvalReport(report.total(), report.recallAt5(), report.recallAt20(), report.mrr(),
+                report.contextPrecision(), report.contextRecall(), report.answerRelevance(), report.ndcg(),
+                report.refusalRate(), report.refusalAccuracy(), report.answerAccuracy(), report.faithfulness(),
+                report.parameters(), report.caseResults(), report.badCases(), report.variant(),
+                report.canonicalMetrics(), report.metricStatus(), report.telemetry(), report.latencyMs(),
+                report.labelCoverage(), report.categoryMetrics(), statuses, report.categorySampleCounts(), null);
+
+        Map<String, Boolean> gates = evaluator.evaluate(report, unlabeled, fullEvidence(true), thresholds);
+
+        assertFalse(gates.get("categorySampleCoverage"));
+    }
+
     private BenchmarkEvidence fullEvidence(boolean noStaleLeakage) {
         return new BenchmarkEvidence("COMPLETED", "full", "commit", "fixture",
                 "modelrag-retrieval-units-v2",
@@ -69,10 +88,14 @@ class G111ReadinessGateTest {
         metrics.keySet().forEach(name -> status.put(name, "COMPARABLE"));
         Map<String, Integer> categories = new LinkedHashMap<>();
         EvalCategory.canonicalNames().forEach(name -> categories.put(name, 1));
+        Map<String, Map<String, String>> categoryStatuses = new LinkedHashMap<>();
+        EvalCategory.canonicalNames().forEach(name -> categoryStatuses.put(name, Map.of(
+                "documentRecallAt20", "COMPARABLE", "nodeRecall", "COMPARABLE",
+                "completeEvidenceRecall", "COMPARABLE", "refusalAccuracy", "COMPARABLE")));
         EvalParameters parameters = new EvalParameters(1, "benchmark", 1, 600, 80, 20, .7,
                 "DETERMINISTIC", "now", List.of(), 0, 0, "DETERMINISTIC");
         return new EvalReport(10, quality, quality, quality, quality, quality, quality, quality,
                 0, quality, quality, 0, parameters, List.of(), List.of(), "V2", metrics, status,
-                Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), categories, null);
+                Map.of(), Map.of(), Map.of(), Map.of(), categoryStatuses, categories, null);
     }
 }

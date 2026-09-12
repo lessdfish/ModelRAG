@@ -9,6 +9,7 @@ public record EvalLabels(List<Long> expectedChunkIds, List<Long> expectedDocumen
     public static final String COMPARABLE = "COMPARABLE";
     public static final String LEGACY_LABEL_ONLY = "LEGACY_LABEL_ONLY";
     public static final String INSUFFICIENT_LABELS = "INSUFFICIENT_LABELS";
+    public static final String INSUFFICIENT_SAMPLE = "INSUFFICIENT_SAMPLE";
     public static final String NON_COMPARABLE = "NON_COMPARABLE";
     public static final String MISSING = "MISSING";
     public static final String V1_ONLY = "V1_ONLY";

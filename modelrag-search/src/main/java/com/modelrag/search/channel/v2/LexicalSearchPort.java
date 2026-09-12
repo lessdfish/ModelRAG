@@ -5,6 +5,12 @@ import java.util.List;
 
 /** V2 lexical retrieval port; it is independent from the legacy chunk/BM25 model. */
 public interface LexicalSearchPort {
+    record ActiveValidatedResult(List<RetrievalCandidate> candidates, boolean truncated) {
+        public ActiveValidatedResult {
+            candidates = candidates == null ? List.of() : List.copyOf(candidates);
+        }
+    }
+
     List<RetrievalCandidate> search(LexicalSearchRequest request);
 
     /**
@@ -13,6 +19,10 @@ public interface LexicalSearchPort {
      */
     default List<RetrievalCandidate> searchActiveValidated(LexicalSearchRequest request) {
         return search(request);
+    }
+
+    default ActiveValidatedResult searchActiveValidatedResult(LexicalSearchRequest request) {
+        return new ActiveValidatedResult(searchActiveValidated(request), false);
     }
 
     /**

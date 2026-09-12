@@ -98,6 +98,41 @@ class G5LexicalRetrievalTest {
         }
     }
 
+    @Test
+    void overflowReportsTruncationOnlyAfterThePageBudgetIsExhausted() throws Exception {
+        AtomicInteger requests = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/modelrag-retrieval-units-v2/_search", exchange -> {
+            int page = requests.incrementAndGet();
+            StringBuilder hits = new StringBuilder();
+            for (int index = 0; index < 50; index++) {
+                if (index > 0) hits.append(',');
+                long id = page * 100L + index;
+                hits.append("{\"_score\":1.2,\"sort\":[1.2,").append(id).append("],\"_source\":{")
+                        .append("\"retrievalUnitId\":").append(id)
+                        .append(",\"datasetId\":7,\"nodeId\":19,\"documentId\":23,")
+                        .append("\"documentVersionId\":29,\"indexBuildId\":31,\"unitType\":\"SECTION\",")
+                        .append("\"titlePath\":\"Title\",\"content\":\"content\",\"metadata\":{}}}");
+            }
+            byte[] response = ("{\"hits\":{\"hits\":[" + hits + "]}}")
+                    .getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, response.length);
+            try (var output = exchange.getResponseBody()) { output.write(response); }
+        });
+        server.start();
+        RetrievalUnitRepository units = mock(RetrievalUnitRepository.class);
+        when(units.findActiveByIds(eq(7L), any())).thenReturn(List.of());
+        try {
+            var result = search(server, units).searchActiveValidatedResult(
+                    new LexicalSearchRequest(7, "policy", List.of(), 1));
+            assertTrue(result.candidates().isEmpty());
+            assertTrue(result.truncated());
+            assertEquals(2, requests.get());
+        } finally {
+            server.stop(0);
+        }
+    }
+
     private HttpServer server(AtomicReference<String> body) throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/modelrag-retrieval-units-v2/_search", exchange -> {

@@ -48,6 +48,11 @@ public class JsonBenchmarkEvidenceReader implements BenchmarkEvidenceReader {
     }
 
     private BenchmarkEvidence parse(JsonNode root) {
+        String status = root.path("status").asText("NOT_RUN");
+        String mode = root.path("mode").asText("unknown");
+        if ("full".equals(mode) && root.path("runtime").path("serverJavaVersion").asText("").isBlank()) {
+            status = "NOT_RUN";
+        }
         Map<String, Long> topology = new LinkedHashMap<>();
         JsonNode shape = root.path("topology");
         for (String name : List.of("activeRetrievalUnits", "activeDocuments", "staleRetrievalUnits",
@@ -63,7 +68,7 @@ public class JsonBenchmarkEvidenceReader implements BenchmarkEvidenceReader {
         });
         JsonNode summary = root.path("summary");
         JsonNode correctness = root.path("correctness");
-        return new BenchmarkEvidence(root.path("status").asText("NOT_RUN"), root.path("mode").asText("unknown"),
+        return new BenchmarkEvidence(status, mode,
                 root.path("gitCommit").asText("unknown"), root.path("fixtureIdentity").asText("unknown"),
                 shape.path("sharedV2Index").asText("unknown"), topology, workloads, concurrencies,
                 summary.path("p50Ms").asDouble(0), summary.path("p95Ms").asDouble(0),

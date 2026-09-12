@@ -42,7 +42,7 @@ public class CutoverReadinessEvaluator {
         gates.put("degradedRate", metric(v2, "degradedRate") <= thresholds.maxDegradedRate());
         gates.put("p95LatencyRegression", p95Ratio(v1, v2) <= thresholds.maxP95LatencyRegressionRatio());
         gates.put("categorySampleCoverage", EvalCategory.canonicalNames().stream().allMatch(category ->
-                v2.categorySampleCounts().getOrDefault(category, 0) >= thresholds.minCategorySamples()));
+                categoryEvaluable(v2, category, thresholds.minCategorySamples())));
         gates.put("fullScaleBenchmark", benchmark.isVerifiedFull());
         gates.put("staleBuildAndFilterValidated", benchmark.isVerifiedFull());
         gates.put("noAclLeakage", benchmark.noAclLeakage());
@@ -72,5 +72,25 @@ public class CutoverReadinessEvaluator {
     private double metric(EvalReport report, String name) { return report.canonicalMetrics().getOrDefault(name, 0D); }
     private boolean comparable(EvalReport report, String name) {
         return EvalLabels.COMPARABLE.equals(report.metricStatus().get(name));
+    }
+
+    private boolean categoryEvaluable(EvalReport report, String category, int minimumSamples) {
+        if (report.categorySampleCounts().getOrDefault(category, 0) < minimumSamples) return false;
+        return switch (EvalCategory.valueOf(category)) {
+            case POINT_FACT, WHOLE_DOCUMENT, GLOBAL -> sufficientCategoryMetric(report, category,
+                    "documentRecallAt20");
+            case CROSS_SECTION, TABLE -> sufficientCategoryMetric(report, category, "nodeRecall");
+            case CROSS_DOCUMENT, MULTI_HOP, REFERENCE -> sufficientCategoryMetric(report, category,
+                    "completeEvidenceRecall");
+            case VERSION_SENSITIVE -> sufficientCategoryMetric(report, category, "documentRecallAt20")
+                    && sufficientCategoryMetric(report, category, "completeEvidenceRecall");
+            case REFUSAL -> sufficientCategoryMetric(report, category, "refusalAccuracy");
+        };
+    }
+
+    private boolean sufficientCategoryMetric(EvalReport report, String category, String metric) {
+        String status = report.categoryMetricStatus().getOrDefault(category, Map.of()).get(metric);
+        return status != null && !EvalLabels.INSUFFICIENT_LABELS.equals(status)
+                && !EvalLabels.INSUFFICIENT_SAMPLE.equals(status);
     }
 }

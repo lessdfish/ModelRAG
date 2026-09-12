@@ -4,7 +4,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.modelrag.common.observability.JdbcRetrievalTraceSink;
+import com.modelrag.common.observability.RetrievalTraceContext;
+import com.modelrag.common.observability.RetrievalTraceSink;
 import com.modelrag.server.eval.EvalCategory;
 import com.modelrag.server.eval.EvalEvidenceGroup;
 import com.modelrag.server.eval.EvalLabels;
@@ -15,7 +23,16 @@ import com.modelrag.server.eval.V2CutoverReadinessReport;
 import com.modelrag.server.benchmark.RetrievalBenchmarkController;
 import com.modelrag.search.orchestrator.HybridRetrievalService;
 import com.modelrag.knowledge.repository.IndexBuildRepository;
+import com.modelrag.knowledge.repository.RetrievalUnitRepository;
+import com.modelrag.knowledge.model.RetrievalUnit;
+import com.modelrag.knowledge.model.RetrievalUnitType;
 import com.modelrag.search.channel.v2.LexicalSearchPort;
+import com.modelrag.search.dto.RetrievalCandidate;
+import com.modelrag.search.dto.RetrievalChannel;
+import com.modelrag.search.dto.RetrievalV2Stages;
+import java.time.Instant;
+import java.util.concurrent.atomic.AtomicReference;
+import org.springframework.jdbc.core.JdbcTemplate;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -145,11 +162,61 @@ class G11EvaluationTest {
         }
     }
 
+    @Test
+    void benchmarkCorrectnessComesFromActiveRepositoryAndSentinelRecall() {
+        String sentinel = "G11_ACTIVE_BUILD_SENTINEL_10001";
+        RetrievalCandidate candidate = new RetrievalCandidate(7, 101, 19, 23, 29, 10_001,
+                RetrievalUnitType.PARAGRAPH, "Benchmark", sentinel, 1, RetrievalChannel.LEXICAL, 1, Map.of());
+        RetrievalUnit active = new RetrievalUnit(101, 7, 23, 29, 19, 10_001,
+                RetrievalUnitType.PARAGRAPH, 0, "Benchmark", sentinel, "hash", 1,
+                Map.of("fixtureIdentity", "fixture"), Instant.now());
+        HybridRetrievalService retrieval = mock(HybridRetrievalService.class);
+        when(retrieval.inspect(any(), any())).thenReturn(new RetrievalV2Stages("", List.of(), "", List.of(),
+                List.of(candidate), List.of(candidate), List.of(), List.of(candidate), false, List.of(), Map.of()));
+        RetrievalUnitRepository units = mock(RetrievalUnitRepository.class);
+        when(units.findActiveByIds(any(Long.class), any())).thenReturn(List.of(active));
+        RetrievalBenchmarkController controller = new RetrievalBenchmarkController(retrieval,
+                mock(IndexBuildRepository.class), units, mock(LexicalSearchPort.class));
+
+        var response = controller.retrieve(new RetrievalBenchmarkController.Request(7, sentinel,
+                "high-active-build-count", "lexical", null, null, true, "fixture")).getBody();
+
+        assertEquals(0, response.staleCandidateCount());
+        assertFalse(response.activeBuildTruncated());
+        assertTrue(response.evidenceValid());
+        assertEquals(System.getProperty("java.version"), response.serverJavaVersion());
+
+        when(units.findActiveByIds(any(Long.class), any())).thenReturn(List.of());
+        response = controller.retrieve(new RetrievalBenchmarkController.Request(7, sentinel,
+                "high-active-build-count", "lexical", null, null, true, "fixture")).getBody();
+        assertEquals(1, response.staleCandidateCount());
+        assertTrue(response.activeBuildTruncated());
+        assertFalse(response.evidenceValid());
+    }
+
+    @Test
+    void technicalTraceFailureIsErrorAndNeverBusinessRefusal() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        AtomicReference<String> sql = new AtomicReference<>();
+        doAnswer(invocation -> {
+            sql.set(invocation.getArgument(0));
+            return 1;
+        }).when(jdbc).update(anyString(), any(Object[].class));
+        JdbcRetrievalTraceSink sink = new JdbcRetrievalTraceSink(jdbc, new ObjectMapper());
+
+        sink.fail(new RetrievalTraceContext("request", "trace", null, "V2", 7, null, "qwen3-v1"),
+                "technical-failure", new RetrievalTraceSink.Completion(1, 0, 10, true, List.of()));
+
+        assertTrue(sql.get().contains("status='ERROR'"));
+        assertTrue(sql.get().contains("refused=FALSE"));
+    }
+
     private AnnotationConfigApplicationContext endpointContext(String profile) {
         AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
         context.getEnvironment().setActiveProfiles(profile);
         context.registerBean(HybridRetrievalService.class, () -> mock(HybridRetrievalService.class));
         context.registerBean(IndexBuildRepository.class, () -> mock(IndexBuildRepository.class));
+        context.registerBean(RetrievalUnitRepository.class, () -> mock(RetrievalUnitRepository.class));
         context.registerBean(LexicalSearchPort.class, () -> mock(LexicalSearchPort.class));
         context.register(RetrievalBenchmarkController.class);
         context.refresh();

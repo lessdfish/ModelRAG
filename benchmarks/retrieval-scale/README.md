@@ -14,6 +14,9 @@ The benchmark identity is deterministic:
 - workloads are semantic-only, lexical-only, hybrid, document-scoped, broad,
   stale-build exclusion, and high-active-build-count;
 - each workload is exercised at concurrency 1, 8, and 32.
+- `high-active-build-count` queries `G11_ACTIVE_BUILD_SENTINEL_<buildId>` from
+  the final active build; a report passes active-build truncation only when the
+  active-validated final candidates contain that sentinel.
 
 ## Generate a deterministic fixture
 
@@ -75,7 +78,11 @@ The runner captures p50/p95/p99, throughput, HTTP errors, degraded responses,
 timeouts, stage latency when returned, and PostgreSQL
 `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` for bounded retrieval predicates.
 Reports include the git commit, fixture manifest hash, verified PG/ES topology, runtime endpoints
-without credentials, JVM/Python versions, and hardware information.
+without credentials, `runtime.serverJavaVersion` from the benchmark endpoint,
+`runtime.runnerJavaVersion` from the runner host, Python version, and hardware information.
+
+Dataset ACL correctness is proven by the PostgreSQL-backed Java integration
+test, not by this internal endpoint and not by an environment boolean.
 
 If the full-scale infrastructure is unavailable, the command prints
 `NOT RUN: <reason>` and exits without a result report. A smoke run must never

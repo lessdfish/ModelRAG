@@ -68,12 +68,18 @@ def validate_manifest(manifest: dict[str, Any], mode: str) -> list[str]:
             errors.append("full manifest has fewer than 20,000 active documents")
         if int(manifest.get("activeBuildCount", 0)) <= int(manifest.get("activeBuildFilterLimit", 10_000)):
             errors.append("full manifest does not exceed the active-build filter cap")
+        if int(manifest.get("staleRetrievalUnits", 0)) <= 0:
+            errors.append("full manifest has no stale retrieval units")
     if int(manifest.get("vectorDimension", 0)) != 1024:
         errors.append("vector dimension is not 1024")
     if manifest.get("sharedV2Index") != SHARED_INDEX:
         errors.append(f"shared V2 index is not {SHARED_INDEX}")
     if not manifest.get("hasStaleBuilds"):
         errors.append("stale/superseded builds are missing")
+    sentinel = str(manifest.get("activeBuildSentinel", ""))
+    expected_sentinel = f"G11_ACTIVE_BUILD_SENTINEL_{int(manifest.get('activeBuildCount', 0))}"
+    if sentinel != expected_sentinel:
+        errors.append("active-build sentinel does not identify the last active build")
     return errors
 
 
@@ -251,9 +257,12 @@ def percentile(values: list[float], fraction: float) -> float | None:
 
 def request_once(target: str, workload: dict[str, Any], request_number: int, dataset_id: int,
                 manifest: dict[str, Any], timeout: float) -> dict[str, Any]:
+    query = (str(manifest.get("activeBuildSentinel", ""))
+             if workload.get("querySource") == "activeBuildSentinel"
+             else f"G11 deterministic {workload['name']} query {request_number % 20}")
     body = {
         "datasetId": dataset_id,
-        "query": f"G11 deterministic {workload['name']} query {request_number % 20}",
+        "query": query,
         "workload": workload["name"],
         "mode": workload.get("mode", "hybrid"),
         "documentId": 1 if workload.get("documentScoped") else None,
@@ -276,10 +285,10 @@ def request_once(target: str, workload: dict[str, Any], request_number: int, dat
         "stageLatencyMs": response.get("stageLatencyMs", {}),
         "candidateCount": int(response.get("candidateCount", 0)),
         "staleCandidateCount": int(response.get("staleCandidateCount", 0)),
-        "aclLeakage": bool(response.get("aclLeakage", False)),
         "activeBuildTruncated": bool(response.get("activeBuildTruncated", False)),
         "boundedResults": bool(response.get("boundedResults", False)),
         "evidenceValid": bool(response.get("evidenceValid", False)),
+        "serverJavaVersion": str(response.get("serverJavaVersion", "")),
     }
 
 
@@ -327,7 +336,6 @@ def run_workload(target: str, workload: dict[str, Any], concurrency: int, option
         "timeoutRate": round(timeouts / count, 6),
         "stageP95Ms": {stage: percentile(values, .95) for stage, values in sorted(stage_values.items())},
         "staleCandidateCount": sum(value["staleCandidateCount"] for value in results),
-        "aclLeakageCount": sum(1 for value in results if value["aclLeakage"]),
         "activeBuildTruncationCount": sum(1 for value in results if value["activeBuildTruncated"]),
         "boundedResultFailures": sum(1 for value in results if not value["boundedResults"]),
         "invalidEvidenceCount": sum(1 for value in results if not value["evidenceValid"]),
@@ -364,8 +372,9 @@ def build_report(options: argparse.Namespace, manifest: dict[str, Any], workload
                "errorRate": sum(value["errors"] for value in results) / total_requests,
                "degradedRate": sum(value["degraded"] for value in results) / total_requests,
                "timeoutRate": sum(value["timeouts"] for value in results) / total_requests}
+    server_java_versions = sorted({value["serverJavaVersion"] for value in results
+                                   if value["serverJavaVersion"]})
     correctness = {"noStaleBuildLeakage": sum(value["staleCandidateCount"] for value in results) == 0,
-                   "noAclLeakage": sum(value["aclLeakageCount"] for value in results) == 0,
                    "noActiveBuildTruncation": sum(value["activeBuildTruncationCount"] for value in results) == 0,
                    "boundedResults": sum(value["boundedResultFailures"] for value in results) == 0,
                    "validEvidence": sum(value["invalidEvidenceCount"] for value in results) == 0}
@@ -383,7 +392,9 @@ def build_report(options: argparse.Namespace, manifest: dict[str, Any], workload
         "correctness": correctness,
         "preflight": verified,
         "explainAnalyze": plan,
-        "runtime": {"python": platform.python_version(), "java": command_version(["java", "-version"]),
+        "runtime": {"python": platform.python_version(),
+                     "serverJavaVersion": server_java_versions[0] if len(server_java_versions) == 1 else "unavailable",
+                     "runnerJavaVersion": command_version(["java", "-version"]),
                      "platform": platform.platform(), "processor": platform.processor()[:200],
                      "target": redact_url(os.environ.get("MODELRAG_BENCHMARK_TARGET", "")),
                      "elasticsearch": redact_url(os.environ.get("MODELRAG_BENCHMARK_ES_URL", ""))},
@@ -434,10 +445,14 @@ def main() -> int:
 
     target = os.environ["MODELRAG_BENCHMARK_TARGET"]
     concurrencies = options.concurrency or list(CONCURRENCIES)
+    if options.mode == "full" and set(concurrencies) != set(CONCURRENCIES):
+        return not_run("full mode requires concurrency 1, 8, and 32")
     results = []
     for workload in workloads:
         for concurrency in concurrencies:
             results.append(run_workload(target, workload, concurrency, options, manifest))
+    if options.mode == "full" and any(not value.get("serverJavaVersion") for value in results):
+        return not_run("benchmark endpoint did not report the server JVM version")
     plan = explain(os.environ["MODELRAG_BENCHMARK_DATABASE_URL"], options.dataset_id, options.timeout_seconds)
     report = build_report(options, manifest, workloads, results, plan, verified)
     write_report(report, options.report_dir)

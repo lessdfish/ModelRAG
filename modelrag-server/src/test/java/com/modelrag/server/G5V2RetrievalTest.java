@@ -74,18 +74,35 @@ class G5V2RetrievalTest {
         EmbeddingService embeddings = mock(EmbeddingService.class);
         when(embeddings.embed(anyLong(), anyString())).thenReturn(new float[1024]);
         when(semantic.search(any())).thenReturn(List.of(candidate(101, 19, 23, 31, RetrievalChannel.SEMANTIC, .9, 1)));
-        when(lexical.searchActiveValidated(any())).thenReturn(List.of(
-                candidate(102, 20, 24, 32, RetrievalChannel.LEXICAL, 5, 1)));
+        when(lexical.searchActiveValidatedResult(any())).thenReturn(new LexicalSearchPort.ActiveValidatedResult(List.of(
+                candidate(102, 20, 24, 32, RetrievalChannel.LEXICAL, 5, 1)), false));
 
         RetrievalV2Stages stages = service(semantic, lexical, embeddings, builds, false)
                 .inspect(new RetrievalV2Request(7, "question", 1));
 
-        assertTrue(stages.degradedComponents().contains("ACTIVE_BUILD_FILTER_LIMIT"));
+        assertFalse(stages.degradedComponents().contains("ACTIVE_BUILD_FILTER_LIMIT"));
+        assertFalse(stages.degradedComponents().contains("ACTIVE_BUILD_VALIDATION_TRUNCATED"));
         assertEquals(List.of(102L), stages.lexicalCandidates().stream()
                 .map(RetrievalCandidate::retrievalUnitId).toList());
         assertEquals(1, stages.finalCandidates().size());
         verify(lexical, never()).search(any());
-        verify(lexical, org.mockito.Mockito.atLeastOnce()).searchActiveValidated(any());
+        verify(lexical, org.mockito.Mockito.atLeastOnce()).searchActiveValidatedResult(any());
+    }
+
+    @Test
+    void overflowOnlyDegradesWhenActiveValidationBudgetIsTruncated() {
+        IndexBuildRepository builds = activeBuilds(new ActiveBuildRef(23, 29, 31, "qwen3-v1"),
+                new ActiveBuildRef(24, 30, 32, "qwen3-v1"));
+        SemanticSearchPort semantic = mock(SemanticSearchPort.class);
+        LexicalSearchPort lexical = mock(LexicalSearchPort.class);
+        EmbeddingService embeddings = mock(EmbeddingService.class);
+        when(lexical.searchActiveValidatedResult(any()))
+                .thenReturn(new LexicalSearchPort.ActiveValidatedResult(List.of(), true));
+
+        RetrievalV2Stages stages = service(semantic, lexical, embeddings, builds, false)
+                .inspect(new RetrievalV2Request(7, "question", 1), HybridRetrievalService.Mode.LEXICAL_ONLY);
+
+        assertTrue(stages.degradedComponents().contains("ACTIVE_BUILD_VALIDATION_TRUNCATED"));
     }
 
     @Test
@@ -122,7 +139,7 @@ class G5V2RetrievalTest {
                 .map(RetrievalCandidate::retrievalUnitId).toList());
         verify(semantic, org.mockito.Mockito.atLeastOnce()).search(any());
         verify(lexical, never()).search(any());
-        verify(lexical, never()).searchActiveValidated(any());
+        verify(lexical, never()).searchActiveValidatedResult(any());
     }
 
     @Test

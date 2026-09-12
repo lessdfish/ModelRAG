@@ -110,6 +110,9 @@ def load_postgres(connection: Any, root: Path, manifest: dict[str, Any], batch_s
     dataset_id = 1
     documents_path = root / manifest["files"]["documents"]
     units_path = root / manifest["files"]["retrievalUnits"]
+    sentinel = str(manifest.get("activeBuildSentinel", ""))
+    if not sentinel or int(manifest.get("activeBuildSentinelBuildId", 0)) <= 0:
+        raise RuntimeError("active-build sentinel metadata is missing")
     with connection.cursor() as cursor:
         cursor.execute("SELECT COUNT(*) FROM kb_dataset WHERE id=%s", (dataset_id,))
         if cursor.fetchone()[0]:
@@ -182,6 +185,13 @@ def load_postgres(connection: Any, root: Path, manifest: dict[str, Any], batch_s
         bulk_index(es_endpoint, fixture, batch)
 
     with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT COUNT(*) FROM kb_retrieval_unit
+            WHERE id=%s AND index_build_id=%s AND content=%s
+        """, (int(manifest["activeBuildSentinelRetrievalUnitId"]),
+              int(manifest["activeBuildSentinelBuildId"]), sentinel))
+        if cursor.fetchone()[0] != 1:
+            raise RuntimeError("active-build sentinel was not loaded into PostgreSQL")
         for table in ("kb_document", "kb_document_version", "kb_document_node", "kb_index_build",
                       "kb_retrieval_unit", "kb_vector_embedding"):
             cursor.execute("SELECT setval(pg_get_serial_sequence(%s,'id'), COALESCE((SELECT MAX(id) FROM " + table + "),1), true)", (table,))

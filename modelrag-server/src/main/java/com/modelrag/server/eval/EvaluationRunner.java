@@ -162,15 +162,15 @@ public class EvaluationRunner {
                     observationsByCategory.get(category), scoresByCategory.get(category));
             categoryValues.put(category, categoryAggregate.values());
             Map<String, String> statuses = new LinkedHashMap<>(categoryAggregate.status());
-            if (categoryLabels.size() < 2) {
-                statuses.replaceAll((metricName, ignored) -> "INSUFFICIENT_SAMPLE");
+            if (categoryLabels.size() < minCategorySamples) {
+                statuses.replaceAll((metricName, ignored) -> EvalLabels.INSUFFICIENT_SAMPLE);
             }
             categoryStatus.put(category, statuses);
             categoryCounts.put(category, categoryLabels.size());
         });
         for (String category : EvalCategory.canonicalNames()) {
             categoryValues.putIfAbsent(category, Map.of());
-            categoryStatus.putIfAbsent(category, Map.of("category", "INSUFFICIENT_SAMPLE"));
+            categoryStatus.putIfAbsent(category, Map.of("category", EvalLabels.INSUFFICIENT_SAMPLE));
             categoryCounts.putIfAbsent(category, 0);
         }
         EvalParameters parameters = parameters(datasetId, topK);

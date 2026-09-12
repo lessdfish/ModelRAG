@@ -5,5 +5,5 @@
   {"name":"document-scoped","mode":"hybrid","documentScoped":true,"staleFilter":false,"activeBuildOverflow":false},
   {"name":"broad","mode":"hybrid","documentScoped":false,"staleFilter":false,"activeBuildOverflow":false},
   {"name":"stale-build-exclusion","mode":"hybrid","documentScoped":false,"staleFilter":true,"activeBuildOverflow":false},
-  {"name":"high-active-build-count","mode":"lexical","documentScoped":false,"staleFilter":false,"activeBuildOverflow":true}
+  {"name":"high-active-build-count","mode":"lexical","documentScoped":false,"staleFilter":false,"activeBuildOverflow":true,"querySource":"activeBuildSentinel"}
 ]

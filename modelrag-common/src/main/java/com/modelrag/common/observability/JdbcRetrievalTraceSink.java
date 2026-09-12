@@ -79,7 +79,7 @@ public class JdbcRetrievalTraceSink implements RetrievalTraceSink {
     public void fail(RetrievalTraceContext context, String safeError, Completion completion) {
         jdbc.update("""
                 UPDATE kb_retrieval_trace
-                SET status='ERROR',total_actions=?,total_evidence=?,latency_ms=?,refused=TRUE,
+                SET status='ERROR',total_actions=?,total_evidence=?,latency_ms=?,refused=FALSE,
                     degraded_components=CAST(? AS jsonb),completed_at=NOW()
                 WHERE trace_id=?
                 """, completion.totalActions(), completion.totalEvidence(),

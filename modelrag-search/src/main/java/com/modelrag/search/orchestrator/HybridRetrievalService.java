@@ -144,7 +144,6 @@ public class HybridRetrievalService {
             }
         }
         CompletableFuture<List<RetrievalCandidate>> lexicalFuture;
-        if (scope.overflow()) degraded.add("ACTIVE_BUILD_FILTER_LIMIT");
         lexicalFuture = mode == Mode.SEMANTIC_ONLY ? CompletableFuture.completedFuture(List.of())
                 : submitLexical(request, expanded.searchQueries(), scope, recall, degraded, latency);
 
@@ -256,7 +255,8 @@ public class HybridRetrievalService {
         final RetrievalTraceSession session = TraceCorrelation.currentSession();
         try {
             return CompletableFuture.supplyAsync(() -> TraceCorrelation.call(context, session,
-                    () -> timed("lexical", latency, () -> retrieveLexical(request, queries, scope, recall))), lexicalExecutor)
+                    () -> timed("lexical", latency,
+                            () -> retrieveLexical(request, queries, scope, recall, degraded))), lexicalExecutor)
                     .orTimeout(channelTimeoutMs, TimeUnit.MILLISECONDS)
                     .exceptionally(error -> failed("lexical", degraded, latency));
         } catch (RejectedExecutionException rejected) {
@@ -275,13 +275,18 @@ public class HybridRetrievalService {
     }
 
     private List<RetrievalCandidate> retrieveLexical(RetrievalV2Request request, List<String> queries,
-            ActiveBuildScope scope, int recall) {
+            ActiveBuildScope scope, int recall, Queue<String> degraded) {
         List<RetrievalCandidate> result = new ArrayList<>();
         for (String query : queries) {
             LexicalSearchRequest lexicalRequest = new LexicalSearchRequest(request.datasetId(), query,
                     scope.indexBuildIds(), recall);
-            result.addAll(scope.overflow() ? lexical.searchActiveValidated(lexicalRequest)
-                    : lexical.search(lexicalRequest));
+            if (scope.overflow()) {
+                LexicalSearchPort.ActiveValidatedResult page = lexical.searchActiveValidatedResult(lexicalRequest);
+                result.addAll(page.candidates());
+                if (page.truncated()) degraded.add("ACTIVE_BUILD_VALIDATION_TRUNCATED");
+            } else {
+                result.addAll(lexical.search(lexicalRequest));
+            }
         }
         return dedupe(result);
     }
