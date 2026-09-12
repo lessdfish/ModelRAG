@@ -23,6 +23,7 @@ public class AgentCheckpointService {
         this(executions, checkpoints, codec, 30);
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
     public AgentCheckpointService(AgentExecutionRepository executions, AgentCheckpointRepository checkpoints,
             AgentStateCodec codec, @Value("${modelrag.agent.runtime.lease-seconds:30}") long leaseSeconds) {
         this.executions = executions;

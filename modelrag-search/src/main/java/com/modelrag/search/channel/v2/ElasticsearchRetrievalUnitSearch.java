@@ -30,6 +30,8 @@ import org.springframework.stereotype.Service;
 @Profile("!test")
 public class ElasticsearchRetrievalUnitSearch implements LexicalSearchPort {
     private static final String INDEX = "modelrag-retrieval-units-v2";
+    private static final int MAX_OVERFLOW_PAGES = 10;
+    private static final int MAX_OVERFLOW_CANDIDATES = 5_000;
 
     private final String endpoint;
     private final ObjectMapper json;
@@ -56,35 +58,61 @@ public class ElasticsearchRetrievalUnitSearch implements LexicalSearchPort {
     @Override
     public List<RetrievalCandidate> search(LexicalSearchRequest request) {
         if (request.activeIndexBuildIds().isEmpty()) return List.of();
-        return search(request.query(), request.datasetId(), null, request.activeIndexBuildIds(), request.limit());
+        return search(request.query(), request.datasetId(), null, request.activeIndexBuildIds(), request.limit(), false);
+    }
+
+    @Override
+    public List<RetrievalCandidate> searchActiveValidated(LexicalSearchRequest request) {
+        return search(request.query(), request.datasetId(), null, List.of(), request.limit(), true);
     }
 
     @Override
     public List<RetrievalCandidate> findInDocument(DocumentLexicalSearchRequest request) {
         if (request.activeIndexBuildIds().isEmpty()) return List.of();
         return search(request.query(), request.datasetId(), request.documentId(),
-                request.activeIndexBuildIds(), request.limit());
+                request.activeIndexBuildIds(), request.limit(), false);
     }
 
     private List<RetrievalCandidate> search(String query, long datasetId, Long documentId,
-            List<Long> activeBuildIds, int limit) {
+            List<Long> activeBuildIds, int limit, boolean overflow) {
         try {
-            HttpResponse<String> response = http.send(HttpRequest.newBuilder(
-                    URI.create(endpoint + "/" + INDEX + "/_search"))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(query(query, datasetId, documentId, activeBuildIds, limit)))
-                    .build(), HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() / 100 != 2) {
-                throw new IllegalStateException("V2 Elasticsearch 返回 HTTP " + response.statusCode());
+            int pageSize = overflow ? Math.min(LexicalSearchRequest.MAX_LIMIT, Math.max(50, limit * 2)) : limit;
+            int candidateBudget = overflow
+                    ? Math.min(MAX_OVERFLOW_CANDIDATES, Math.max(pageSize * 2, limit * 20)) : limit;
+            ArrayNode searchAfter = null;
+            List<RetrievalCandidate> retained = new ArrayList<>();
+            int pages = 0;
+            int inspected = 0;
+            while (retained.size() < limit && inspected < candidateBudget && pages < MAX_OVERFLOW_PAGES) {
+                int size = Math.min(pageSize, candidateBudget - inspected);
+                HttpResponse<String> response = http.send(HttpRequest.newBuilder(
+                        URI.create(endpoint + "/" + INDEX + "/_search"))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(query(query, datasetId, documentId,
+                                activeBuildIds, size, searchAfter, overflow)))
+                        .build(), HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() / 100 != 2) {
+                    throw new IllegalStateException("V2 Elasticsearch 返回 HTTP " + response.statusCode());
+                }
+                JsonNode hits = json.readTree(response.body()).path("hits").path("hits");
+                List<RetrievalCandidate> page = new ArrayList<>();
+                for (JsonNode hit : hits) {
+                    RetrievalCandidate candidate = map(hit.path("_source"), hit.path("_score").asDouble(),
+                            inspected + page.size() + 1);
+                    if (candidate != null) page.add(candidate);
+                }
+                inspected += hits.size();
+                retained.addAll(validateActive(datasetId, activeBuildIds, documentId, page, hits.size()));
+                pages++;
+                if (!overflow || hits.size() < size || hits.isEmpty()) break;
+                JsonNode sort = hits.get(hits.size() - 1).path("sort");
+                if (!sort.isArray() || sort.isEmpty()) break;
+                searchAfter = (ArrayNode) sort.deepCopy();
             }
-            JsonNode hits = json.readTree(response.body()).path("hits").path("hits");
-            List<RetrievalCandidate> candidates = new ArrayList<>();
-            for (JsonNode hit : hits) {
-                RetrievalCandidate candidate = map(hit.path("_source"), hit.path("_score").asDouble(),
-                        candidates.size() + 1);
-                if (candidate != null) candidates.add(candidate);
-            }
-            return validateActive(datasetId, activeBuildIds, documentId, candidates, hits.size());
+            List<RetrievalCandidate> result = retained.stream().limit(limit).toList();
+            List<RetrievalCandidate> ranked = new ArrayList<>(result.size());
+            for (RetrievalCandidate candidate : result) ranked.add(copy(candidate, ranked.size() + 1));
+            return List.copyOf(ranked);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("V2 Elasticsearch 词法检索被中断", interrupted);
@@ -94,15 +122,22 @@ public class ElasticsearchRetrievalUnitSearch implements LexicalSearchPort {
     }
 
     private String query(String query, long datasetId, Long documentId,
-            List<Long> activeBuildIds, int limit) throws Exception {
+            List<Long> activeBuildIds, int limit, ArrayNode searchAfter, boolean overflow) throws Exception {
         ObjectNode root = json.createObjectNode();
         root.put("size", limit);
+        if (overflow) {
+            root.putArray("sort").addObject().put("_score", "desc");
+            root.withArray("sort").addObject().put("retrievalUnitId", "asc");
+            if (searchAfter != null) root.set("search_after", searchAfter);
+        }
         ObjectNode bool = root.putObject("query").putObject("bool");
         ArrayNode filters = bool.putArray("filter");
         term(filters, "datasetId", datasetId);
         if (documentId != null) term(filters, "documentId", documentId);
-        ArrayNode builds = filters.addObject().putObject("terms").putArray("indexBuildId");
-        activeBuildIds.forEach(builds::add);
+        if (!activeBuildIds.isEmpty()) {
+            ArrayNode builds = filters.addObject().putObject("terms").putArray("indexBuildId");
+            activeBuildIds.forEach(builds::add);
+        }
 
         ObjectNode multiMatch = bool.putArray("must").addObject().putObject("multi_match");
         multiMatch.put("query", query);
@@ -126,7 +161,7 @@ public class ElasticsearchRetrievalUnitSearch implements LexicalSearchPort {
         List<RetrievalCandidate> retained = new ArrayList<>();
         for (RetrievalCandidate candidate : candidates) {
             RetrievalUnit unit = active.get(candidate.retrievalUnitId());
-            if (!activeBuildIds.contains(candidate.indexBuildId())
+            if ((!activeBuildIds.isEmpty() && !activeBuildIds.contains(candidate.indexBuildId()))
                     || (documentId != null && candidate.documentId() != documentId)
                     || unit == null || unit.datasetId() != candidate.datasetId()
                     || unit.documentId() != candidate.documentId()

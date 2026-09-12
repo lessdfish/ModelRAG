@@ -8,6 +8,14 @@ public interface LexicalSearchPort {
     List<RetrievalCandidate> search(LexicalSearchRequest request);
 
     /**
+     * Large active-build-scope path. Implementations must use bounded recall and
+     * validate every returned unit against the PostgreSQL active pointers.
+     */
+    default List<RetrievalCandidate> searchActiveValidated(LexicalSearchRequest request) {
+        return search(request);
+    }
+
+    /**
      * Performs an indexed, document-scoped lookup over the V2 retrieval-unit
      * projection. Implementations must keep the PostgreSQL active-unit
      * validation used by {@link #search(LexicalSearchRequest)}.

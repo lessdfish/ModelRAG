@@ -28,7 +28,7 @@ public class EvaluationRunner {
     private final V2EvaluationAdapter v2;
     private final EvaluationMetrics metrics;
     private final String baseCommit;
-    private final boolean fullScaleBenchmarkRun;
+    private final BenchmarkEvidenceReader benchmarkEvidenceReader;
 
     @Value("${modelrag.eval.quality-regression-tolerance:0.0}")
     private double qualityRegressionTolerance;
@@ -36,34 +36,24 @@ public class EvaluationRunner {
     private double errorRateTolerance;
     @Value("${modelrag.eval.degraded-rate-tolerance:0.0}")
     private double degradedRateTolerance;
-    @Value("${modelrag.eval.benchmark.active-retrieval-units:0}")
-    private long benchmarkActiveRetrievalUnits;
-    @Value("${modelrag.eval.benchmark.active-documents:0}")
-    private long benchmarkActiveDocuments;
-    @Value("${modelrag.eval.benchmark.stale-retrieval-units:0}")
-    private long benchmarkStaleRetrievalUnits;
-    @Value("${modelrag.eval.benchmark.active-build-count:0}")
-    private long benchmarkActiveBuildCount;
-    @Value("${modelrag.eval.benchmark.active-build-filter-limit:10000}")
-    private long benchmarkActiveBuildFilterLimit;
-    @Value("${modelrag.eval.benchmark.no-acl-leakage:false}")
-    private boolean noAclLeakage;
-    @Value("${modelrag.eval.benchmark.no-stale-build-leakage:false}")
-    private boolean noStaleBuildLeakage;
-    @Value("${modelrag.eval.benchmark.no-active-build-truncation:false}")
-    private boolean noActiveBuildTruncation;
-    @Value("${modelrag.eval.benchmark.bounded-results:false}")
-    private boolean boundedResults;
-    @Value("${modelrag.eval.benchmark.valid-evidence:false}")
-    private boolean validEvidence;
+    @Value("${modelrag.eval.readiness.min-document-recall-at-20:0.90}") private double minDocumentRecallAt20;
+    @Value("${modelrag.eval.readiness.min-document-mrr:0.85}") private double minDocumentMrr;
+    @Value("${modelrag.eval.readiness.min-document-ndcg:0.85}") private double minDocumentNdcg;
+    @Value("${modelrag.eval.readiness.min-complete-evidence-recall:0.85}") private double minCompleteEvidenceRecall;
+    @Value("${modelrag.eval.readiness.min-answer-accuracy:0.85}") private double minAnswerAccuracy;
+    @Value("${modelrag.eval.readiness.min-refusal-accuracy:0.90}") private double minRefusalAccuracy;
+    @Value("${modelrag.eval.readiness.max-error-rate:0.01}") private double maxErrorRate;
+    @Value("${modelrag.eval.readiness.max-degraded-rate:0.05}") private double maxDegradedRate;
+    @Value("${modelrag.eval.readiness.max-p95-latency-regression-ratio:1.30}") private double maxP95LatencyRegressionRatio;
+    @Value("${modelrag.eval.readiness.min-category-samples:5}") private int minCategorySamples;
 
     public EvaluationRunner(DatasetRepository datasets, ChunkRepository chunks, SearchFacade search,
             QaOrchestrator qa, HybridRetrievalService retrieval, QaV2ApplicationService qaV2,
             EvaluationMetrics metrics,
             ObjectProvider<RetrievalTraceSink> traceSinks,
+            ObjectProvider<BenchmarkEvidenceReader> benchmarkEvidenceReaders,
             @Value("${modelrag.index.v2.embedding-profile:qwen3-v1}") String embeddingProfile,
-            @Value("${modelrag.eval.base-commit:unknown}") String baseCommit,
-            @Value("${modelrag.eval.full-scale-benchmark-run:false}") boolean fullScaleBenchmarkRun) {
+            @Value("${modelrag.eval.base-commit:unknown}") String baseCommit) {
         this.datasets = datasets;
         this.labels = new EvaluationLabelResolver(chunks);
         RetrievalTraceSink traceSink = traceSinks == null ? RetrievalTraceSink.NOOP
@@ -72,7 +62,10 @@ public class EvaluationRunner {
         this.v2 = new V2EvaluationAdapter(retrieval, qaV2, embeddingProfile, traceSink);
         this.metrics = metrics;
         this.baseCommit = baseCommit == null || baseCommit.isBlank() ? "unknown" : baseCommit;
-        this.fullScaleBenchmarkRun = fullScaleBenchmarkRun;
+        this.benchmarkEvidenceReader = benchmarkEvidenceReaders == null
+                ? identity -> BenchmarkEvidence.notRun("benchmark evidence reader unavailable")
+                : benchmarkEvidenceReaders.getIfAvailable(
+                        () -> identity -> BenchmarkEvidence.notRun("benchmark evidence reader unavailable"));
     }
 
     public EvalReport run(long datasetId, List<EvalItem> items) {
@@ -98,48 +91,37 @@ public class EvaluationRunner {
         delta.put("documentNdcg", metric(v2Report, "documentNdcg") - metric(v1Report, "documentNdcg"));
         delta.put("errorRate", metric(v2Report, "errorRate") - metric(v1Report, "errorRate"));
         delta.put("degradedRate", metric(v2Report, "degradedRate") - metric(v1Report, "degradedRate"));
-
-        Map<String, Boolean> gates = new LinkedHashMap<>();
-        gates.put("canonicalDocumentLabels", comparable(v1Report, "documentRecallAt20")
-                && comparable(v2Report, "documentRecallAt20")
-                && comparable(v1Report, "documentMrr") && comparable(v2Report, "documentMrr")
-                && comparable(v1Report, "documentNdcg") && comparable(v2Report, "documentNdcg"));
-        gates.put("documentRecallNoRegression", delta.get("documentRecallAt20") >= -qualityRegressionTolerance);
-        gates.put("documentMrrNoRegression", delta.get("documentMrr") >= -qualityRegressionTolerance);
-        gates.put("documentNdcgNoRegression", delta.get("documentNdcg") >= -qualityRegressionTolerance);
-        gates.put("errorRateNoRegression", delta.get("errorRate") <= errorRateTolerance);
-        gates.put("degradedRateNoRegression", delta.get("degradedRate") <= degradedRateTolerance);
-        gates.put("fullScaleBenchmark", fullScaleBenchmarkRun);
-        gates.put("staleBuildAndFilterValidated", fullScaleBenchmarkRun
-                && benchmarkStaleRetrievalUnits > 0
-                && benchmarkActiveBuildCount > benchmarkActiveBuildFilterLimit);
-        gates.put("noAclLeakage", noAclLeakage);
-        gates.put("noStaleBuildLeakage", noStaleBuildLeakage);
-        gates.put("noActiveBuildTruncation", noActiveBuildTruncation);
-        gates.put("boundedResults", boundedResults);
-        gates.put("validEvidence", validEvidence);
-        gates.put("v1DefaultPreserved", true);
+        BenchmarkEvidence benchmark = benchmarkEvidenceReader.read(benchmarkIdentity);
+        CutoverReadinessEvaluator gateEvaluator = new CutoverReadinessEvaluator();
+        CutoverReadinessEvaluator.Thresholds thresholds = new CutoverReadinessEvaluator.Thresholds(
+                qualityRegressionTolerance, errorRateTolerance, degradedRateTolerance, minDocumentRecallAt20,
+                minDocumentMrr, minDocumentNdcg, minCompleteEvidenceRecall, minAnswerAccuracy,
+                minRefusalAccuracy, maxErrorRate, maxDegradedRate, maxP95LatencyRegressionRatio,
+                minCategorySamples);
+        delta.put("p95LatencyRegressionRatio", gateEvaluator.p95Ratio(v1Report, v2Report));
+        Map<String, Boolean> gates = gateEvaluator.evaluate(v1Report, v2Report, benchmark, thresholds);
         List<String> passes = new ArrayList<>();
         List<String> failures = new ArrayList<>();
         gates.forEach((name, pass) -> (pass ? passes : failures).add(name + (pass ? " passed" : " failed")));
-        boolean ready = failures.isEmpty();
+        boolean ready = V2CutoverReadinessReport.READY_FOR_G12.equals(gateEvaluator.decision(gates));
         Map<String, String> statuses = new LinkedHashMap<>();
         statuses.putAll(v1Report.metricStatus());
         v2Report.metricStatus().forEach((key, value) -> statuses.put("V2." + key, value));
         Dataset dataset = datasets.findById(datasetId);
         return new V2CutoverReadinessReport(ready ? V2CutoverReadinessReport.READY_FOR_G12
                 : V2CutoverReadinessReport.NOT_READY_FOR_G12, baseCommit,
-                dataset.id() + "@revision-" + dataset.revision(), benchmarkIdentity, fullScaleBenchmarkRun,
+                dataset.id() + "@revision-" + dataset.revision(), benchmarkIdentity, benchmark.isVerifiedFull(),
                 delta, v1Report.canonicalMetrics(), v2Report.canonicalMetrics(), v1Report.categoryMetrics(),
-                v2Report.categoryMetrics(), configuredThresholds(), benchmarkTopology(), statuses, gates, passes, failures);
+                v2Report.categoryMetrics(), configuredThresholds(), benchmark.topology(), statuses, gates, passes, failures);
     }
 
     private EvalReport runVariant(long datasetId, List<EvalItem> items, String variant) {
-        return runVariant(datasetId, items, variant, 5);
+        return runVariant(datasetId, items, variant, Math.max(1, datasets.findById(datasetId).topK()));
     }
 
     private EvalReport runVariant(long datasetId, List<EvalItem> items, String variant, int topK) {
         if (items == null || items.isEmpty()) throw new IllegalArgumentException("评测集不能为空");
+        double threshold = datasets.findById(datasetId).threshold();
         List<EvalLabels> resolvedLabels = new ArrayList<>();
         List<EvaluationObservation> observations = new ArrayList<>();
         List<EvaluationMetrics.CaseScore> scores = new ArrayList<>();
@@ -148,7 +130,7 @@ public class EvaluationRunner {
         for (EvalItem item : items) {
             EvalLabels resolved = labels.resolve(datasetId, item);
             EvaluationObservation observation = "V2".equals(variant)
-                    ? v2.run(datasetId, item, topK, 0) : v1.run(datasetId, item, topK);
+                    ? v2.run(datasetId, item, topK, threshold) : v1.run(datasetId, item, topK, threshold);
             EvaluationMetrics.CaseScore score = metrics.score(resolved, observation, item.question(),
                     item.expectedAnswer(), Boolean.TRUE.equals(item.shouldRefuse()));
             resolvedLabels.add(resolved);
@@ -252,16 +234,21 @@ public class EvaluationRunner {
     }
 
     private Map<String, Double> configuredThresholds() {
-        return Map.of("qualityRegressionTolerance", qualityRegressionTolerance,
-                "errorRateTolerance", errorRateTolerance, "degradedRateTolerance", degradedRateTolerance);
-    }
-
-    private Map<String, Long> benchmarkTopology() {
-        return Map.of("activeRetrievalUnits", Math.max(0, benchmarkActiveRetrievalUnits),
-                "activeDocuments", Math.max(0, benchmarkActiveDocuments),
-                "staleRetrievalUnits", Math.max(0, benchmarkStaleRetrievalUnits),
-                "activeBuildCount", Math.max(0, benchmarkActiveBuildCount),
-                "activeBuildFilterLimit", Math.max(0, benchmarkActiveBuildFilterLimit));
+        Map<String, Double> values = new LinkedHashMap<>();
+        values.put("qualityRegressionTolerance", qualityRegressionTolerance);
+        values.put("errorRateTolerance", errorRateTolerance);
+        values.put("degradedRateTolerance", degradedRateTolerance);
+        values.put("minDocumentRecallAt20", minDocumentRecallAt20);
+        values.put("minDocumentMrr", minDocumentMrr);
+        values.put("minDocumentNdcg", minDocumentNdcg);
+        values.put("minCompleteEvidenceRecall", minCompleteEvidenceRecall);
+        values.put("minAnswerAccuracy", minAnswerAccuracy);
+        values.put("minRefusalAccuracy", minRefusalAccuracy);
+        values.put("maxErrorRate", maxErrorRate);
+        values.put("maxDegradedRate", maxDegradedRate);
+        values.put("maxP95LatencyRegressionRatio", maxP95LatencyRegressionRatio);
+        values.put("minCategorySamples", (double) minCategorySamples);
+        return Map.copyOf(values);
     }
 
     private int rank(List<Long> expected, List<Long> actual) {

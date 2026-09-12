@@ -3,18 +3,25 @@ package com.modelrag.server;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 import com.modelrag.server.eval.EvalCategory;
 import com.modelrag.server.eval.EvalEvidenceGroup;
 import com.modelrag.server.eval.EvalLabels;
 import com.modelrag.server.eval.EvaluationMetrics;
 import com.modelrag.server.eval.EvaluationObservation;
+import com.modelrag.server.eval.ObservedEvidenceIdentity;
 import com.modelrag.server.eval.V2CutoverReadinessReport;
+import com.modelrag.server.benchmark.RetrievalBenchmarkController;
+import com.modelrag.search.orchestrator.HybridRetrievalService;
+import com.modelrag.knowledge.repository.IndexBuildRepository;
+import com.modelrag.search.channel.v2.LexicalSearchPort;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 class G11EvaluationTest {
     @Test
@@ -25,7 +32,8 @@ class G11EvaluationTest {
         EvaluationObservation observation = new EvaluationObservation("V2", "trace", List.of(), List.of(),
                 List.of(11L, 10L), List.of(10L), List.of(101L), List.of(101L), List.of(1001L),
                 List.of(1001L), List.of(1001L), List.of(1002L), List.of(1001L), "answer", false, false,
-                false, 12, 4, 2, 20L, 8L, Map.of("semantic", 3L));
+                false, 12, 4, 2, 20L, 8L, Map.of("semantic", 3L),
+                List.of(new ObservedEvidenceIdentity(10, 29L, 101L, 1001L, 1, true)));
 
         EvaluationMetrics metrics = new EvaluationMetrics();
         EvaluationMetrics.CaseScore score = metrics.score(labels, observation, "answer", false);
@@ -40,6 +48,46 @@ class G11EvaluationTest {
         assertEquals(4L, aggregate.telemetry().get("actionCount"));
         assertEquals(20L, aggregate.telemetry().get("inputTokens"));
         assertEquals(12.0, aggregate.values().get("p50LatencyMs"));
+    }
+
+    @Test
+    void completeEvidenceDoesNotCrossMatchIndependentIdentityDimensions() {
+        EvalLabels labels = new EvalLabels(List.of(), List.of(10L), List.of(200L),
+                List.of(new EvalEvidenceGroup("crossed", List.of(10L), List.of(200L), List.of(1000L))),
+                EvalLabels.COMPARABLE, EvalLabels.COMPARABLE, EvalLabels.COMPARABLE);
+        EvaluationObservation observation = new EvaluationObservation("V2", "trace", List.of(), List.of(),
+                List.of(10L, 20L), List.of(), List.of(100L, 200L), List.of(), List.of(1000L, 2000L),
+                List.of(), List.of(), List.of(), List.of(), "", false, false, false, 1, 1, 0, null, null,
+                Map.of(), List.of(new ObservedEvidenceIdentity(10, 1L, 100L, 1000L, 1, true),
+                        new ObservedEvidenceIdentity(20, 1L, 200L, 2000L, 2, true)));
+        EvaluationMetrics metrics = new EvaluationMetrics();
+        EvaluationMetrics.CaseScore score = metrics.score(labels, observation, "", false);
+
+        assertEquals(0.0, score.completeEvidenceRecall());
+    }
+
+    @Test
+    void unlabeledCasesAreExcludedFromMetricDenominators() {
+        EvalLabels labeled = new EvalLabels(List.of(), List.of(10L), List.of(), List.of(),
+                EvalLabels.COMPARABLE, EvalLabels.INSUFFICIENT_LABELS, EvalLabels.INSUFFICIENT_LABELS);
+        EvalLabels unlabeled = new EvalLabels(List.of(), List.of(), List.of(), List.of(),
+                EvalLabels.INSUFFICIENT_LABELS, EvalLabels.INSUFFICIENT_LABELS, EvalLabels.INSUFFICIENT_LABELS);
+        EvaluationObservation hit = new EvaluationObservation("V2", "a", List.of(), List.of(), List.of(10L),
+                List.of(), List.of(), List.of(), List.of(), List.of(), "expected", false, false, false,
+                1, 0, 0, null, null, Map.of());
+        EvaluationObservation missingLabels = new EvaluationObservation("V2", "b", List.of(), List.of(), List.of(),
+                List.of(), List.of(), List.of(), List.of(), List.of(), "", false, false, false,
+                1, 0, 0, null, null, Map.of());
+        EvaluationMetrics metrics = new EvaluationMetrics();
+        List<EvaluationMetrics.CaseScore> scores = List.of(metrics.score(labeled, hit, "expected", false),
+                metrics.score(unlabeled, missingLabels, "", false));
+        EvaluationMetrics.Aggregate aggregate = metrics.aggregate(List.of(labeled, unlabeled),
+                List.of(hit, missingLabels), scores);
+
+        assertEquals(1.0, aggregate.values().get("documentRecallAt20"));
+        assertEquals(1.0, aggregate.values().get("answerAccuracy"));
+        assertEquals(1L, aggregate.labelCoverage().get("documentLabels"));
+        assertEquals(1L, aggregate.labelCoverage().get("answerLabels"));
     }
 
     @Test
@@ -85,5 +133,26 @@ class G11EvaluationTest {
         assertFalse(Files.exists(migrations.resolve("V61__retrieval_trace_header_and_actions.sql")));
         assertFalse(Files.exists(migrations.resolve("V62__retrieval_evidence.sql")));
         assertFalse(Files.exists(migrations.resolve("V63__resource_acl.sql")));
+    }
+
+    @Test
+    void retrievalBenchmarkEndpointIsRestrictedToBenchmarkProfile() {
+        try (AnnotationConfigApplicationContext production = endpointContext("production")) {
+            assertTrue(production.getBeansOfType(RetrievalBenchmarkController.class).isEmpty());
+        }
+        try (AnnotationConfigApplicationContext benchmark = endpointContext("benchmark")) {
+            assertEquals(1, benchmark.getBeansOfType(RetrievalBenchmarkController.class).size());
+        }
+    }
+
+    private AnnotationConfigApplicationContext endpointContext(String profile) {
+        AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
+        context.getEnvironment().setActiveProfiles(profile);
+        context.registerBean(HybridRetrievalService.class, () -> mock(HybridRetrievalService.class));
+        context.registerBean(IndexBuildRepository.class, () -> mock(IndexBuildRepository.class));
+        context.registerBean(LexicalSearchPort.class, () -> mock(LexicalSearchPort.class));
+        context.register(RetrievalBenchmarkController.class);
+        context.refresh();
+        return context;
     }
 }

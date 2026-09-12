@@ -6,8 +6,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.stereotype.Component;
 
 /** Deterministic, adapter-independent retrieval and answer metrics. */
+@Component
 public class EvaluationMetrics {
     public record CaseScore(double documentRecallAt5, double documentRecallAt20, double documentMrr,
             double documentNdcg, Double nodeRecall, Double completeEvidenceRecall, double evidencePrecision,
@@ -63,14 +65,15 @@ public class EvaluationMetrics {
         if (total == 0) return new Aggregate(Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
         Map<String, Double> values = new LinkedHashMap<>();
         Map<String, String> status = new LinkedHashMap<>();
-        boolean documentLabels = labels.stream().anyMatch(value -> !value.expectedDocumentIds().isEmpty());
-        averageIfAvailable(values, "documentRecallAt5", cases.stream().mapToDouble(CaseScore::documentRecallAt5).average().orElse(0),
+        List<Integer> documentCases = eligible(labels, value -> !value.expectedDocumentIds().isEmpty());
+        boolean documentLabels = !documentCases.isEmpty();
+        averageIfAvailable(values, "documentRecallAt5", average(cases, documentCases, CaseScore::documentRecallAt5),
                 documentLabels, documentLabels ? statusFor(labels, "document") : EvalLabels.INSUFFICIENT_LABELS, status);
-        averageIfAvailable(values, "documentRecallAt20", cases.stream().mapToDouble(CaseScore::documentRecallAt20).average().orElse(0),
+        averageIfAvailable(values, "documentRecallAt20", average(cases, documentCases, CaseScore::documentRecallAt20),
                 documentLabels, documentLabels ? statusFor(labels, "document") : EvalLabels.INSUFFICIENT_LABELS, status);
-        averageIfAvailable(values, "documentMrr", cases.stream().mapToDouble(CaseScore::documentMrr).average().orElse(0),
+        averageIfAvailable(values, "documentMrr", average(cases, documentCases, CaseScore::documentMrr),
                 documentLabels, documentLabels ? statusFor(labels, "document") : EvalLabels.INSUFFICIENT_LABELS, status);
-        averageIfAvailable(values, "documentNdcg", cases.stream().mapToDouble(CaseScore::documentNdcg).average().orElse(0),
+        averageIfAvailable(values, "documentNdcg", average(cases, documentCases, CaseScore::documentNdcg),
                 documentLabels, documentLabels ? statusFor(labels, "document") : EvalLabels.INSUFFICIENT_LABELS, status);
         boolean v2Identities = observations.stream().allMatch(value -> "V2".equalsIgnoreCase(value.variant()));
         averageNullable(values, "nodeRecall", cases.stream().map(CaseScore::nodeRecall).filter(value -> value != null)
@@ -81,14 +84,15 @@ public class EvaluationMetrics {
                 .filter(value -> value != null).mapToDouble(Double::doubleValue).average().orElse(0),
                 labels.stream().anyMatch(value -> !value.expectedEvidenceGroups().isEmpty()),
                 v2Identities ? EvalLabels.COMPARABLE : EvalLabels.V2_ONLY, status);
-        averageIfAvailable(values, "evidencePrecision", cases.stream().mapToDouble(CaseScore::evidencePrecision).average().orElse(0),
+        averageIfAvailable(values, "evidencePrecision", average(cases, documentCases, CaseScore::evidencePrecision),
                 documentLabels, documentLabels ? statusFor(labels, "document") : EvalLabels.INSUFFICIENT_LABELS, status);
 
         long answerChecked = cases.stream().filter(CaseScore::answerChecked).count();
         long answerCorrect = cases.stream().filter(CaseScore::answerCorrect).count();
         averageIfAvailable(values, "answerAccuracy", answerChecked == 0 ? 0 : (double) answerCorrect / answerChecked,
                 answerChecked > 0, answerChecked == 0 ? EvalLabels.INSUFFICIENT_LABELS : EvalLabels.COMPARABLE, status);
-        averageIfAvailable(values, "answerRelevance", cases.stream().mapToDouble(CaseScore::answerRelevance).average().orElse(0),
+        averageIfAvailable(values, "answerRelevance", cases.stream().filter(CaseScore::answerChecked)
+                        .mapToDouble(CaseScore::answerRelevance).average().orElse(0),
                 answerChecked > 0, answerChecked == 0 ? EvalLabels.INSUFFICIENT_LABELS : EvalLabels.COMPARABLE, status);
         status.put("faithfulness", answerChecked == 0 ? EvalLabels.INSUFFICIENT_LABELS : EvalLabels.NON_COMPARABLE);
 
@@ -148,6 +152,15 @@ public class EvaluationMetrics {
         coverage.put("documentLabels", count(labels, "document"));
         coverage.put("nodeLabels", count(labels, "node"));
         coverage.put("evidenceGroups", count(labels, "evidence"));
+        coverage.put("answerLabels", answerChecked);
+        coverage.put("totalCaseCount", total);
+        coverage.put("eligibleCaseCount", Map.of("document", documentCases.size(),
+                "node", count(labels, "node"), "completeEvidence", count(labels, "evidence"),
+                "answer", answerChecked));
+        coverage.put("coverage", Map.of("document", ratio(documentCases.size(), total),
+                "node", ratio(count(labels, "node"), total),
+                "completeEvidence", ratio(count(labels, "evidence"), total),
+                "answer", ratio(answerChecked, total)));
         coverage.put("legacyLabelOnly", labels.stream().filter(value -> EvalLabels.LEGACY_LABEL_ONLY.equals(value.overallStatus())).count());
         return new Aggregate(values, status, telemetry, latencyMs, coverage);
     }
@@ -196,17 +209,25 @@ public class EvaluationMetrics {
     }
 
     private boolean groupSatisfied(EvalEvidenceGroup group, EvaluationObservation observation) {
-        boolean documents = group.documentIds().isEmpty() || intersects(group.documentIds(), observation.finalDocumentIds());
-        boolean nodes = group.nodeIds().isEmpty() || intersects(group.nodeIds(), observation.finalNodeIds());
-        boolean units = group.retrievalUnitIds().isEmpty()
-                || intersects(group.retrievalUnitIds(), observation.finalRetrievalUnitIds());
-        return documents && nodes && units;
+        return observation.evidenceIdentities().stream().filter(ObservedEvidenceIdentity::selected).anyMatch(identity ->
+                (group.documentIds().isEmpty() || group.documentIds().contains(identity.documentId()))
+                && (group.nodeIds().isEmpty() || group.nodeIds().contains(identity.nodeId()))
+                && (group.retrievalUnitIds().isEmpty()
+                        || group.retrievalUnitIds().contains(identity.retrievalUnitId())));
     }
 
-    private boolean intersects(List<Long> left, List<Long> right) {
-        Set<Long> values = Set.copyOf(right);
-        return left.stream().anyMatch(values::contains);
+    private List<Integer> eligible(List<EvalLabels> labels, java.util.function.Predicate<EvalLabels> predicate) {
+        List<Integer> result = new java.util.ArrayList<>();
+        for (int index = 0; index < labels.size(); index++) if (predicate.test(labels.get(index))) result.add(index);
+        return List.copyOf(result);
     }
+
+    private double average(List<CaseScore> cases, List<Integer> indexes,
+            java.util.function.ToDoubleFunction<CaseScore> value) {
+        return indexes.stream().mapToDouble(index -> value.applyAsDouble(cases.get(index))).average().orElse(0);
+    }
+
+    private double ratio(long eligible, long total) { return total == 0 ? 0 : (double) eligible / total; }
 
     private double precision(List<Long> expected, List<Long> actual) {
         return actual.isEmpty() ? 0 : (double) hits(expected, actual) / actual.size();

@@ -34,6 +34,16 @@ import org.junit.jupiter.api.Test;
 
 class G5V2RetrievalTest {
     @Test
+    void tenThousandAndOneActiveBuildsSelectTheOverflowPath() {
+        IndexBuildRepository repository = mock(IndexBuildRepository.class);
+        List<ActiveBuildRef> values = java.util.stream.LongStream.rangeClosed(1, 10_001)
+                .mapToObj(id -> new ActiveBuildRef(id, id, id, "qwen3-v1")).toList();
+        when(repository.findActiveByDataset(7, 10_001)).thenReturn(values);
+
+        assertTrue(new ActiveBuildScopeResolver(repository, 10_000).resolve(7).overflow());
+    }
+
+    @Test
     void hybridFusesByRetrievalUnitAndKeepsDifferentUnitsFromOneNode() {
         IndexBuildRepository builds = activeBuilds(new ActiveBuildRef(23, 29, 31, "qwen3-v1"));
         SemanticSearchPort semantic = mock(SemanticSearchPort.class);
@@ -55,7 +65,7 @@ class G5V2RetrievalTest {
     }
 
     @Test
-    void activeBuildScopeOverflowDegradesLexicalWithoutTruncatingTheFilter() {
+    void activeBuildScopeOverflowStillRunsPostgresValidatedLexicalRecall() {
         IndexBuildRepository builds = activeBuilds(
                 new ActiveBuildRef(23, 29, 31, "qwen3-v1"),
                 new ActiveBuildRef(24, 30, 32, "qwen3-v1"));
@@ -64,14 +74,18 @@ class G5V2RetrievalTest {
         EmbeddingService embeddings = mock(EmbeddingService.class);
         when(embeddings.embed(anyLong(), anyString())).thenReturn(new float[1024]);
         when(semantic.search(any())).thenReturn(List.of(candidate(101, 19, 23, 31, RetrievalChannel.SEMANTIC, .9, 1)));
+        when(lexical.searchActiveValidated(any())).thenReturn(List.of(
+                candidate(102, 20, 24, 32, RetrievalChannel.LEXICAL, 5, 1)));
 
         RetrievalV2Stages stages = service(semantic, lexical, embeddings, builds, false)
                 .inspect(new RetrievalV2Request(7, "question", 1));
 
-        assertTrue(stages.degradedComponents().contains("active_build_scope"));
-        assertTrue(stages.degradedComponents().contains("lexical"));
+        assertTrue(stages.degradedComponents().contains("ACTIVE_BUILD_FILTER_LIMIT"));
+        assertEquals(List.of(102L), stages.lexicalCandidates().stream()
+                .map(RetrievalCandidate::retrievalUnitId).toList());
         assertEquals(1, stages.finalCandidates().size());
         verify(lexical, never()).search(any());
+        verify(lexical, org.mockito.Mockito.atLeastOnce()).searchActiveValidated(any());
     }
 
     @Test
@@ -89,6 +103,26 @@ class G5V2RetrievalTest {
 
         assertTrue(stages.degradedComponents().contains("semantic"));
         assertFalse(stages.finalCandidates().isEmpty());
+    }
+
+    @Test
+    void benchmarkChannelModesExecuteOnlyTheRequestedRealChannel() {
+        IndexBuildRepository builds = activeBuilds(new ActiveBuildRef(23, 29, 31, "qwen3-v1"));
+        SemanticSearchPort semantic = mock(SemanticSearchPort.class);
+        LexicalSearchPort lexical = mock(LexicalSearchPort.class);
+        EmbeddingService embeddings = mock(EmbeddingService.class);
+        when(embeddings.embed(anyLong(), anyString())).thenReturn(new float[1024]);
+        when(semantic.search(any())).thenReturn(List.of(
+                candidate(101, 19, 23, 31, RetrievalChannel.SEMANTIC, .9, 1)));
+
+        RetrievalV2Stages semanticStages = service(semantic, lexical, embeddings, builds, false).inspect(
+                new RetrievalV2Request(7, "question", 1), HybridRetrievalService.Mode.SEMANTIC_ONLY);
+
+        assertEquals(List.of(101L), semanticStages.finalCandidates().stream()
+                .map(RetrievalCandidate::retrievalUnitId).toList());
+        verify(semantic, org.mockito.Mockito.atLeastOnce()).search(any());
+        verify(lexical, never()).search(any());
+        verify(lexical, never()).searchActiveValidated(any());
     }
 
     @Test

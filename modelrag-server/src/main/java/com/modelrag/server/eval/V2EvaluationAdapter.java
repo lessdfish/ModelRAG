@@ -2,7 +2,9 @@ package com.modelrag.server.eval;
 
 import com.modelrag.qa.dto.QaRequest;
 import com.modelrag.qa.dto.QaResult;
+import com.modelrag.qa.evidence.Evidence;
 import com.modelrag.qa.orchestrator.QaV2ApplicationService;
+import com.modelrag.qa.orchestrator.QaV2ExecutionSnapshot;
 import com.modelrag.common.observability.RetrievalTraceContext;
 import com.modelrag.common.observability.RetrievalTraceSession;
 import com.modelrag.common.observability.RetrievalTraceSink;
@@ -42,10 +44,13 @@ public class V2EvaluationAdapter {
         try {
             RetrievalV2Stages stages;
             QaResult answer;
+            List<Evidence> evidence;
             try (TraceCorrelation.Scope ignored = TraceCorrelation.bind(context, session)) {
-                stages = retrieval.inspect(new RetrievalV2Request(datasetId, item.question(), topK,
-                        threshold, embeddingProfile));
-                answer = qa.answer(new QaRequest(datasetId, item.question(), null).withoutConversationMessage(), null);
+                QaV2ExecutionSnapshot snapshot = qa.executeForEvaluation(
+                        new QaRequest(datasetId, item.question(), null).withoutConversationMessage(), topK, threshold);
+                stages = snapshot.retrievalStages();
+                answer = snapshot.result();
+                evidence = snapshot.evidenceSet().evidence();
             }
             List<RetrievalCandidate> finalCandidates = stages.finalCandidates();
             List<RetrievalCandidate> fusedCandidates = stages.fusedCandidates();
@@ -58,12 +63,23 @@ public class V2EvaluationAdapter {
                     units(stages.lexicalCandidates()), units(stages.rerankedCandidates()), answer.answer(), answer.refused(),
                     answer.degradedComponents().contains("v2-failure"), degraded, Math.max(elapsed(started),
                     stages.latencyMs().getOrDefault("total", 0L)), session.actionCount(), 0, null, null,
-                    stages.latencyMs());
+                    stages.latencyMs(), evidence(evidence));
         } catch (RuntimeException error) {
             session.fail("evaluation-v2-failure", List.of("EVALUATION_FAILURE"));
             return new EvaluationObservation("V2", "", List.of(), List.of(), List.of(), List.of(), List.of(),
-                    List.of(), List.of(), List.of(), "", true, true, true, elapsed(started), 0, 0, null, null, Map.of());
+                    List.of(), List.of(), List.of(), "", false, true, false, elapsed(started), 0, 0, null, null, Map.of());
         }
+    }
+
+    private List<ObservedEvidenceIdentity> evidence(List<Evidence> values) {
+        if (values == null) return List.of();
+        java.util.ArrayList<ObservedEvidenceIdentity> result = new java.util.ArrayList<>();
+        for (Evidence value : values) {
+            if (value == null) continue;
+            result.add(new ObservedEvidenceIdentity(value.documentId(), value.documentVersionId(), value.nodeId(),
+                    value.retrievalUnitId(), result.size() + 1, value.primary()));
+        }
+        return List.copyOf(result);
     }
 
     private List<Long> units(List<RetrievalCandidate> values) {

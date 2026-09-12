@@ -221,8 +221,9 @@ public class EvalController {
 
         for (EvalItem item : items) {
             boolean shouldRefuse = Boolean.TRUE.equals(item.shouldRefuse());
-            var stages = search.inspect(new HybridSearchRequest(datasetId, item.question(), 5));
-            var result = qa.answer(new com.modelrag.qa.dto.QaRequest(datasetId, item.question(), null));
+            var execution = qa.executeV1(new com.modelrag.qa.dto.QaRequest(datasetId, item.question(), null));
+            var stages = execution.retrievalStages();
+            var result = execution.result();
             if (result.refused()) refused++;
             if (result.refused() == shouldRefuse) refusalCorrect++;
             List<Long> finalIds = ids(stages.finalResults());

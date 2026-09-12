@@ -22,6 +22,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class G5LexicalRetrievalTest {
@@ -57,6 +58,41 @@ class G5LexicalRetrievalTest {
 
             assertTrue(search.search(new LexicalSearchRequest(7, "policy", List.of(31L), 5)).isEmpty());
             assertEquals(1.0, metrics.get("modelrag.retrieval.v2.lexical.stale_candidates").counter().count());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void overflowRecallContinuesWithSearchAfterUntilActiveCandidateIsFound() throws Exception {
+        AtomicInteger requests = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/modelrag-retrieval-units-v2/_search", exchange -> {
+            int page = requests.incrementAndGet();
+            StringBuilder hits = new StringBuilder();
+            int count = page == 1 ? 50 : 1;
+            for (int index = 0; index < count; index++) {
+                if (index > 0) hits.append(',');
+                long id = page == 1 ? 101 + index : 999;
+                hits.append("{\"_score\":1.2,\"sort\":[1.2,").append(id).append("],\"_source\":{")
+                        .append("\"retrievalUnitId\":").append(id)
+                        .append(",\"datasetId\":7,\"nodeId\":19,\"documentId\":23,")
+                        .append("\"documentVersionId\":29,\"indexBuildId\":31,\"unitType\":\"SECTION\",")
+                        .append("\"titlePath\":\"Title\",\"content\":\"content\",\"metadata\":{}}}");
+            }
+            byte[] response = ("{\"hits\":{\"hits\":[" + hits + "]}}")
+                    .getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, response.length);
+            try (var output = exchange.getResponseBody()) { output.write(response); }
+        });
+        server.start();
+        RetrievalUnitRepository units = mock(RetrievalUnitRepository.class);
+        when(units.findActiveByIds(eq(7L), any())).thenReturn(List.of(), List.of(unit(999, 31)));
+        try {
+            List<RetrievalCandidate> result = search(server, units).searchActiveValidated(
+                    new LexicalSearchRequest(7, "policy", List.of(), 1));
+            assertEquals(List.of(999L), result.stream().map(RetrievalCandidate::retrievalUnitId).toList());
+            assertEquals(2, requests.get());
         } finally {
             server.stop(0);
         }

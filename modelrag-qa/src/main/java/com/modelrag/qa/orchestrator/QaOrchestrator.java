@@ -3,7 +3,6 @@ package com.modelrag.qa.orchestrator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.modelrag.common.event.QaAnsweredEvent;
 import com.modelrag.common.metrics.TokenUsageTracker;
-import com.modelrag.common.observability.RetrievalMetrics;
 import com.modelrag.common.observability.RetrievalTraceContext;
 import com.modelrag.common.observability.RetrievalTraceSession;
 import com.modelrag.common.observability.RetrievalTraceSink;
@@ -69,7 +68,6 @@ public class QaOrchestrator {
     private final boolean qaV2Enabled;
     private final int contextMaxTokens;
     private final ObjectMapper json = new ObjectMapper();
-    private final RetrievalMetrics retrievalMetrics;
     private volatile RetrievalTraceSink traceSink = RetrievalTraceSink.NOOP;
 
     public QaOrchestrator(
@@ -111,7 +109,6 @@ public class QaOrchestrator {
         this.contextMaxTokens = contextMaxTokens;
         this.qaV2 = qaV2;
         this.qaV2Enabled = qaV2Enabled;
-        this.retrievalMetrics = new RetrievalMetrics(m);
     }
 
     @Autowired(required = false)
@@ -124,7 +121,22 @@ public class QaOrchestrator {
     }
 
     public QaResult answer(QaRequest request, Consumer<String> tokenConsumer) {
+        return execute(request, tokenConsumer, false, null, null).result();
+    }
+
+    /** Evaluation entry point that executes the production V1 QA path exactly once. */
+    public QaExecutionSnapshot executeV1(QaRequest request) {
+        return execute(request, null, true, null, null);
+    }
+
+    public QaExecutionSnapshot executeV1ForEvaluation(QaRequest request, int topK, double threshold) {
+        return execute(request, null, true, Math.max(1, topK), threshold);
+    }
+
+    private QaExecutionSnapshot execute(QaRequest request, Consumer<String> tokenConsumer, boolean forceV1,
+            Integer topKOverride, Double thresholdOverride) {
         boolean v2 = qaV2Enabled && !isDatasetOverviewQuery(request.query());
+        if (forceV1) v2 = false;
         RetrievalTraceContext context = TraceCorrelation.current();
         if (context == null) context = RetrievalTraceContext.create(v2 ? "V2" : "V1", request.datasetId(),
                 request.userId(), v2 ? "qwen3-v1" : "legacy");
@@ -133,35 +145,34 @@ public class QaOrchestrator {
         if (ownsSession) session = RetrievalTraceSession.start(traceSink, context, "redacted");
         long started = System.nanoTime();
         try (TraceCorrelation.Scope ignored = TraceCorrelation.bind(context, session)) {
-            QaResult result = answerInternal(request, tokenConsumer);
-            String status = result.refused() ? "refused" : (result.degradedComponents().isEmpty() ? "success" : "degraded");
-            retrievalMetrics.request(context, status);
-            retrievalMetrics.latency(context, status, (System.nanoTime() - started) / 1_000_000L);
-            if (!result.degradedComponents().isEmpty()) retrievalMetrics.degraded(context);
+            QaExecutionSnapshot snapshot = answerInternal(request, tokenConsumer, forceV1,
+                    topKOverride, thresholdOverride);
+            QaResult result = snapshot.result();
             if (ownsSession) session.complete(result.refused(), result.degradedComponents());
-            return result;
+            return snapshot;
         } catch (RuntimeException error) {
-            retrievalMetrics.failure(context);
+            metrics.counter("modelrag.qa.requests", "status", "error").increment();
             if (ownsSession) session.fail("qa-failure", List.of("QA_FAILURE"));
             throw error;
         }
     }
 
-    private QaResult answerInternal(QaRequest request, Consumer<String> tokenConsumer) {
+    private QaExecutionSnapshot answerInternal(QaRequest request, Consumer<String> tokenConsumer, boolean forceV1,
+            Integer topKOverride, Double thresholdOverride) {
         if (request.query() == null || request.query().isBlank()) throw new IllegalArgumentException("问题不能为空");
         limiter.check(request.datasetId());
         Dataset dataset = datasets.findById(request.datasetId());
         boolean userMessagePersisted = !request.persistConversationMessage() || persistUserMessage(request);
-        QaResult result;
-        if (qaV2Enabled && !isDatasetOverviewQuery(request.query())) {
+        QaExecutionSnapshot snapshot;
+        if (!forceV1 && qaV2Enabled && !isDatasetOverviewQuery(request.query())) {
             QaV2ApplicationService service = qaV2.getIfAvailable();
-            result = service == null
-                    ? new QaResult(AnswerSynthesizer.INSUFFICIENT_EVIDENCE, List.of(), 0, true,
-                            UUID.randomUUID().toString(), List.of("v2-unavailable"))
-                    : service.answer(request, tokenConsumer);
+            if (service == null) throw new IllegalStateException("V2 QA service unavailable");
+            QaV2ExecutionSnapshot v2Snapshot = service.execute(request, tokenConsumer);
+            snapshot = new QaExecutionSnapshot(v2Snapshot.result(), null, List.of(), v2Snapshot.latencyMs());
         } else {
-            result = answerUncached(request, tokenConsumer);
+            snapshot = answerUncached(request, tokenConsumer, topKOverride, thresholdOverride);
         }
+        QaResult result = snapshot.result();
         audit(request, result);
         metrics.counter("modelrag.qa.requests", "status", result.refused() ? "refused" : "success").increment();
         tokens.record(request.datasetId(), request.query(), result.answer());
@@ -170,7 +181,7 @@ public class QaOrchestrator {
                     citationsJson(result.citations()), request.userId(), result.traceId(), "rag", dataset.name(),
                     userMessagePersisted, request.datasetId()));
         }
-        return result;
+        return snapshot;
     }
 
     private boolean persistUserMessage(QaRequest request) {
@@ -179,7 +190,8 @@ public class QaOrchestrator {
         return true;
     }
 
-    private QaResult answerUncached(QaRequest request, Consumer<String> tokenConsumer) {
+    private QaExecutionSnapshot answerUncached(QaRequest request, Consumer<String> tokenConsumer,
+            Integer topKOverride, Double thresholdOverride) {
         long started = System.nanoTime();
         Dataset dataset = datasets.findById(request.datasetId());
         String query = sanitizer.sanitize(request.query());
@@ -187,9 +199,10 @@ public class QaOrchestrator {
         ConversationContextBuilder.ConversationContext conversationContext = contextBundle.conversation();
         String retrievalQuery = contextBundle.standaloneQuestion();
         if (isDatasetOverviewQuery(query)) return datasetOverview(request, dataset, query, started);
-        int topK = Math.max(1, dataset.topK());
+        int topK = topKOverride == null ? Math.max(1, dataset.topK()) : topKOverride;
+        double threshold = thresholdOverride == null ? dataset.threshold() : thresholdOverride;
         RetrievalPipeline.RetrievalResult retrievalResult = retrievalPipeline.retrieve(
-                request.datasetId(), retrievalQuery, topK, dataset.threshold());
+                request.datasetId(), retrievalQuery, topK, threshold);
         SearchStages stages = retrievalResult.stages();
         List<ScoredChunk> results = retrievalResult.selected();
         List<ScoredChunk> contextChunks = retrievalResult.contextChunks();
@@ -206,7 +219,7 @@ public class QaOrchestrator {
                 && !stages.vectorResults().isEmpty()
                 && rawVectorScore >= 0
                 && rawVectorScore <= 1
-                && confidence < dataset.threshold();
+                && confidence < threshold;
         boolean refused = results.isEmpty() || thresholdFailed || (evidenceScore < 2 && !anchoredFactEvidence);
         List<Citation> citations = refused ? List.of() : citations(request.datasetId(), results, 2);
         AnswerApplicationService.AnswerDraft draft = answerApplication.answer(request.userId(), query,
@@ -244,7 +257,8 @@ public class QaOrchestrator {
         persistTrace(trace);
         metrics.timer("modelrag.qa.latency", "phase", "total")
                 .record(System.nanoTime() - started, java.util.concurrent.TimeUnit.NANOSECONDS);
-        return new QaResult(draft.answer(), citations, confidence, refused, traceId, degradedComponents);
+        QaResult result = new QaResult(draft.answer(), citations, confidence, refused, traceId, degradedComponents);
+        return new QaExecutionSnapshot(result, stages, results, latencyMs);
     }
 
     private List<String> answerDegradation(List<String> retrieval, String answerSource) {
@@ -255,7 +269,7 @@ public class QaOrchestrator {
         return List.copyOf(values);
     }
 
-    private QaResult datasetOverview(QaRequest request, Dataset dataset, String query, long started) {
+    private QaExecutionSnapshot datasetOverview(QaRequest request, Dataset dataset, String query, long started) {
         List<com.modelrag.knowledge.model.Document> documentsForDataset = documents.findByDatasetId(request.datasetId());
         List<Chunk> chunksForDataset = chunks.findActiveByDatasetId(request.datasetId());
         List<ScoredChunk> contextChunks = chunksForDataset.stream()
@@ -298,7 +312,9 @@ public class QaOrchestrator {
         long latencyMs = (System.nanoTime() - started) / 1_000_000;
         trace.put("latencyMs", latencyMs);
         persistTrace(trace);
-        return new QaResult(answer, citations, documentsForDataset.isEmpty() ? .3 : .9, false, traceId, List.of());
+        QaResult result = new QaResult(answer, citations, documentsForDataset.isEmpty() ? .3 : .9,
+                false, traceId, List.of());
+        return new QaExecutionSnapshot(result, emptyStages, contextChunks, latencyMs);
     }
 
     private boolean isDatasetOverviewQuery(String query) {

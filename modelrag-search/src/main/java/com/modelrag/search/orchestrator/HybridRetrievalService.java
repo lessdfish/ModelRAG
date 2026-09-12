@@ -63,6 +63,8 @@ public class HybridRetrievalService {
     private final RetrievalMetrics retrievalMetrics;
     private volatile RetrievalTraceSink traceSink = RetrievalTraceSink.NOOP;
 
+    public enum Mode { SEMANTIC_ONLY, LEXICAL_ONLY, HYBRID }
+
     @Autowired
     public HybridRetrievalService(SemanticSearchPort semantic, LexicalSearchPort lexical,
             TextEmbeddingProvider embeddings, QueryRewriter rewriter, Reranker reranker,
@@ -98,6 +100,10 @@ public class HybridRetrievalService {
     }
 
     public RetrievalV2Stages inspect(RetrievalV2Request request) {
+        return inspect(request, Mode.HYBRID);
+    }
+
+    public RetrievalV2Stages inspect(RetrievalV2Request request, Mode mode) {
         RetrievalTraceContext context = TraceCorrelation.current();
         if (context == null) context = RetrievalTraceContext.create("V2", request.datasetId(), null,
                 request.embeddingProfile());
@@ -105,7 +111,7 @@ public class HybridRetrievalService {
         boolean ownsSession = session == null;
         if (ownsSession) session = RetrievalTraceSession.start(traceSink, context, "redacted");
         try (TraceCorrelation.Scope ignored = TraceCorrelation.bind(context, session)) {
-            RetrievalV2Stages result = inspectInternal(request);
+            RetrievalV2Stages result = inspectInternal(request, mode == null ? Mode.HYBRID : mode);
             String status = result.degradedComponents().isEmpty() ? "success" : "degraded";
             retrievalMetrics.request(context, status);
             retrievalMetrics.latency(context, status, result.latencyMs().getOrDefault("total", 0L));
@@ -119,30 +125,28 @@ public class HybridRetrievalService {
         }
     }
 
-    private RetrievalV2Stages inspectInternal(RetrievalV2Request request) {
+    private RetrievalV2Stages inspectInternal(RetrievalV2Request request, Mode mode) {
         long started = System.nanoTime();
         var expanded = rewriter.expand(request.query());
         Queue<String> degraded = new ConcurrentLinkedQueue<>();
         Map<String, Long> latency = new ConcurrentHashMap<>();
         int recall = Math.min(MAX_RECALL, Math.max(request.topK() * 2, 10));
 
-        CompletableFuture<List<RetrievalCandidate>> semanticFuture = submitSemantic(request, expanded.searchQueries(),
-                recall, degraded, latency);
-        ActiveBuildScope scope;
-        try {
-            scope = activeBuilds.resolve(request.datasetId());
-        } catch (RuntimeException error) {
-            scope = new ActiveBuildScope(List.of(), true);
+        CompletableFuture<List<RetrievalCandidate>> semanticFuture = mode == Mode.LEXICAL_ONLY
+                ? CompletableFuture.completedFuture(List.of())
+                : submitSemantic(request, expanded.searchQueries(), recall, degraded, latency);
+        ActiveBuildScope scope = new ActiveBuildScope(List.of(), false);
+        if (mode != Mode.SEMANTIC_ONLY) {
+            try {
+                scope = activeBuilds.resolve(request.datasetId());
+            } catch (RuntimeException error) {
+                scope = new ActiveBuildScope(List.of(), true);
+            }
         }
         CompletableFuture<List<RetrievalCandidate>> lexicalFuture;
-        if (scope.overflow()) {
-            degrade("active_build_scope", degraded);
-            degraded.add("ACTIVE_BUILD_FILTER_LIMIT");
-            degrade("lexical", degraded);
-            lexicalFuture = CompletableFuture.completedFuture(List.of());
-        } else {
-            lexicalFuture = submitLexical(request, expanded.searchQueries(), scope, recall, degraded, latency);
-        }
+        if (scope.overflow()) degraded.add("ACTIVE_BUILD_FILTER_LIMIT");
+        lexicalFuture = mode == Mode.SEMANTIC_ONLY ? CompletableFuture.completedFuture(List.of())
+                : submitLexical(request, expanded.searchQueries(), scope, recall, degraded, latency);
 
         List<RetrievalCandidate> semanticCandidates = semanticFuture.join();
         List<RetrievalCandidate> lexicalCandidates = lexicalFuture.join();
@@ -161,7 +165,11 @@ public class HybridRetrievalService {
         retrievalMetrics.candidates(traceContext, "semantic", semanticCandidates.size());
         retrievalMetrics.candidates(traceContext, "lexical", lexicalCandidates.size());
         long fusionStarted = System.nanoTime();
-        List<RetrievalCandidate> fused = fuse(dedupe(semanticCandidates), dedupe(lexicalCandidates), request.topK());
+        List<RetrievalCandidate> fused = switch (mode) {
+            case SEMANTIC_ONLY -> dedupe(semanticCandidates);
+            case LEXICAL_ONLY -> dedupe(lexicalCandidates);
+            case HYBRID -> fuse(dedupe(semanticCandidates), dedupe(lexicalCandidates), request.topK());
+        };
         latency.put("fusion", elapsed(fusionStarted));
         recordDuration("fusion", latency.get("fusion"));
         record("semantic", semanticCandidates.size());
@@ -180,7 +188,8 @@ public class HybridRetrievalService {
         } catch (RuntimeException error) {
             degrade("reranker", degraded);
         }
-        if (rerankEnabled && shouldRerank(semanticCandidates, lexicalCandidates, fused, request.query())) {
+        if (mode == Mode.HYBRID && rerankEnabled
+                && shouldRerank(semanticCandidates, lexicalCandidates, fused, request.query())) {
             long rerankStarted = System.nanoTime();
             try {
                 RetrievalCandidateReranker.RerankResult result = CompletableFuture
@@ -269,8 +278,10 @@ public class HybridRetrievalService {
             ActiveBuildScope scope, int recall) {
         List<RetrievalCandidate> result = new ArrayList<>();
         for (String query : queries) {
-            result.addAll(lexical.search(new LexicalSearchRequest(request.datasetId(), query,
-                    scope.indexBuildIds(), recall)));
+            LexicalSearchRequest lexicalRequest = new LexicalSearchRequest(request.datasetId(), query,
+                    scope.indexBuildIds(), recall);
+            result.addAll(scope.overflow() ? lexical.searchActiveValidated(lexicalRequest)
+                    : lexical.search(lexicalRequest));
         }
         return dedupe(result);
     }

@@ -27,7 +27,8 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--documents", type=int)
     parser.add_argument("--active-builds", type=int)
     parser.add_argument("--stale-units", type=int)
-    parser.add_argument("--include-vectors", action="store_true")
+    parser.add_argument("--include-vectors", action="store_true",
+                        help="materialize vectors in JSONL; the loader can generate them from embeddingSeed")
     return parser.parse_args()
 
 
@@ -47,13 +48,14 @@ def write_fixture(options: argparse.Namespace) -> dict:
     is_full = options.mode == "full"
     unit_count = bounded_positive(options.units, FULL_UNITS if is_full else SMOKE_UNITS, "units")
     document_count = bounded_positive(options.documents, FULL_DOCUMENTS if is_full else SMOKE_DOCUMENTS, "documents")
-    build_count = bounded_positive(options.active_builds,
-                                   ACTIVE_BUILD_FILTER_LIMIT + 1 if is_full else 4, "active-builds")
+    build_count = bounded_positive(options.active_builds, document_count, "active-builds")
+    if build_count != document_count:
+        raise SystemExit("active-builds must equal documents because each active build belongs to one document")
     stale_units = max(1, options.stale_units if options.stale_units is not None else max(100, unit_count // 100))
     if is_full and (unit_count < FULL_UNITS or document_count < FULL_DOCUMENTS
-                    or build_count <= ACTIVE_BUILD_FILTER_LIMIT or not options.include_vectors):
+                    or build_count <= ACTIVE_BUILD_FILTER_LIMIT or build_count > document_count):
         raise SystemExit(
-            "full mode requires >=1,000,000 units, >=20,001 documents, >10,000 active builds, and --include-vectors")
+            "full mode requires >=1,000,000 units, >=20,001 documents, and 10,001..document-count active builds")
     if not 10_000 <= unit_count <= 50_000 and not is_full:
         raise SystemExit("smoke mode must contain 10,000-50,000 retrieval units")
 
@@ -70,20 +72,20 @@ def write_fixture(options: argparse.Namespace) -> dict:
                 "datasetId": 1,
                 "active": True,
                 "activeVersionId": document_id,
-                "activeBuildId": (document_id - 1) % build_count + 1,
+                "activeBuildId": document_id,
             }
             stream.write(json.dumps(row, separators=(",", ":")) + "\n")
 
     with units_path.open("w", encoding="utf-8", newline="\n") as stream:
         for unit_id in range(1, unit_count + 1):
             document_id = (unit_id - 1) % document_count + 1
-            build_id = (document_id - 1) % build_count + 1
+            build_id = document_id
             row = {
                 "retrievalUnitId": unit_id,
                 "datasetId": 1,
                 "documentId": document_id,
                 "documentVersionId": document_id,
-                "nodeId": (unit_id - 1) % max(1, document_count * 4) + 1,
+                "nodeId": document_id,
                 "indexBuildId": build_id,
                 "active": True,
                 "indexName": SHARED_INDEX,
@@ -103,8 +105,8 @@ def write_fixture(options: argparse.Namespace) -> dict:
                 "datasetId": 1,
                 "documentId": document_id,
                 "documentVersionId": document_id,
-                "nodeId": (unit_id - 1) % max(1, document_count * 4) + 1,
-                "indexBuildId": build_count + 1,
+                "nodeId": document_id,
+                "indexBuildId": build_count + document_id,
                 "active": False,
                 "superseded": True,
                 "indexName": SHARED_INDEX,

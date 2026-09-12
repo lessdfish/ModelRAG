@@ -8,8 +8,8 @@ import com.modelrag.common.observability.RetrievalTraceSink;
 import com.modelrag.common.observability.TraceCorrelation;
 import com.modelrag.qa.dto.QaRequest;
 import com.modelrag.qa.dto.QaResult;
+import com.modelrag.qa.orchestrator.QaExecutionSnapshot;
 import com.modelrag.qa.orchestrator.QaOrchestrator;
-import com.modelrag.search.dto.HybridSearchRequest;
 import com.modelrag.search.dto.ScoredChunk;
 import com.modelrag.search.dto.SearchStages;
 import com.modelrag.search.facade.SearchFacade;
@@ -17,7 +17,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /** V1 adapter. It preserves chunk labels and resolves document identities for comparable V1 metrics. */
@@ -39,20 +38,22 @@ public class V1EvaluationAdapter {
         this.traceSink = traceSink == null ? RetrievalTraceSink.NOOP : traceSink;
     }
 
-    public EvaluationObservation run(long datasetId, EvalItem item, int topK) {
+    public EvaluationObservation run(long datasetId, EvalItem item, int topK, double threshold) {
         long started = System.nanoTime();
         SearchStages stages;
         QaResult answer;
         RetrievalTraceContext context = RetrievalTraceContext.create("V1", datasetId, null, "legacy");
         RetrievalTraceSession session = RetrievalTraceSession.start(traceSink, context, "redacted");
         try (TraceCorrelation.Scope ignored = TraceCorrelation.bind(context, session)) {
-            stages = search.inspect(new HybridSearchRequest(datasetId, item.question(), Math.max(1, topK)));
-            answer = qa.answer(new QaRequest(datasetId, item.question(), null).withoutConversationMessage());
+            QaExecutionSnapshot snapshot = qa.executeV1ForEvaluation(
+                    new QaRequest(datasetId, item.question(), null).withoutConversationMessage(), topK, threshold);
+            stages = snapshot.retrievalStages();
+            answer = snapshot.result();
             session.complete(answer.refused(), answer.degradedComponents());
         } catch (RuntimeException error) {
             session.fail("evaluation-v1-failure", List.of("EVALUATION_FAILURE"));
             return new EvaluationObservation("V1", "", List.of(), List.of(), List.of(), List.of(), List.of(),
-                    List.of(), List.of(), List.of(), "", true, true, true, elapsed(started), 0, 0, null, null, Map.of());
+                    List.of(), List.of(), List.of(), "", false, true, false, elapsed(started), 0, 0, null, null, Map.of());
         }
         List<Long> allIds = new ArrayList<>();
         addIds(allIds, stages.vectorResults());
@@ -72,7 +73,17 @@ public class V1EvaluationAdapter {
                 fusedDocuments, List.of(), List.of(), List.of(), List.of(), ids(stages.vectorResults()),
                 ids(stages.bm25Results()), ids(stages.rerankResults()), answer.answer(), answer.refused(), false,
                 degraded, Math.max(elapsed(started), latency.getOrDefault("total", 0L)),
-                session.actionCount(), 0, null, null, latency);
+                session.actionCount(), 0, null, null, latency, evidence(finalChunks, documentByChunk));
+    }
+
+    private List<ObservedEvidenceIdentity> evidence(List<Long> chunkIds, Map<Long, Long> documentByChunk) {
+        List<ObservedEvidenceIdentity> result = new ArrayList<>();
+        for (Long chunkId : chunkIds) {
+            Long documentId = documentByChunk.get(chunkId);
+            if (documentId != null) result.add(new ObservedEvidenceIdentity(documentId, null, null, null,
+                    result.size() + 1, true));
+        }
+        return List.copyOf(result);
     }
 
     private void addIds(List<Long> target, List<ScoredChunk> values) {

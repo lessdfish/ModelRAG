@@ -79,6 +79,20 @@ public class QaV2ApplicationService {
     }
 
     public QaResult answer(QaRequest request, Consumer<String> tokenConsumer) {
+        return execute(request, tokenConsumer).result();
+    }
+
+    public QaV2ExecutionSnapshot execute(QaRequest request, Consumer<String> tokenConsumer) {
+        return execute(request, tokenConsumer, null, null);
+    }
+
+    /** Runs one real V2 QA execution with the evaluation dataset's effective retrieval settings. */
+    public QaV2ExecutionSnapshot executeForEvaluation(QaRequest request, int topK, double threshold) {
+        return execute(request, null, Math.max(1, topK), threshold);
+    }
+
+    private QaV2ExecutionSnapshot execute(QaRequest request, Consumer<String> tokenConsumer,
+            Integer topKOverride, Double thresholdOverride) {
         long started = System.nanoTime();
         RetrievalTraceContext traceContext = TraceCorrelation.current();
         String traceId = traceContext == null ? UUID.randomUUID().toString() : traceContext.traceId();
@@ -90,9 +104,11 @@ public class QaV2ApplicationService {
             ConversationContext conversation = contextBundle.conversation();
             retrievalQuery = contextBundle.standaloneQuestion() == null
                     || contextBundle.standaloneQuestion().isBlank() ? query : contextBundle.standaloneQuestion();
-            int topK = Math.min(RetrievalV2Request.MAX_TOP_K, Math.max(1, dataset.topK()));
+            int topK = Math.min(RetrievalV2Request.MAX_TOP_K,
+                    topKOverride == null ? Math.max(1, dataset.topK()) : topKOverride);
+            double threshold = thresholdOverride == null ? dataset.threshold() : thresholdOverride;
             RetrievalV2Stages stages = retrieval.inspect(new RetrievalV2Request(request.datasetId(), retrievalQuery,
-                    topK, dataset.threshold(), embeddingProfiles.profile()));
+                    topK, threshold, embeddingProfiles.profile()));
             EvidenceRetrievalService.EvidenceRetrievalResult primary = evidenceRetrieval.retrieve(
                     request.datasetId(), stages.finalCandidates());
             EvidenceExpansionService.ExpansionResult expanded = evidenceExpansion.expand(primary.primaryEvidence());
@@ -109,7 +125,7 @@ public class QaV2ApplicationService {
                 recordV2Evidence(selected, true, degraded, expanded.navigationActions());
                 persistTraceSafely(request, traceId, retrievalQuery, stages, evidenceSet, null,
                         true, started);
-                return result;
+                return new QaV2ExecutionSnapshot(result, stages, evidenceSet, elapsed(started));
             }
             AnswerSynthesizer.AnswerDraft draft = synthesizer.synthesize(request.userId(), query, conversation,
                     evidenceSet, tokenConsumer);
@@ -121,17 +137,16 @@ public class QaV2ApplicationService {
             recordV2Evidence(selected, false, answerDegraded, expanded.navigationActions());
             persistTraceSafely(request, traceId, retrievalQuery, stages, evidenceSet, draft,
                     false, started);
-            return result;
+            return new QaV2ExecutionSnapshot(result, stages, evidenceSet, elapsed(started));
         } catch (RuntimeException error) {
             List<String> degraded = List.of("v2-failure");
             EvidenceSufficiency sufficiency = new EvidenceSufficiency(false, 0, "v2-failure", 0);
             EvidenceSet empty = new EvidenceSet(traceId, query, List.of(), sufficiency, degraded,
                     elapsed(started), 0);
             metricEvidence(empty);
-            recordV2Evidence(List.of(), true, degraded, 0);
-            persistTraceSafely(request, traceId, retrievalQuery, null, empty, null, true, started);
-            return new QaResult(AnswerSynthesizer.INSUFFICIENT_EVIDENCE, List.of(), 0, true,
-                    traceId, degraded);
+            recordV2Evidence(List.of(), false, degraded, 0);
+            persistTraceSafely(request, traceId, retrievalQuery, null, empty, null, false, started);
+            throw error;
         }
     }
 
