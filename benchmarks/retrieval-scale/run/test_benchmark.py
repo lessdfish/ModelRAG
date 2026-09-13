@@ -77,3 +77,19 @@ def test_high_active_build_workload_queries_real_sentinel_and_captures_server_ja
     assert seen["query"] == "G11_ACTIVE_BUILD_SENTINEL_20001"
     assert result["serverJavaVersion"] == "21.0.8"
     assert "aclLeakage" not in result
+
+
+def test_full_benchmark_rejects_missing_or_inconsistent_server_java_versions():
+    assert benchmark.full_server_java_error([
+        {"missingServerJavaVersionCount": 1, "serverJavaVersions": ["21.0.8"]}
+    ]) is not None
+    assert benchmark.full_server_java_error([
+        {"missingServerJavaVersionCount": 0, "serverJavaVersions": ["21.0.8"]},
+        {"missingServerJavaVersionCount": 0, "serverJavaVersions": ["21.0.9"]},
+    ]) is not None
+    assert benchmark.full_server_java_error([
+        {"missingServerJavaVersionCount": 0, "serverJavaVersions": ["21.0.8"]}
+    ]) is None
+    for invalid in ("17.0.12", "unknown", "unavailable", ""):
+        result = [{"missingServerJavaVersionCount": 0, "serverJavaVersions": [invalid] if invalid else []}]
+        assert benchmark.full_server_java_error(result) is not None

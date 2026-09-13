@@ -29,6 +29,7 @@ public class EvaluationRunner {
     private final EvaluationMetrics metrics;
     private final String baseCommit;
     private final BenchmarkEvidenceReader benchmarkEvidenceReader;
+    private final AclIsolationEvidenceReader aclIsolationEvidenceReader;
 
     @Value("${modelrag.eval.quality-regression-tolerance:0.0}")
     private double qualityRegressionTolerance;
@@ -52,6 +53,7 @@ public class EvaluationRunner {
             EvaluationMetrics metrics,
             ObjectProvider<RetrievalTraceSink> traceSinks,
             ObjectProvider<BenchmarkEvidenceReader> benchmarkEvidenceReaders,
+            ObjectProvider<AclIsolationEvidenceReader> aclIsolationEvidenceReaders,
             @Value("${modelrag.index.v2.embedding-profile:qwen3-v1}") String embeddingProfile,
             @Value("${modelrag.eval.base-commit:unknown}") String baseCommit) {
         this.datasets = datasets;
@@ -66,6 +68,10 @@ public class EvaluationRunner {
                 ? identity -> BenchmarkEvidence.notRun("benchmark evidence reader unavailable")
                 : benchmarkEvidenceReaders.getIfAvailable(
                         () -> identity -> BenchmarkEvidence.notRun("benchmark evidence reader unavailable"));
+        this.aclIsolationEvidenceReader = aclIsolationEvidenceReaders == null
+                ? () -> AclIsolationEvidence.notRun("ACL isolation evidence reader unavailable")
+                : aclIsolationEvidenceReaders.getIfAvailable(
+                        () -> () -> AclIsolationEvidence.notRun("ACL isolation evidence reader unavailable"));
     }
 
     public EvalReport run(long datasetId, List<EvalItem> items) {
@@ -92,6 +98,7 @@ public class EvaluationRunner {
         delta.put("errorRate", metric(v2Report, "errorRate") - metric(v1Report, "errorRate"));
         delta.put("degradedRate", metric(v2Report, "degradedRate") - metric(v1Report, "degradedRate"));
         BenchmarkEvidence benchmark = benchmarkEvidenceReader.read(benchmarkIdentity);
+        AclIsolationEvidence aclEvidence = aclIsolationEvidenceReader.read();
         CutoverReadinessEvaluator gateEvaluator = new CutoverReadinessEvaluator();
         CutoverReadinessEvaluator.Thresholds thresholds = new CutoverReadinessEvaluator.Thresholds(
                 qualityRegressionTolerance, errorRateTolerance, degradedRateTolerance, minDocumentRecallAt20,
@@ -99,7 +106,8 @@ public class EvaluationRunner {
                 minRefusalAccuracy, maxErrorRate, maxDegradedRate, maxP95LatencyRegressionRatio,
                 minCategorySamples);
         delta.put("p95LatencyRegressionRatio", gateEvaluator.p95Ratio(v1Report, v2Report));
-        Map<String, Boolean> gates = gateEvaluator.evaluate(v1Report, v2Report, benchmark, thresholds);
+        Map<String, Boolean> gates = gateEvaluator.evaluate(v1Report, v2Report, benchmark, aclEvidence,
+                baseCommit, thresholds);
         List<String> passes = new ArrayList<>();
         List<String> failures = new ArrayList<>();
         gates.forEach((name, pass) -> (pass ? passes : failures).add(name + (pass ? " passed" : " failed")));

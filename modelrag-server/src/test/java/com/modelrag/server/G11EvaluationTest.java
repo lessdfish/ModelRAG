@@ -195,6 +195,30 @@ class G11EvaluationTest {
     }
 
     @Test
+    void sentinelTextHitWithMismatchedActiveIdentityIsInvalidEvidence() {
+        String sentinel = "G11_ACTIVE_BUILD_SENTINEL_10001";
+        RetrievalCandidate candidate = new RetrievalCandidate(7, 101, 19, 23, 29, 10_001,
+                RetrievalUnitType.PARAGRAPH, "Benchmark", sentinel, 1, RetrievalChannel.LEXICAL, 1, Map.of());
+        RetrievalUnit differentActiveIdentity = new RetrievalUnit(101, 7, 23, 30, 19, 10_002,
+                RetrievalUnitType.PARAGRAPH, 0, "Benchmark", sentinel, "hash", 1,
+                Map.of("fixtureIdentity", "fixture"), Instant.now());
+        HybridRetrievalService retrieval = mock(HybridRetrievalService.class);
+        when(retrieval.inspect(any(), any())).thenReturn(new RetrievalV2Stages("", List.of(), "", List.of(),
+                List.of(candidate), List.of(candidate), List.of(), List.of(candidate), false, List.of(), Map.of()));
+        RetrievalUnitRepository units = mock(RetrievalUnitRepository.class);
+        when(units.findActiveByIds(any(Long.class), any())).thenReturn(List.of(differentActiveIdentity));
+        RetrievalBenchmarkController controller = new RetrievalBenchmarkController(retrieval,
+                mock(IndexBuildRepository.class), units, mock(LexicalSearchPort.class));
+
+        var response = controller.retrieve(new RetrievalBenchmarkController.Request(7, sentinel,
+                "high-active-build-count", "lexical", null, null, true, "fixture")).getBody();
+
+        assertEquals(1, response.staleCandidateCount());
+        assertTrue(response.activeBuildTruncated());
+        assertFalse(response.evidenceValid());
+    }
+
+    @Test
     void technicalTraceFailureIsErrorAndNeverBusinessRefusal() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         AtomicReference<String> sql = new AtomicReference<>();

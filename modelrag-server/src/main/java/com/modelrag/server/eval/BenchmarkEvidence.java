@@ -5,10 +5,11 @@ import java.util.Map;
 
 /** Evidence parsed from one completed real retrieval-scale benchmark report. */
 public record BenchmarkEvidence(String status, String mode, String gitCommit, String fixtureIdentity,
-        String sharedIndex, Map<String, Long> topology, List<String> workloads, List<Integer> concurrencies,
+        String sharedIndex, String serverJavaVersion, Map<String, Long> topology,
+        List<String> workloads, List<Integer> concurrencies,
         double p50Ms, double p95Ms, double p99Ms,
         double errorRate, double degradedRate, double timeoutRate, boolean noStaleBuildLeakage,
-        boolean noAclLeakage, boolean noActiveBuildTruncation, boolean boundedResults,
+        boolean noActiveBuildTruncation, boolean boundedResults,
         boolean validEvidence, String reason) {
     public BenchmarkEvidence {
         status = status == null ? "NOT_RUN" : status;
@@ -16,6 +17,7 @@ public record BenchmarkEvidence(String status, String mode, String gitCommit, St
         gitCommit = gitCommit == null ? "unknown" : gitCommit;
         fixtureIdentity = fixtureIdentity == null ? "unknown" : fixtureIdentity;
         sharedIndex = sharedIndex == null ? "unknown" : sharedIndex;
+        serverJavaVersion = serverJavaVersion == null ? "unknown" : serverJavaVersion;
         topology = topology == null ? Map.of() : Map.copyOf(topology);
         workloads = workloads == null ? List.of() : List.copyOf(workloads);
         concurrencies = concurrencies == null ? List.of() : List.copyOf(concurrencies);
@@ -23,8 +25,8 @@ public record BenchmarkEvidence(String status, String mode, String gitCommit, St
     }
 
     public static BenchmarkEvidence notRun(String reason) {
-        return new BenchmarkEvidence("NOT_RUN", "unknown", "unknown", "unknown", "unknown", Map.of(), List.of(), List.of(),
-                0, 0, 0, 0, 0, 0, false, false, false, false, false, reason);
+        return new BenchmarkEvidence("NOT_RUN", "unknown", "unknown", "unknown", "unknown", "unknown",
+                Map.of(), List.of(), List.of(), 0, 0, 0, 0, 0, 0, false, false, false, false, reason);
     }
 
     public boolean isVerifiedFull() {

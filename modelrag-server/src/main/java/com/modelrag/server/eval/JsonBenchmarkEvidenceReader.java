@@ -50,9 +50,7 @@ public class JsonBenchmarkEvidenceReader implements BenchmarkEvidenceReader {
     private BenchmarkEvidence parse(JsonNode root) {
         String status = root.path("status").asText("NOT_RUN");
         String mode = root.path("mode").asText("unknown");
-        if ("full".equals(mode) && root.path("runtime").path("serverJavaVersion").asText("").isBlank()) {
-            status = "NOT_RUN";
-        }
+        String serverJavaVersion = root.path("runtime").path("serverJavaVersion").asText("unknown");
         Map<String, Long> topology = new LinkedHashMap<>();
         JsonNode shape = root.path("topology");
         for (String name : List.of("activeRetrievalUnits", "activeDocuments", "staleRetrievalUnits",
@@ -70,12 +68,11 @@ public class JsonBenchmarkEvidenceReader implements BenchmarkEvidenceReader {
         JsonNode correctness = root.path("correctness");
         return new BenchmarkEvidence(status, mode,
                 root.path("gitCommit").asText("unknown"), root.path("fixtureIdentity").asText("unknown"),
-                shape.path("sharedV2Index").asText("unknown"), topology, workloads, concurrencies,
+                shape.path("sharedV2Index").asText("unknown"), serverJavaVersion, topology, workloads, concurrencies,
                 summary.path("p50Ms").asDouble(0), summary.path("p95Ms").asDouble(0),
                 summary.path("p99Ms").asDouble(0), summary.path("errorRate").asDouble(1),
                 summary.path("degradedRate").asDouble(1), summary.path("timeoutRate").asDouble(1),
                 correctness.path("noStaleBuildLeakage").asBoolean(false),
-                correctness.path("noAclLeakage").asBoolean(false),
                 correctness.path("noActiveBuildTruncation").asBoolean(false),
                 correctness.path("boundedResults").asBoolean(false),
                 correctness.path("validEvidence").asBoolean(false), root.path("reason").asText(""));

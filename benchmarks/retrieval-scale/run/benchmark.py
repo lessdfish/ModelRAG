@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import subprocess
 import time
 import urllib.error
@@ -288,7 +289,8 @@ def request_once(target: str, workload: dict[str, Any], request_number: int, dat
         "activeBuildTruncated": bool(response.get("activeBuildTruncated", False)),
         "boundedResults": bool(response.get("boundedResults", False)),
         "evidenceValid": bool(response.get("evidenceValid", False)),
-        "serverJavaVersion": str(response.get("serverJavaVersion", "")),
+        "serverJavaVersion": (response.get("serverJavaVersion", "").strip()
+                              if isinstance(response.get("serverJavaVersion", ""), str) else ""),
     }
 
 
@@ -339,6 +341,9 @@ def run_workload(target: str, workload: dict[str, Any], concurrency: int, option
         "activeBuildTruncationCount": sum(1 for value in results if value["activeBuildTruncated"]),
         "boundedResultFailures": sum(1 for value in results if not value["boundedResults"]),
         "invalidEvidenceCount": sum(1 for value in results if not value["evidenceValid"]),
+        "missingServerJavaVersionCount": sum(1 for value in results if not value["serverJavaVersion"].strip()),
+        "serverJavaVersions": sorted({value["serverJavaVersion"].strip() for value in results
+                                      if value["serverJavaVersion"].strip()}),
     }
 
 
@@ -372,8 +377,8 @@ def build_report(options: argparse.Namespace, manifest: dict[str, Any], workload
                "errorRate": sum(value["errors"] for value in results) / total_requests,
                "degradedRate": sum(value["degraded"] for value in results) / total_requests,
                "timeoutRate": sum(value["timeouts"] for value in results) / total_requests}
-    server_java_versions = sorted({value["serverJavaVersion"] for value in results
-                                   if value["serverJavaVersion"]})
+    server_java_versions = sorted({version for value in results
+                                   for version in value.get("serverJavaVersions", []) if version})
     correctness = {"noStaleBuildLeakage": sum(value["staleCandidateCount"] for value in results) == 0,
                    "noActiveBuildTruncation": sum(value["activeBuildTruncationCount"] for value in results) == 0,
                    "boundedResults": sum(value["boundedResultFailures"] for value in results) == 0,
@@ -419,6 +424,22 @@ def write_report(report: dict[str, Any], directory: Path) -> None:
     markdown_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def full_server_java_error(results: list[dict[str, Any]]) -> str | None:
+    if any(value.get("missingServerJavaVersionCount", 0) > 0 for value in results):
+        return "benchmark endpoint did not report the server JVM version for every response"
+    versions = {version for value in results for version in value.get("serverJavaVersions", []) if version}
+    if len(versions) != 1:
+        return "benchmark endpoint reported inconsistent server JVM versions"
+    if java_major(next(iter(versions))) != 21:
+        return "full benchmark server JVM is not Java 21"
+    return None
+
+
+def java_major(version: str) -> int | None:
+    match = re.fullmatch(r"(\d+)(?:[._+-].*)?", version.strip())
+    return int(match.group(1)) if match else None
+
+
 def main() -> int:
     options = args()
     if options.requests_per_workload <= 0:
@@ -451,8 +472,10 @@ def main() -> int:
     for workload in workloads:
         for concurrency in concurrencies:
             results.append(run_workload(target, workload, concurrency, options, manifest))
-    if options.mode == "full" and any(not value.get("serverJavaVersion") for value in results):
-        return not_run("benchmark endpoint did not report the server JVM version")
+    if options.mode == "full":
+        server_java_error = full_server_java_error(results)
+        if server_java_error:
+            return not_run(server_java_error)
     plan = explain(os.environ["MODELRAG_BENCHMARK_DATABASE_URL"], options.dataset_id, options.timeout_seconds)
     report = build_report(options, manifest, workloads, results, plan, verified)
     write_report(report, options.report_dir)

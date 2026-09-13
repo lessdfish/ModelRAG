@@ -8,6 +8,12 @@ import com.modelrag.common.exception.BusinessException;
 import com.modelrag.common.exception.ErrorCode;
 import com.modelrag.common.security.AccessControlService;
 import com.modelrag.common.security.LocalAuthTokenService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -61,5 +67,46 @@ class G112AclIntegrationTest {
         access.requireDatasetAccess(101L);
         BusinessException denied = assertThrows(BusinessException.class, () -> access.requireDatasetAccess(202L));
         assertTrue(denied.errorCode() == ErrorCode.FORBIDDEN);
+
+        writePassedEvidence();
+    }
+
+    private void writePassedEvidence() {
+        Path repository = repositoryRoot();
+        String commit = gitCommit(repository);
+        assertFalse(commit.isBlank() || "unknown".equals(commit));
+        Path artifact = repository.resolve("target").resolve("gate-evidence").resolve("acl-isolation.json");
+        try {
+            Files.createDirectories(artifact.getParent());
+            new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(artifact.toFile(), Map.of(
+                    "status", "PASSED",
+                    "gitCommit", commit,
+                    "testName", "G112AclIntegrationTest.userACanReadDatasetAButDatasetBIsDenied",
+                    "executedAt", Instant.now().toString()));
+        } catch (IOException error) {
+            throw new IllegalStateException("cannot write ACL gate evidence", error);
+        }
+    }
+
+    private Path repositoryRoot() {
+        String multiModule = System.getProperty("maven.multiModuleProjectDirectory", "");
+        Path current = multiModule.isBlank() ? Path.of("").toAbsolutePath() : Path.of(multiModule).toAbsolutePath();
+        while (current != null && !Files.exists(current.resolve(".git"))) current = current.getParent();
+        if (current == null) throw new IllegalStateException("repository root not found");
+        return current.normalize();
+    }
+
+    private String gitCommit(Path repository) {
+        try {
+            Process process = new ProcessBuilder("git", "-c", "safe.directory=" + repository,
+                    "-C", repository.toString(), "rev-parse", "HEAD").redirectErrorStream(true).start();
+            String output = new String(process.getInputStream().readAllBytes()).trim();
+            return process.waitFor() == 0 ? output : "unknown";
+        } catch (IOException error) {
+            return "unknown";
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            return "unknown";
+        }
     }
 }

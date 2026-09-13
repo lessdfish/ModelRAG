@@ -2,9 +2,12 @@ package com.modelrag.server.eval;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Pure, evidence-driven G12 gate evaluation. */
 public class CutoverReadinessEvaluator {
+    private static final Pattern JAVA_VERSION = Pattern.compile("^(\\d+)(?:[._+-].*)?$");
     public record Thresholds(double qualityRegressionTolerance, double errorRateTolerance,
             double degradedRateTolerance, double minDocumentRecallAt20, double minDocumentMrr,
             double minDocumentNdcg, double minCompleteEvidenceRecall, double minAnswerAccuracy,
@@ -12,7 +15,7 @@ public class CutoverReadinessEvaluator {
             double maxP95LatencyRegressionRatio, int minCategorySamples) { }
 
     public Map<String, Boolean> evaluate(EvalReport v1, EvalReport v2, BenchmarkEvidence benchmark,
-            Thresholds thresholds) {
+            AclIsolationEvidence aclEvidence, String expectedGitCommit, Thresholds thresholds) {
         Map<String, Boolean> gates = new LinkedHashMap<>();
         gates.put("canonicalDocumentLabels", comparable(v1, "documentRecallAt20")
                 && comparable(v2, "documentRecallAt20") && comparable(v1, "documentMrr")
@@ -45,7 +48,10 @@ public class CutoverReadinessEvaluator {
                 categoryEvaluable(v2, category, thresholds.minCategorySamples())));
         gates.put("fullScaleBenchmark", benchmark.isVerifiedFull());
         gates.put("staleBuildAndFilterValidated", benchmark.isVerifiedFull());
-        gates.put("noAclLeakage", benchmark.noAclLeakage());
+        gates.put("noAclLeakage", aclEvidence.passed());
+        gates.put("aclEvidenceCommitMatches", commitMatches(aclEvidence.gitCommit(), expectedGitCommit));
+        gates.put("benchmarkCommitMatches", commitMatches(benchmark.gitCommit(), expectedGitCommit));
+        gates.put("serverJava21", javaMajor(benchmark.serverJavaVersion()) == 21);
         gates.put("noStaleBuildLeakage", benchmark.noStaleBuildLeakage());
         gates.put("noActiveBuildTruncation", benchmark.noActiveBuildTruncation());
         gates.put("boundedResults", benchmark.boundedResults());
@@ -92,5 +98,24 @@ public class CutoverReadinessEvaluator {
         String status = report.categoryMetricStatus().getOrDefault(category, Map.of()).get(metric);
         return status != null && !EvalLabels.INSUFFICIENT_LABELS.equals(status)
                 && !EvalLabels.INSUFFICIENT_SAMPLE.equals(status);
+    }
+
+    private boolean commitMatches(String actual, String expected) {
+        return known(actual) && known(expected) && actual.equals(expected);
+    }
+
+    private boolean known(String value) {
+        return value != null && !value.isBlank() && !"unknown".equalsIgnoreCase(value);
+    }
+
+    private int javaMajor(String version) {
+        if (version == null) return -1;
+        Matcher matcher = JAVA_VERSION.matcher(version.trim());
+        if (!matcher.matches()) return -1;
+        try {
+            return Integer.parseInt(matcher.group(1));
+        } catch (NumberFormatException error) {
+            return -1;
+        }
     }
 }

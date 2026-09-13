@@ -123,6 +123,7 @@ modelrag:
   eval:
     llm-judge-enabled: ${MODELRAG_EVAL_LLM_JUDGE_ENABLED:false}
     base-commit: ${MODELRAG_EVAL_BASE_COMMIT:unknown}
+    acl-evidence-file: ${MODELRAG_EVAL_ACL_EVIDENCE_FILE:target/gate-evidence/acl-isolation.json}
     quality-regression-tolerance: ${MODELRAG_EVAL_QUALITY_REGRESSION_TOLERANCE:0.0}
     error-rate-tolerance: ${MODELRAG_EVAL_ERROR_RATE_TOLERANCE:0.0}
     degraded-rate-tolerance: ${MODELRAG_EVAL_DEGRADED_RATE_TOLERANCE:0.0}
