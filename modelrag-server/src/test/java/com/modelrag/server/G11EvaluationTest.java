@@ -183,7 +183,9 @@ class G11EvaluationTest {
 
         assertEquals(0, response.staleCandidateCount());
         assertFalse(response.activeBuildTruncated());
+        assertTrue(response.sentinelRecall());
         assertTrue(response.evidenceValid());
+        assertEquals(RetrievalBenchmarkController.EvidenceValidationStatus.VALID, response.evidenceStatus());
         assertEquals(System.getProperty("java.version"), response.serverJavaVersion());
 
         when(units.findActiveByIds(any(Long.class), any())).thenReturn(List.of());
@@ -191,7 +193,9 @@ class G11EvaluationTest {
                 "high-active-build-count", "lexical", null, null, true, "fixture")).getBody();
         assertEquals(1, response.staleCandidateCount());
         assertTrue(response.activeBuildTruncated());
+        assertFalse(response.sentinelRecall());
         assertFalse(response.evidenceValid());
+        assertEquals(RetrievalBenchmarkController.EvidenceValidationStatus.INVALID, response.evidenceStatus());
     }
 
     @Test
@@ -215,7 +219,45 @@ class G11EvaluationTest {
 
         assertEquals(1, response.staleCandidateCount());
         assertTrue(response.activeBuildTruncated());
+        assertFalse(response.sentinelRecall());
         assertFalse(response.evidenceValid());
+        assertEquals(RetrievalBenchmarkController.EvidenceValidationStatus.INVALID, response.evidenceStatus());
+    }
+
+    @Test
+    void emptyCandidatesAreNoEvidenceRatherThanInvalidEvidence() {
+        HybridRetrievalService retrieval = mock(HybridRetrievalService.class);
+        when(retrieval.inspect(any(), any())).thenReturn(stages(List.of(), List.of()));
+        RetrievalBenchmarkController controller = new RetrievalBenchmarkController(retrieval,
+                mock(IndexBuildRepository.class), mock(RetrievalUnitRepository.class), mock(LexicalSearchPort.class));
+
+        var response = controller.retrieve(new RetrievalBenchmarkController.Request(7, "nothing",
+                "semantic-only", "semantic", null, null, false, "fixture")).getBody();
+
+        assertEquals(0, response.candidateCount());
+        assertTrue(response.evidenceValid());
+        assertEquals(RetrievalBenchmarkController.EvidenceValidationStatus.NO_EVIDENCE, response.evidenceStatus());
+    }
+
+    @Test
+    void endpointTimeoutFlagOnlyReflectsComponentTimeouts() {
+        HybridRetrievalService retrieval = mock(HybridRetrievalService.class);
+        when(retrieval.inspect(any(), any()))
+                .thenReturn(stages(List.of(), List.of("SEMANTIC_TIMEOUT")))
+                .thenReturn(stages(List.of(), List.of("SEMANTIC_ERROR")));
+        RetrievalBenchmarkController controller = new RetrievalBenchmarkController(retrieval,
+                mock(IndexBuildRepository.class), mock(RetrievalUnitRepository.class), mock(LexicalSearchPort.class));
+        RetrievalBenchmarkController.Request request = new RetrievalBenchmarkController.Request(7, "question",
+                "semantic-only", "semantic", null, null, false, "fixture");
+
+        var timedOut = controller.retrieve(request).getBody();
+        assertTrue(timedOut.timeout());
+        assertEquals(List.of("SEMANTIC_TIMEOUT"), timedOut.timeoutComponents());
+        assertEquals("TIMED_OUT_AT_CHANNEL_BUDGET", timedOut.timeoutStatus());
+        var failed = controller.retrieve(request).getBody();
+        assertFalse(failed.timeout());
+        assertTrue(failed.timeoutComponents().isEmpty());
+        assertEquals("NONE", failed.timeoutStatus());
     }
 
     @Test
@@ -233,6 +275,11 @@ class G11EvaluationTest {
 
         assertTrue(sql.get().contains("status='ERROR'"));
         assertTrue(sql.get().contains("refused=FALSE"));
+    }
+
+    private RetrievalV2Stages stages(List<RetrievalCandidate> candidates, List<String> degraded) {
+        return new RetrievalV2Stages("", List.of(), "", List.of(), List.of(), candidates, List.of(),
+                candidates, false, degraded, Map.of());
     }
 
     private AnnotationConfigApplicationContext endpointContext(String profile) {

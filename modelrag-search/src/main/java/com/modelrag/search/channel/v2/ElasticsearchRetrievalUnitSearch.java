@@ -28,7 +28,7 @@ import org.springframework.stereotype.Service;
 /** V2 Elasticsearch channel over the retrieval-unit projection only. */
 @Service
 @Profile("!test")
-public class ElasticsearchRetrievalUnitSearch implements LexicalSearchPort {
+public class ElasticsearchRetrievalUnitSearch implements MeasuredLexicalSearchPort {
     private static final String INDEX = "modelrag-retrieval-units-v2";
     private static final int MAX_OVERFLOW_PAGES = 10;
     private static final int MAX_OVERFLOW_CANDIDATES = 5_000;
@@ -58,8 +58,8 @@ public class ElasticsearchRetrievalUnitSearch implements LexicalSearchPort {
     @Override
     public List<RetrievalCandidate> search(LexicalSearchRequest request) {
         if (request.activeIndexBuildIds().isEmpty()) return List.of();
-        return search(request.query(), request.datasetId(), null, request.activeIndexBuildIds(), request.limit(), false)
-                .candidates();
+        return execute(request.query(), request.datasetId(), null, request.activeIndexBuildIds(), request.limit(), false)
+                .result().candidates();
     }
 
     @Override
@@ -69,18 +69,31 @@ public class ElasticsearchRetrievalUnitSearch implements LexicalSearchPort {
 
     @Override
     public ActiveValidatedResult searchActiveValidatedResult(LexicalSearchRequest request) {
-        return search(request.query(), request.datasetId(), null, List.of(), request.limit(), true);
+        return execute(request.query(), request.datasetId(), null, List.of(), request.limit(), true).result();
+    }
+
+    @Override
+    public MeasuredResult searchMeasured(LexicalSearchRequest request, boolean overflow) {
+        if (!overflow && request.activeIndexBuildIds().isEmpty()) {
+            return new MeasuredResult(new ActiveValidatedResult(List.of(), false), 0, 0);
+        }
+        SearchExecution execution = execute(request.query(), request.datasetId(), null,
+                overflow ? List.of() : request.activeIndexBuildIds(), request.limit(), overflow);
+        return new MeasuredResult(execution.result(), execution.elasticsearchNanos(),
+                execution.activeValidationNanos());
     }
 
     @Override
     public List<RetrievalCandidate> findInDocument(DocumentLexicalSearchRequest request) {
         if (request.activeIndexBuildIds().isEmpty()) return List.of();
-        return search(request.query(), request.datasetId(), request.documentId(),
-                request.activeIndexBuildIds(), request.limit(), false).candidates();
+        return execute(request.query(), request.datasetId(), request.documentId(),
+                request.activeIndexBuildIds(), request.limit(), false).result().candidates();
     }
 
-    private ActiveValidatedResult search(String query, long datasetId, Long documentId,
+    private SearchExecution execute(String query, long datasetId, Long documentId,
             List<Long> activeBuildIds, int limit, boolean overflow) {
+        long elasticsearchNanos = 0;
+        long activeValidationNanos = 0;
         try {
             int pageSize = overflow ? Math.min(LexicalSearchRequest.MAX_LIMIT, Math.max(50, limit * 2)) : limit;
             int candidateBudget = overflow
@@ -92,12 +105,17 @@ public class ElasticsearchRetrievalUnitSearch implements LexicalSearchPort {
             boolean moreHitsAvailable = false;
             while (retained.size() < limit && inspected < candidateBudget && pages < MAX_OVERFLOW_PAGES) {
                 int size = Math.min(pageSize, candidateBudget - inspected);
-                HttpResponse<String> response = http.send(HttpRequest.newBuilder(
-                        URI.create(endpoint + "/" + INDEX + "/_search"))
-                        .header("Content-Type", "application/json")
-                        .POST(HttpRequest.BodyPublishers.ofString(query(query, datasetId, documentId,
-                                activeBuildIds, size, searchAfter, overflow)))
-                        .build(), HttpResponse.BodyHandlers.ofString());
+                long elasticsearchStarted = System.nanoTime();
+                HttpResponse<String> response;
+                try {
+                    response = http.send(HttpRequest.newBuilder(URI.create(endpoint + "/" + INDEX + "/_search"))
+                            .header("Content-Type", "application/json")
+                            .POST(HttpRequest.BodyPublishers.ofString(query(query, datasetId, documentId,
+                                    activeBuildIds, size, searchAfter, overflow)))
+                            .build(), HttpResponse.BodyHandlers.ofString());
+                } finally {
+                    elasticsearchNanos += System.nanoTime() - elasticsearchStarted;
+                }
                 if (response.statusCode() / 100 != 2) {
                     throw new IllegalStateException("V2 Elasticsearch 返回 HTTP " + response.statusCode());
                 }
@@ -109,7 +127,12 @@ public class ElasticsearchRetrievalUnitSearch implements LexicalSearchPort {
                     if (candidate != null) page.add(candidate);
                 }
                 inspected += hits.size();
-                retained.addAll(validateActive(datasetId, activeBuildIds, documentId, page, hits.size()));
+                long validationStarted = System.nanoTime();
+                try {
+                    retained.addAll(validateActive(datasetId, activeBuildIds, documentId, page, hits.size()));
+                } finally {
+                    activeValidationNanos += System.nanoTime() - validationStarted;
+                }
                 pages++;
                 moreHitsAvailable = overflow && hits.size() == size && !hits.isEmpty();
                 if (!moreHitsAvailable) break;
@@ -125,7 +148,8 @@ public class ElasticsearchRetrievalUnitSearch implements LexicalSearchPort {
             for (RetrievalCandidate candidate : result) ranked.add(copy(candidate, ranked.size() + 1));
             boolean truncated = overflow && ranked.size() < limit && moreHitsAvailable
                     && (inspected >= candidateBudget || pages >= MAX_OVERFLOW_PAGES);
-            return new ActiveValidatedResult(ranked, truncated);
+            return new SearchExecution(new ActiveValidatedResult(ranked, truncated),
+                    elasticsearchNanos, activeValidationNanos);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("V2 Elasticsearch 词法检索被中断", interrupted);
@@ -133,6 +157,9 @@ public class ElasticsearchRetrievalUnitSearch implements LexicalSearchPort {
             throw new IllegalStateException("V2 Elasticsearch 词法检索不可用", error);
         }
     }
+
+    private record SearchExecution(ActiveValidatedResult result, long elasticsearchNanos,
+            long activeValidationNanos) { }
 
     private String query(String query, long datasetId, Long documentId,
             List<Long> activeBuildIds, int limit, ArrayNode searchAfter, boolean overflow) throws Exception {

@@ -13,6 +13,7 @@ import com.modelrag.knowledge.model.RetrievalUnitType;
 import com.modelrag.knowledge.repository.RetrievalUnitRepository;
 import com.modelrag.search.channel.v2.ElasticsearchRetrievalUnitSearch;
 import com.modelrag.search.channel.v2.LexicalSearchRequest;
+import com.modelrag.search.channel.v2.MeasuredLexicalSearchPort;
 import com.modelrag.search.dto.RetrievalCandidate;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import com.sun.net.httpserver.HttpServer;
@@ -34,9 +35,13 @@ class G5LexicalRetrievalTest {
         when(units.findActiveByIds(eq(7L), any())).thenReturn(List.of(unit(101, 31)));
         try {
             ElasticsearchRetrievalUnitSearch search = search(server, units);
-            List<RetrievalCandidate> result = search.search(new LexicalSearchRequest(7, "policy", List.of(31L), 5));
+            MeasuredLexicalSearchPort.MeasuredResult measured = search.searchMeasured(
+                    new LexicalSearchRequest(7, "policy", List.of(31L), 5), false);
+            List<RetrievalCandidate> result = measured.result().candidates();
 
             assertEquals(List.of(101L), result.stream().map(RetrievalCandidate::retrievalUnitId).toList());
+            assertTrue(measured.elasticsearchNanos() > 0);
+            assertTrue(measured.activeValidationNanos() > 0);
             assertTrue(body.get().contains("\"indexBuildId\""));
             assertTrue(body.get().contains("titlePath^4"));
         } finally {

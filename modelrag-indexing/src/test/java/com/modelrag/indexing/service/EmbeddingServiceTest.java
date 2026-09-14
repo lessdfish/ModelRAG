@@ -2,6 +2,7 @@ package com.modelrag.indexing.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -36,6 +37,23 @@ class EmbeddingServiceTest {
 
         assertEquals(1024, first.length);
         assertEquals(first, second);
+        verify(provider, times(1)).embed(anyString(), eq(1024), anyList(), any(Duration.class));
+    }
+
+    @Test
+    void diagnosticsDistinguishRemoteMissFromCacheHit() {
+        EmbeddingComputeProvider provider = mock(EmbeddingComputeProvider.class);
+        when(provider.embed(anyString(), eq(1024), anyList(), any(Duration.class)))
+                .thenReturn(List.of(vector(1)));
+        EmbeddingService service = service(provider, new EmbeddingCache());
+
+        var miss = service.embedWithDiagnostics(7, "diagnostic text");
+        var hit = service.embedWithDiagnostics(7, "diagnostic text");
+
+        assertEquals("MISS_REMOTE", miss.cacheOutcome());
+        assertTrue(miss.remoteCallMs() >= 0);
+        assertEquals("HIT", hit.cacheOutcome());
+        assertEquals(0, hit.remoteCallMs());
         verify(provider, times(1)).embed(anyString(), eq(1024), anyList(), any(Duration.class));
     }
 

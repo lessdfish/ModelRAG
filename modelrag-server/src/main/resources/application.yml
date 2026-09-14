@@ -71,6 +71,12 @@ modelrag:
     rrf-vector-weight: 0.7
     rrf-bm25-weight: 0.3
     channel-timeout-ms: ${MODELRAG_SEARCH_CHANNEL_TIMEOUT_MS:800}
+    semantic-workers: ${MODELRAG_SEARCH_SEMANTIC_WORKERS:8}
+    semantic-queue-capacity: ${MODELRAG_SEARCH_SEMANTIC_QUEUE_CAPACITY:32}
+    semantic-min-execution-budget-ms: ${MODELRAG_SEARCH_SEMANTIC_MIN_EXECUTION_BUDGET_MS:300}
+    lexical-workers: ${MODELRAG_SEARCH_LEXICAL_WORKERS:8}
+    lexical-queue-capacity: ${MODELRAG_SEARCH_LEXICAL_QUEUE_CAPACITY:32}
+    lexical-min-execution-budget-ms: ${MODELRAG_SEARCH_LEXICAL_MIN_EXECUTION_BUDGET_MS:125}
     rerank-timeout-ms: ${MODELRAG_SEARCH_RERANK_TIMEOUT_MS:500}
   retrieval:
     v2:

@@ -4,6 +4,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -12,18 +13,22 @@ import org.springframework.context.annotation.Configuration;
 public class SearchExecutorConfig {
 
     @Bean("vectorSearchExecutor")
-    public Executor vectorSearchExecutor() {
-        return executor("modelrag-vector-search-");
+    public Executor vectorSearchExecutor(
+            @Value("${modelrag.search.semantic-workers:8}") int workers,
+            @Value("${modelrag.search.semantic-queue-capacity:32}") int queueCapacity) {
+        return fixedExecutor("modelrag-vector-search-", workers, queueCapacity);
     }
 
     @Bean("bm25SearchExecutor")
-    public Executor bm25SearchExecutor() {
-        return executor("modelrag-bm25-search-");
+    public Executor bm25SearchExecutor(
+            @Value("${modelrag.search.lexical-workers:8}") int workers,
+            @Value("${modelrag.search.lexical-queue-capacity:32}") int queueCapacity) {
+        return fixedExecutor("modelrag-bm25-search-", workers, queueCapacity);
     }
 
     @Bean("rerankExecutor")
     public Executor rerankExecutor() {
-        return executor("modelrag-rerank-");
+        return elasticExecutor("modelrag-rerank-");
     }
 
     @Bean("retrievalShadowExecutor")
@@ -43,13 +48,22 @@ public class SearchExecutorConfig {
                 new ThreadPoolExecutor.AbortPolicy());
     }
 
-    private Executor executor(String prefix) {
+    private Executor fixedExecutor(String prefix, int workers, int queueCapacity) {
+        int boundedWorkers = Math.max(1, Math.min(16, workers));
+        return executor(prefix, boundedWorkers, boundedWorkers, queueCapacity);
+    }
+
+    private Executor elasticExecutor(String prefix) {
+        return executor(prefix, 1, 2, 32);
+    }
+
+    private Executor executor(String prefix, int core, int max, int queueCapacity) {
         ThreadPoolExecutor executor = new ThreadPoolExecutor(
-                1,
-                2,
+                core,
+                max,
                 60,
                 TimeUnit.SECONDS,
-                new ArrayBlockingQueue<>(32),
+                new ArrayBlockingQueue<>(Math.max(1, Math.min(256, queueCapacity))),
                 task -> {
                     Thread thread = new Thread(task);
                     thread.setName(prefix + thread.threadId());

@@ -15,6 +15,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +39,8 @@ def args() -> argparse.Namespace:
     parser.add_argument("--warmup-requests", type=int, default=10)
     parser.add_argument("--timeout-seconds", type=float, default=30.0)
     parser.add_argument("--concurrency", type=int, choices=CONCURRENCIES, action="append")
+    parser.add_argument("--workload", choices=sorted(REQUIRED_WORKLOADS), action="append",
+                        help="run selected smoke workload(s); full mode always requires all workloads")
     parser.add_argument("--dataset-id", type=int, default=1)
     return parser.parse_args()
 
@@ -228,24 +231,46 @@ def explain(database_url: str, dataset_id: int, timeout: float) -> dict[str, Any
     import psycopg  # type: ignore
     query = """
         EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
-        SELECT ru.id, ru.document_id, ru.node_id, ru.index_build_id
-        FROM kb_retrieval_unit ru
-        JOIN kb_index_build b ON b.id = ru.index_build_id
-        JOIN kb_document d ON d.id = ru.document_id
-        WHERE ru.dataset_id = %s AND b.state = 'ACTIVE'
-          AND d.active_index_build_id = b.id
-          AND d.active_version_id = ru.document_version_id
-        ORDER BY ru.id
-        LIMIT 50
+        WITH ann AS MATERIALIZED (
+            SELECT e.retrieval_unit_id,e.dataset_id,e.document_id,e.document_version_id,e.index_build_id,
+                   e.embedding <=> CAST(%s AS vector) AS distance
+            FROM kb_vector_embedding e
+            WHERE e.dataset_id=%s AND e.embedding_profile='qwen3-v1'
+            ORDER BY e.embedding <=> CAST(%s AS vector)
+            LIMIT 80
+        )
+        SELECT u.id,u.document_id,u.node_id,u.index_build_id,1-ann.distance AS score
+        FROM ann
+        JOIN kb_retrieval_unit u ON u.id=ann.retrieval_unit_id AND u.dataset_id=ann.dataset_id
+          AND u.document_id=ann.document_id AND u.document_version_id=ann.document_version_id
+          AND u.index_build_id=ann.index_build_id
+        JOIN kb_index_build b ON b.id=u.index_build_id
+        JOIN kb_document d ON d.id=u.document_id
+        JOIN kb_dataset ds ON ds.id=u.dataset_id
+        WHERE b.state='ACTIVE' AND d.delete_time IS NULL AND ds.delete_time IS NULL
+          AND d.active_index_build_id=u.index_build_id
+          AND d.active_version_id=u.document_version_id
+        ORDER BY ann.distance
+        LIMIT 20
     """
     try:
         with psycopg.connect(database_url, connect_timeout=max(1, int(timeout))) as connection:
             with connection.cursor() as cursor:
-                cursor.execute(query, (dataset_id,))
+                cursor.execute("""
+                    SELECT embedding::text FROM kb_vector_embedding
+                    WHERE dataset_id=%s AND embedding_profile='qwen3-v1'
+                    ORDER BY retrieval_unit_id LIMIT 1
+                """, (dataset_id,))
+                vector_row = cursor.fetchone()
+                if not vector_row:
+                    return {"query": "ann_first_semantic_retrieval", "error": "no_query_vector"}
+                cursor.execute("SET LOCAL hnsw.iterative_scan = 'relaxed_order'")
+                cursor.execute(query, (vector_row[0], dataset_id, vector_row[0]))
                 row = cursor.fetchone()
-                return {"query": "bounded_active_build_retrieval_unit_lookup", "plan": row[0] if row else None}
+                return {"query": "ann_first_semantic_retrieval", "candidateBudget": 80,
+                        "finalTopK": 20, "plan": row[0] if row else None}
     except Exception as error:
-        return {"query": "bounded_active_build_retrieval_unit_lookup", "error": type(error).__name__}
+        return {"query": "ann_first_semantic_retrieval", "error": type(error).__name__}
 
 
 def percentile(values: list[float], fraction: float) -> float | None:
@@ -261,6 +286,8 @@ def request_once(target: str, workload: dict[str, Any], request_number: int, dat
     query = (str(manifest.get("activeBuildSentinel", ""))
              if workload.get("querySource") == "activeBuildSentinel"
              else f"G11 deterministic {workload['name']} query {request_number % 20}")
+    active_build_overflow = (int(manifest.get("activeBuildCount", 0))
+                             > int(manifest.get("activeBuildFilterLimit", 10_000)))
     body = {
         "datasetId": dataset_id,
         "query": query,
@@ -268,7 +295,7 @@ def request_once(target: str, workload: dict[str, Any], request_number: int, dat
         "mode": workload.get("mode", "hybrid"),
         "documentId": 1 if workload.get("documentScoped") else None,
         "staleBuildId": int(manifest.get("activeBuildCount", 1)) + 1 if workload.get("staleFilter") else None,
-        "activeBuildOverflow": bool(workload.get("activeBuildOverflow", False)),
+        "activeBuildOverflow": bool(workload.get("activeBuildOverflow", False)) and active_build_overflow,
         "benchmarkIdentity": manifest.get("fixtureIdentity", "unknown"),
     }
     token = os.environ.get("MODELRAG_BENCHMARK_AUTH_TOKEN", "").strip()
@@ -277,6 +304,20 @@ def request_once(target: str, workload: dict[str, Any], request_number: int, dat
     degraded_value = response.get("degraded", False)
     degraded = (degraded_value.strip().lower() not in {"", "false", "0", "none", "[]"}
                  if isinstance(degraded_value, str) else bool(degraded_value))
+    candidate_count = int(response.get("candidateCount", 0))
+    performance_latency = response.get("performanceLatencyMs", {})
+    if not isinstance(performance_latency, dict):
+        performance_latency = {}
+    performance_attributes = response.get("performanceAttributes", {})
+    if not isinstance(performance_attributes, dict):
+        performance_attributes = {}
+    timeout_components = response.get("timeoutComponents", [])
+    if not isinstance(timeout_components, list):
+        timeout_components = []
+    evidence_status = str(response.get("evidenceStatus", "")).strip().upper()
+    if evidence_status not in {"NO_EVIDENCE", "VALID", "INVALID"}:
+        evidence_status = ("NO_EVIDENCE" if candidate_count == 0 else
+                           "VALID" if bool(response.get("evidenceValid", False)) else "INVALID")
     return {
         "latencyMs": elapsed * 1000,
         "status": status,
@@ -284,26 +325,34 @@ def request_once(target: str, workload: dict[str, Any], request_number: int, dat
         "timeout": bool(response.get("timeout", False)) or status == 0,
         "degraded": bool(degraded),
         "stageLatencyMs": response.get("stageLatencyMs", {}),
-        "candidateCount": int(response.get("candidateCount", 0)),
+        "performanceLatencyMs": performance_latency,
+        "performanceAttributes": performance_attributes,
+        "timeoutComponents": [str(value) for value in timeout_components],
+        "degradedComponents": [str(value) for value in response.get("degradedComponents", [])]
+                              if isinstance(response.get("degradedComponents", []), list) else [],
+        "timeoutStatus": str(response.get("timeoutStatus", "NONE")),
+        "candidateCount": candidate_count,
         "staleCandidateCount": int(response.get("staleCandidateCount", 0)),
         "activeBuildTruncated": bool(response.get("activeBuildTruncated", False)),
+        "sentinelRecall": bool(response.get("sentinelRecall", False)),
         "boundedResults": bool(response.get("boundedResults", False)),
-        "evidenceValid": bool(response.get("evidenceValid", False)),
+        "evidenceStatus": evidence_status,
         "serverJavaVersion": (response.get("serverJavaVersion", "").strip()
                               if isinstance(response.get("serverJavaVersion", ""), str) else ""),
     }
 
 
 def run_workload(target: str, workload: dict[str, Any], concurrency: int, options: argparse.Namespace,
-                 manifest: dict[str, Any]) -> dict[str, Any]:
+                  manifest: dict[str, Any]) -> dict[str, Any]:
     count = max(1, options.requests_per_workload)
     warmup = max(0, options.warmup_requests)
+    warmup_results: list[dict[str, Any]] = []
     if warmup:
         with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as pool:
             warmup_futures = [pool.submit(request_once, target, workload, -index - 1, options.dataset_id,
                                           manifest, options.timeout_seconds) for index in range(warmup)]
             for future in warmup_futures:
-                future.result()
+                warmup_results.append(future.result())
     started = time.perf_counter()
     with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as pool:
         futures = [pool.submit(request_once, target, workload, index, options.dataset_id, manifest,
@@ -315,10 +364,20 @@ def run_workload(target: str, workload: dict[str, Any], concurrency: int, option
     degraded = sum(1 for value in results if value["degraded"])
     timeouts = sum(1 for value in results if value["timeout"])
     stage_values: dict[str, list[float]] = {}
+    performance_values: dict[str, list[float]] = {}
+    timeout_components: Counter[str] = Counter()
+    cache_outcomes: Counter[str] = Counter()
     for value in results:
         for stage, latency in (value.get("stageLatencyMs") or {}).items():
             if isinstance(latency, (int, float)):
                 stage_values.setdefault(str(stage), []).append(float(latency) / 1000)
+        for stage, latency in (value.get("performanceLatencyMs") or {}).items():
+            if isinstance(latency, (int, float)):
+                performance_values.setdefault(str(stage), []).append(float(latency) / 1000)
+        timeout_components.update(value.get("timeoutComponents") or [])
+        outcome = str((value.get("performanceAttributes") or {}).get("semantic.embeddingCacheOutcome", ""))
+        if outcome:
+            cache_outcomes[outcome] += 1
     return {
         "workload": workload["name"],
         "mode": workload.get("mode"),
@@ -336,14 +395,73 @@ def run_workload(target: str, workload: dict[str, Any], concurrency: int, option
         "degradedRate": round(degraded / count, 6),
         "timeouts": timeouts,
         "timeoutRate": round(timeouts / count, 6),
+        "requestLatencyMs": {"p50": percentile(latencies, .50), "p95": percentile(latencies, .95),
+                             "p99": percentile(latencies, .99)},
         "stageP95Ms": {stage: percentile(values, .95) for stage, values in sorted(stage_values.items())},
+        "performanceLatencyMs": {stage: {"count": len(values), "p50": percentile(values, .50),
+                                           "p95": percentile(values, .95), "p99": percentile(values, .99)}
+                                 for stage, values in sorted(performance_values.items())},
+        "timeoutComponents": dict(sorted(timeout_components.items())),
+        "timeoutPlateauCount": sum(1 for value in results
+                                   if value.get("timeoutStatus") == "TIMED_OUT_AT_CHANNEL_BUDGET"),
+        "embeddingCacheOutcomes": dict(sorted(cache_outcomes.items())),
         "staleCandidateCount": sum(value["staleCandidateCount"] for value in results),
         "activeBuildTruncationCount": sum(1 for value in results if value["activeBuildTruncated"]),
+        "sentinelRecallFailures": (sum(1 for value in results if not value["sentinelRecall"])
+                                   if workload["name"] == "high-active-build-count" else 0),
         "boundedResultFailures": sum(1 for value in results if not value["boundedResults"]),
-        "invalidEvidenceCount": sum(1 for value in results if not value["evidenceValid"]),
+        "noEvidenceCount": sum(1 for value in results if value["evidenceStatus"] == "NO_EVIDENCE"),
+        "invalidEvidenceCount": sum(1 for value in results if value["evidenceStatus"] == "INVALID"),
         "missingServerJavaVersionCount": sum(1 for value in results if not value["serverJavaVersion"].strip()),
         "serverJavaVersions": sorted({value["serverJavaVersion"].strip() for value in results
                                       if value["serverJavaVersion"].strip()}),
+        "warmupDiagnostics": diagnostic_summary(warmup_results),
+        "_measuredRequests": results,
+        "_warmupRequests": warmup_results,
+    }
+
+
+def diagnostic_summary(values: list[dict[str, Any]]) -> dict[str, Any]:
+    stages: dict[str, list[float]] = {}
+    components: Counter[str] = Counter()
+    cache: Counter[str] = Counter()
+    for value in values:
+        for stage, latency in (value.get("performanceLatencyMs") or {}).items():
+            if isinstance(latency, (int, float)):
+                stages.setdefault(str(stage), []).append(float(latency) / 1000)
+        components.update(value.get("degradedComponents") or [])
+        outcome = str((value.get("performanceAttributes") or {}).get("semantic.embeddingCacheOutcome", ""))
+        if outcome:
+            cache[outcome] += 1
+    semantic_attributes = [value.get("performanceAttributes") or {} for value in values]
+    semantic = {
+        "annRequests": sum(1 for attrs in semantic_attributes if "semantic.annCandidateBudget" in attrs),
+        "annRefilled": sum(1 for attrs in semantic_attributes
+                           if int(attrs.get("semantic.annRefillRounds", "0")) > 0),
+        "annRefillRounds": sum(int(attrs.get("semantic.annRefillRounds", "0"))
+                               for attrs in semantic_attributes),
+        "annRefillExhausted": sum(1 for attrs in semantic_attributes
+                                  if attrs.get("semantic.annRefillExhausted") == "true"),
+        "dbStatementTimeouts": sum(1 for attrs in semantic_attributes
+                                   if attrs.get("semantic.dbStatementTimeout") == "true"),
+        "admissionTimeouts": components["SEMANTIC_ADMISSION_TIMEOUT"],
+        "rejected": components["SEMANTIC_REJECTED"],
+        "executionTimeouts": components["SEMANTIC_TIMEOUT"],
+    }
+    lexical = {
+        "admissionTimeouts": components["LEXICAL_ADMISSION_TIMEOUT"],
+        "rejected": components["LEXICAL_REJECTED"],
+        "executionTimeouts": components["LEXICAL_TIMEOUT"],
+    }
+    return {
+        "requestCount": len(values),
+        "stages": {stage: {"count": len(samples), "p50Ms": percentile(samples, .50),
+                           "p95Ms": percentile(samples, .95), "p99Ms": percentile(samples, .99)}
+                   for stage, samples in sorted(stages.items())},
+        "degradedComponents": dict(sorted(components.items())),
+        "cacheOutcomes": dict(sorted(cache.items())),
+        "semanticOutcomes": semantic,
+        "lexicalOutcomes": lexical,
     }
 
 
@@ -367,7 +485,8 @@ def command_version(command: list[str]) -> str:
 
 
 def build_report(options: argparse.Namespace, manifest: dict[str, Any], workloads: list[dict[str, Any]],
-                 results: list[dict[str, Any]], plan: dict[str, Any], verified: dict[str, Any]) -> dict[str, Any]:
+                 results: list[dict[str, Any]], plan: dict[str, Any], verified: dict[str, Any],
+                 server_lifetime_diagnostics: dict[str, Any] | None = None) -> dict[str, Any]:
     manifest_text = json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode("utf-8")
     total_requests = sum(value["requests"] for value in results) or 1
     latencies = [value[key] for value in results for key in ("p50Ms",) if value[key] is not None]
@@ -376,13 +495,26 @@ def build_report(options: argparse.Namespace, manifest: dict[str, Any], workload
                "p99Ms": max((value["p99Ms"] or 0 for value in results), default=0),
                "errorRate": sum(value["errors"] for value in results) / total_requests,
                "degradedRate": sum(value["degraded"] for value in results) / total_requests,
-               "timeoutRate": sum(value["timeouts"] for value in results) / total_requests}
+               "timeoutRate": sum(value["timeouts"] for value in results) / total_requests,
+               "noEvidenceCount": sum(value["noEvidenceCount"] for value in results),
+               "invalidEvidenceCount": sum(value["invalidEvidenceCount"] for value in results)}
     server_java_versions = sorted({version for value in results
                                    for version in value.get("serverJavaVersions", []) if version})
+    active_build_overflow = (int(manifest.get("activeBuildCount", 0))
+                             > int(manifest.get("activeBuildFilterLimit", 10_000)))
+    active_build_truncation_status = ("NOT_APPLICABLE" if not active_build_overflow else
+                                      "PASS" if sum(value["activeBuildTruncationCount"]
+                                                    for value in results) == 0 else "FAIL")
     correctness = {"noStaleBuildLeakage": sum(value["staleCandidateCount"] for value in results) == 0,
-                   "noActiveBuildTruncation": sum(value["activeBuildTruncationCount"] for value in results) == 0,
+                   "sentinelRecall": sum(value["sentinelRecallFailures"] for value in results) == 0,
+                   "activeBuildTruncationStatus": active_build_truncation_status,
+                   "noActiveBuildTruncation": active_build_truncation_status != "FAIL",
                    "boundedResults": sum(value["boundedResultFailures"] for value in results) == 0,
                    "validEvidence": sum(value["invalidEvidenceCount"] for value in results) == 0}
+    measured_requests = [request for result in results for request in result.get("_measuredRequests", [])]
+    warmup_requests = [request for result in results for request in result.get("_warmupRequests", [])]
+    public_results = [{key: value for key, value in result.items() if not key.startswith("_")}
+                      for result in results]
     return {
         "status": "COMPLETED",
         "mode": options.mode,
@@ -392,11 +524,14 @@ def build_report(options: argparse.Namespace, manifest: dict[str, Any], workload
         "fixtureManifestSha256": hashlib.sha256(manifest_text).hexdigest(),
         "topology": manifest,
         "workloads": [value["name"] for value in workloads],
-        "results": results,
+        "results": public_results,
         "summary": summary,
         "correctness": correctness,
         "preflight": verified,
         "explainAnalyze": plan,
+        "performanceDiagnostics": diagnostic_summary(measured_requests),
+        "warmupDiagnostics": diagnostic_summary(warmup_requests),
+        "serverLifetimeDiagnostics": server_lifetime_diagnostics or {},
         "runtime": {"python": platform.python_version(),
                      "serverJavaVersion": server_java_versions[0] if len(server_java_versions) == 1 else "unavailable",
                      "runnerJavaVersion": command_version(["java", "-version"]),
@@ -415,12 +550,13 @@ def write_report(report: dict[str, Any], directory: Path) -> None:
     json_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     lines = [f"# Retrieval scale {report['mode']}", "", f"Status: `{report['status']}`",
              f"Commit: `{report['gitCommit']}`", f"Fixture: `{report['fixtureIdentity']}`", "",
-             "| Workload | C | warmup | duration s | p50 ms | p95 ms | p99 ms | req/s | errors | error rate | degraded | degraded rate | timeouts | timeout rate |",
-             "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
+             "| Workload | C | warmup | duration s | p50 ms | p95 ms | p99 ms | req/s | errors | error rate | degraded | degraded rate | timeouts | timeout rate | no evidence | invalid evidence | sentinel misses |",
+             "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for value in report["results"]:
         lines.append("| {workload} | {concurrency} | {warmupRequests} | {durationSeconds} | {p50Ms} | {p95Ms} | "
                      "{p99Ms} | {throughputRequestsPerSecond} | {errors} | {errorRate} | {degraded} | "
-                     "{degradedRate} | {timeouts} | {timeoutRate} |".format(**value))
+                     "{degradedRate} | {timeouts} | {timeoutRate} | {noEvidenceCount} | "
+                     "{invalidEvidenceCount} | {sentinelRecallFailures} |".format(**value))
     markdown_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -452,6 +588,11 @@ def main() -> int:
         return not_run(str(error))
     if errors:
         return not_run("; ".join(errors))
+    if options.mode == "full" and options.workload:
+        return not_run("full mode requires every workload")
+    if options.workload:
+        selected = set(options.workload)
+        workloads = [workload for workload in workloads if workload.get("name") in selected]
     runtime_error = check_runtime(os.environ.get("MODELRAG_BENCHMARK_TARGET", ""),
                                   os.environ.get("MODELRAG_BENCHMARK_DATABASE_URL", ""),
                                   os.environ.get("MODELRAG_BENCHMARK_ES_URL", ""), options.timeout_seconds)
@@ -477,7 +618,13 @@ def main() -> int:
         if server_java_error:
             return not_run(server_java_error)
     plan = explain(os.environ["MODELRAG_BENCHMARK_DATABASE_URL"], options.dataset_id, options.timeout_seconds)
-    report = build_report(options, manifest, workloads, results, plan, verified)
+    token = os.environ.get("MODELRAG_BENCHMARK_AUTH_TOKEN", "").strip()
+    headers = {"Authorization": f"Bearer {token}"} if token else None
+    diagnostics_status, diagnostics, _ = http_json(target.rstrip("/") + "/diagnostics", None,
+                                                    options.timeout_seconds, headers)
+    if diagnostics_status < 200 or diagnostics_status >= 300:
+        diagnostics = {"status": "UNAVAILABLE", "httpStatus": diagnostics_status}
+    report = build_report(options, manifest, workloads, results, plan, verified, diagnostics)
     write_report(report, options.report_dir)
     print(json.dumps({"status": report["status"], "mode": options.mode,
                       "resultCount": len(results), "fixtureIdentity": report["fixtureIdentity"]}, sort_keys=True))

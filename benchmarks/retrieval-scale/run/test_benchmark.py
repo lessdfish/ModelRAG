@@ -65,7 +65,8 @@ def test_high_active_build_workload_queries_real_sentinel_and_captures_server_ja
 
     def response(_target, body, _timeout, _headers):
         seen.update(body)
-        return 200, {"candidateCount": 1, "boundedResults": True, "evidenceValid": True,
+        return 200, {"candidateCount": 1, "boundedResults": True, "evidenceStatus": "VALID",
+                     "sentinelRecall": True,
                      "serverJavaVersion": "21.0.8"}, 0.01
 
     monkeypatch.setattr(benchmark, "http_json", response)
@@ -76,7 +77,63 @@ def test_high_active_build_workload_queries_real_sentinel_and_captures_server_ja
 
     assert seen["query"] == "G11_ACTIVE_BUILD_SENTINEL_20001"
     assert result["serverJavaVersion"] == "21.0.8"
+    assert result["sentinelRecall"] is True
+    assert result["evidenceStatus"] == "VALID"
     assert "aclLeakage" not in result
+
+
+def test_runner_counts_no_evidence_separately_from_invalid_evidence(monkeypatch):
+    responses = iter([
+        {"error": False, "degraded": False, "timeout": False, "latencyMs": 1,
+         "stageLatencyMs": {}, "staleCandidateCount": 0, "activeBuildTruncated": False,
+         "sentinelRecall": False, "boundedResults": True, "evidenceStatus": "NO_EVIDENCE",
+         "serverJavaVersion": "21.0.8"},
+        {"error": False, "degraded": False, "timeout": False, "latencyMs": 1,
+         "stageLatencyMs": {}, "staleCandidateCount": 1, "activeBuildTruncated": False,
+         "sentinelRecall": False, "boundedResults": True, "evidenceStatus": "INVALID",
+         "serverJavaVersion": "21.0.8"},
+    ])
+    monkeypatch.setattr(benchmark, "request_once", lambda *_: next(responses))
+    options = SimpleNamespace(requests_per_workload=2, warmup_requests=0, dataset_id=1, timeout_seconds=1)
+
+    result = benchmark.run_workload("http://server", {"name": "semantic-only", "mode": "semantic"},
+                                    1, options, manifest())
+
+    assert result["noEvidenceCount"] == 1
+    assert result["invalidEvidenceCount"] == 1
+
+
+def report_result(**overrides):
+    result = {"workload": "high-active-build-count", "requests": 1, "p50Ms": 1,
+              "p95Ms": 1, "p99Ms": 1, "errors": 0, "degraded": 0, "timeouts": 0,
+              "staleCandidateCount": 0, "activeBuildTruncationCount": 0,
+              "sentinelRecallFailures": 0, "boundedResultFailures": 0,
+              "noEvidenceCount": 0, "invalidEvidenceCount": 0,
+              "serverJavaVersions": ["21.0.8"]}
+    result.update(overrides)
+    return result
+
+
+def test_smoke_marks_active_build_truncation_not_applicable(monkeypatch):
+    smoke = manifest() | {"activeRetrievalUnits": 20_000, "activeDocuments": 2_000,
+                          "activeBuildCount": 2_000, "staleRetrievalUnits": 200}
+    monkeypatch.setattr(benchmark, "git_commit", lambda: "commit")
+
+    report = benchmark.build_report(SimpleNamespace(mode="smoke"), smoke,
+                                    [{"name": "high-active-build-count"}], [report_result()], {}, {})
+
+    assert report["correctness"]["sentinelRecall"] is True
+    assert report["correctness"]["activeBuildTruncationStatus"] == "NOT_APPLICABLE"
+
+
+def test_full_overflow_reports_pass_only_with_sentinel_and_no_truncation(monkeypatch):
+    monkeypatch.setattr(benchmark, "git_commit", lambda: "commit")
+
+    report = benchmark.build_report(SimpleNamespace(mode="full"), manifest(),
+                                    [{"name": "high-active-build-count"}], [report_result()], {}, {})
+
+    assert report["correctness"]["sentinelRecall"] is True
+    assert report["correctness"]["activeBuildTruncationStatus"] == "PASS"
 
 
 def test_full_benchmark_rejects_missing_or_inconsistent_server_java_versions():
@@ -93,3 +150,77 @@ def test_full_benchmark_rejects_missing_or_inconsistent_server_java_versions():
     for invalid in ("17.0.12", "unknown", "unavailable", ""):
         result = [{"missingServerJavaVersionCount": 0, "serverJavaVersions": [invalid] if invalid else []}]
         assert benchmark.full_server_java_error(result) is not None
+
+
+def test_request_captures_performance_stages_and_channel_timeout_component(monkeypatch):
+    monkeypatch.setattr(benchmark, "http_json", lambda *_: (200, {
+        "timeout": True,
+        "timeoutComponents": ["SEMANTIC_TIMEOUT"],
+        "degradedComponents": ["SEMANTIC_TIMEOUT"],
+        "timeoutStatus": "TIMED_OUT_AT_CHANNEL_BUDGET",
+        "performanceLatencyMs": {"semantic.queueWaitMs": 12.5},
+        "performanceAttributes": {"semantic.embeddingCacheOutcome": "MISS_REMOTE"},
+        "evidenceStatus": "NO_EVIDENCE",
+        "boundedResults": True,
+        "serverJavaVersion": "21.0.10",
+    }, .8))
+
+    result = benchmark.request_once("http://server", {"name": "semantic-only", "mode": "semantic"},
+                                    0, 1, manifest(), 1)
+
+    assert result["timeoutComponents"] == ["SEMANTIC_TIMEOUT"]
+    assert result["degradedComponents"] == ["SEMANTIC_TIMEOUT"]
+    assert result["timeoutStatus"] == "TIMED_OUT_AT_CHANNEL_BUDGET"
+    assert result["performanceLatencyMs"]["semantic.queueWaitMs"] == 12.5
+
+
+def test_warmup_diagnostics_are_separate_from_measured_aggregation(monkeypatch):
+    def response(_target, _workload, request_number, *_args):
+        warmup = request_number < 0
+        return {
+            "error": False, "degraded": warmup, "timeout": warmup,
+            "latencyMs": 999 if warmup else 10,
+            "stageLatencyMs": {},
+            "performanceLatencyMs": {"semantic.queueWaitMs": 999 if warmup else 10},
+            "performanceAttributes": {},
+            "timeoutComponents": ["SEMANTIC_ADMISSION_TIMEOUT"] if warmup else [],
+            "degradedComponents": ["SEMANTIC_ADMISSION_TIMEOUT"] if warmup else [],
+            "timeoutStatus": "TIMED_OUT_AT_CHANNEL_BUDGET" if warmup else "NONE",
+            "staleCandidateCount": 0, "activeBuildTruncated": False,
+            "sentinelRecall": False, "boundedResults": True, "evidenceStatus": "VALID",
+            "serverJavaVersion": "21.0.10",
+        }
+
+    monkeypatch.setattr(benchmark, "request_once", response)
+    options = SimpleNamespace(requests_per_workload=1, warmup_requests=1,
+                              dataset_id=1, timeout_seconds=1)
+
+    result = benchmark.run_workload("http://server", {"name": "semantic-only", "mode": "semantic"},
+                                    1, options, manifest())
+
+    assert result["timeoutRate"] == 0
+    assert result["degradedRate"] == 0
+    assert result["performanceLatencyMs"]["semantic.queueWaitMs"]["p50"] == 10
+    assert result["warmupDiagnostics"]["stages"]["semantic.queueWaitMs"]["p50Ms"] == 999
+    assert result["warmupDiagnostics"]["semanticOutcomes"]["admissionTimeouts"] == 1
+
+
+def test_measured_diagnostics_classify_admission_rejection_and_execution_timeout():
+    diagnostics = benchmark.diagnostic_summary([
+        {"performanceLatencyMs": {"semantic.channelMs": 20},
+         "performanceAttributes": {"semantic.annCandidateBudget": "160",
+                                    "semantic.annRefillRounds": "1",
+                                    "semantic.annRefillExhausted": "false"},
+         "degradedComponents": ["SEMANTIC_ADMISSION_TIMEOUT", "LEXICAL_REJECTED"]},
+        {"performanceLatencyMs": {"semantic.channelMs": 30},
+         "performanceAttributes": {"semantic.dbStatementTimeout": "true"},
+         "degradedComponents": ["SEMANTIC_TIMEOUT", "LEXICAL_TIMEOUT"]},
+    ])
+
+    assert diagnostics["requestCount"] == 2
+    assert diagnostics["semanticOutcomes"]["annRequests"] == 1
+    assert diagnostics["semanticOutcomes"]["annRefilled"] == 1
+    assert diagnostics["semanticOutcomes"]["dbStatementTimeouts"] == 1
+    assert diagnostics["semanticOutcomes"]["admissionTimeouts"] == 1
+    assert diagnostics["semanticOutcomes"]["executionTimeouts"] == 1
+    assert diagnostics["lexicalOutcomes"]["rejected"] == 1

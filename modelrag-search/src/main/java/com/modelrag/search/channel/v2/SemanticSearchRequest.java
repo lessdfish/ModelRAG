@@ -2,8 +2,14 @@ package com.modelrag.search.channel.v2;
 
 /** Bounded vector-store request for one rewritten V2 query. */
 public record SemanticSearchRequest(long datasetId, float[] queryEmbedding,
-        String embeddingProfile, int limit) {
+        String embeddingProfile, int limit, long queryTimeoutMs) {
     public static final int MAX_LIMIT = 500;
+    public static final long DEFAULT_QUERY_TIMEOUT_MS = 800;
+
+    public SemanticSearchRequest(long datasetId, float[] queryEmbedding,
+            String embeddingProfile, int limit) {
+        this(datasetId, queryEmbedding, embeddingProfile, limit, DEFAULT_QUERY_TIMEOUT_MS);
+    }
 
     public SemanticSearchRequest {
         if (datasetId <= 0) throw new IllegalArgumentException("datasetId must be positive");
@@ -14,6 +20,7 @@ public record SemanticSearchRequest(long datasetId, float[] queryEmbedding,
             throw new IllegalArgumentException("embedding profile must not be blank");
         }
         if (limit < 1 || limit > MAX_LIMIT) throw new IllegalArgumentException("limit is out of bounds");
+        if (queryTimeoutMs < 1) throw new IllegalArgumentException("query timeout must be positive");
         queryEmbedding = queryEmbedding.clone();
     }
 

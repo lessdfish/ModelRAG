@@ -1,6 +1,7 @@
 package com.modelrag.indexing.service;
 
 import com.modelrag.api.TextEmbeddingProvider;
+import com.modelrag.api.DiagnosticTextEmbeddingProvider;
 import com.modelrag.common.cache.EmbeddingCache;
 import com.modelrag.common.metrics.TokenUsageTracker;
 import com.modelrag.common.model.ModelHealthRegistry;
@@ -10,6 +11,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,7 +22,7 @@ import org.springframework.stereotype.Service;
 /** Production embedding boundary. Qwen3-Embedding-0.6B is the only accepted profile. */
 @Service
 @Profile("!test")
-public class EmbeddingService implements TextEmbeddingProvider {
+public class EmbeddingService implements TextEmbeddingProvider, DiagnosticTextEmbeddingProvider {
     private static final int DIMENSIONS = 1024;
     private static final String REQUIRED_MODEL = "Qwen3-Embedding-0.6B";
     private final EmbeddingCache cache;
@@ -56,13 +59,36 @@ public class EmbeddingService implements TextEmbeddingProvider {
 
     @Override
     public float[] embed(long datasetId, String text) {
+        return embedWithDiagnostics(datasetId, text).vector();
+    }
+
+    @Override
+    public EmbeddingInvocation embedWithDiagnostics(long datasetId, String text) {
         if (text == null || text.isBlank()) throw new IllegalArgumentException("Embedding 文本不能为空");
-        float[] value = cache.get(cacheKey(text), ignored -> {
+        long totalStarted = System.nanoTime();
+        String key = cacheKey(text);
+        long lookupStarted = System.nanoTime();
+        float[] cached = cache.getIfPresent(key);
+        double lookupMs = elapsedMs(lookupStarted);
+        if (cached != null) {
+            validateVector(cached);
+            return new EmbeddingInvocation(cached, lookupMs, 0, elapsedMs(totalStarted), "HIT");
+        }
+        AtomicBoolean remoteCalled = new AtomicBoolean();
+        AtomicLong remoteNanos = new AtomicLong();
+        float[] value = cache.get(key, ignored -> {
+            remoteCalled.set(true);
             if (datasetId > 0) tokens.recordEmbedding(datasetId, text);
-            return compute(text);
+            long remoteStarted = System.nanoTime();
+            try {
+                return compute(text);
+            } finally {
+                remoteNanos.set(System.nanoTime() - remoteStarted);
+            }
         });
         validateVector(value);
-        return value;
+        return new EmbeddingInvocation(value, lookupMs, remoteNanos.get() / 1_000_000d,
+                elapsedMs(totalStarted), remoteCalled.get() ? "MISS_REMOTE" : "MISS_COALESCED");
     }
 
     /** Provider requests are capped at 32 inputs while preserving one cache entry per text. */
@@ -131,6 +157,8 @@ public class EmbeddingService implements TextEmbeddingProvider {
     }
 
     private String cacheKey(String text) { return model + ":" + DIMENSIONS + "\n" + text; }
+
+    private double elapsedMs(long started) { return (System.nanoTime() - started) / 1_000_000d; }
 
     private static final class DisabledEmbeddingProvider implements EmbeddingComputeProvider {
         @Override public List<float[]> embed(String profile, int dimensions, List<String> texts, Duration timeout) {

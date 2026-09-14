@@ -27,7 +27,8 @@ public class QueryRewriter {
         String keywords = keywords(rewritten);
         if (!keywords.isBlank() && !intentTerms(compact).isBlank()) add(searches, keywords + " " + intentTerms(compact));
         List<String> limited = searches.stream().filter(value -> !value.isBlank()).limit(5).toList();
-        return new QueryExtensionResult(original, rewritten, limited.isEmpty() ? List.of(original) : limited, limited.isEmpty() ? rewritten : limited.get(0));
+        List<String> lexicalQueries = limited.isEmpty() ? List.of(original) : limited;
+        return new QueryExtensionResult(original, rewritten, rewritten, lexicalQueries, rewritten);
     }
 
     private void add(LinkedHashSet<String> values, String value) {

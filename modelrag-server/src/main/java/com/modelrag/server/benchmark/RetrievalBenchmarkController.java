@@ -14,7 +14,17 @@ import com.modelrag.search.orchestrator.HybridRetrievalService;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.distribution.ValueAtPercentile;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.concurrent.TimeUnit;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Profile;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -32,13 +42,26 @@ public class RetrievalBenchmarkController {
     private final IndexBuildRepository builds;
     private final RetrievalUnitRepository units;
     private final LexicalSearchPort lexical;
+    private final MeterRegistry metrics;
 
     public RetrievalBenchmarkController(HybridRetrievalService retrieval, IndexBuildRepository builds,
             RetrievalUnitRepository units, LexicalSearchPort lexical) {
+        this(retrieval, builds, units, lexical, new SimpleMeterRegistry());
+    }
+
+    @Autowired
+    public RetrievalBenchmarkController(HybridRetrievalService retrieval, IndexBuildRepository builds,
+            RetrievalUnitRepository units, LexicalSearchPort lexical, ObjectProvider<MeterRegistry> metrics) {
+        this(retrieval, builds, units, lexical, metrics.getIfAvailable(SimpleMeterRegistry::new));
+    }
+
+    private RetrievalBenchmarkController(HybridRetrievalService retrieval, IndexBuildRepository builds,
+            RetrievalUnitRepository units, LexicalSearchPort lexical, MeterRegistry metrics) {
         this.retrieval = retrieval;
         this.builds = builds;
         this.units = units;
         this.lexical = lexical;
+        this.metrics = metrics;
     }
 
     @PostMapping("/retrieval")
@@ -59,13 +82,20 @@ public class RetrievalBenchmarkController {
             candidates = candidates.stream().filter(value -> value.documentId() == request.documentId()).toList();
         }
         ValidatedCandidates validation = validateActive(request, candidates, null);
-        boolean truncated = "high-active-build-count".equals(request.workload())
-                && validation.candidates().stream().noneMatch(value -> value.content().contains(request.query()));
+        boolean sentinelRecall = "high-active-build-count".equals(request.workload())
+                && validation.candidates().stream().anyMatch(value -> value.content().contains(request.query()));
+        boolean truncated = request.activeBuildOverflow() && "high-active-build-count".equals(request.workload())
+                && !sentinelRecall;
         Map<String, Long> latency = new java.util.LinkedHashMap<>(stages.latencyMs());
         latency.put("endpointTotal", (System.nanoTime() - started) / 1_000_000L);
-        return ResponseEntity.ok(new Response(!stages.degradedComponents().isEmpty(), false, latency,
+        List<String> timeoutComponents = timeoutComponents(stages);
+        return ResponseEntity.ok(new Response(!stages.degradedComponents().isEmpty(), !timeoutComponents.isEmpty(), latency,
+                stages.performanceLatencyMs(), stages.performanceAttributes(), timeoutComponents,
+                stages.degradedComponents(),
+                timeoutComponents.isEmpty() ? "NONE" : "TIMED_OUT_AT_CHANNEL_BUDGET",
                 validation.candidates().size(), validation.staleCandidateCount(), truncated,
-                validation.candidates().size() <= RetrievalV2Request.MAX_TOP_K, validation.evidenceValid(),
+                sentinelRecall, validation.candidates().size() <= RetrievalV2Request.MAX_TOP_K,
+                validation.status() != EvidenceValidationStatus.INVALID, validation.status(),
                 System.getProperty("java.version")));
     }
 
@@ -75,20 +105,24 @@ public class RetrievalBenchmarkController {
         if (build == null || build.state() != IndexBuildState.ACTIVE || build.datasetId() != request.datasetId()) {
             return ResponseEntity.ok(new Response(true, false,
                     Map.of("endpointTotal", (System.nanoTime() - started) / 1_000_000L),
-                    0, 0, false, true, false, System.getProperty("java.version")));
+                    Map.of(), Map.of(), List.of(), List.of(), "NONE",
+                    0, 0, false, false, true, true, EvidenceValidationStatus.NO_EVIDENCE,
+                    System.getProperty("java.version")));
         }
         List<RetrievalCandidate> candidates = lexical.findInDocument(new DocumentLexicalSearchRequest(
                 request.datasetId(), request.documentId(), request.query(), List.of(build.id()), 20));
         ValidatedCandidates validation = validateActive(request, candidates, build);
         return ResponseEntity.ok(new Response(false, false,
-                Map.of("lexical", (System.nanoTime() - started) / 1_000_000L), validation.candidates().size(),
-                validation.staleCandidateCount(), false, validation.candidates().size() <= 20,
-                validation.evidenceValid(), System.getProperty("java.version")));
+                Map.of("lexical", (System.nanoTime() - started) / 1_000_000L),
+                Map.of(), Map.of(), List.of(), List.of(), "NONE", validation.candidates().size(),
+                validation.staleCandidateCount(), false, false, validation.candidates().size() <= 20,
+                validation.status() != EvidenceValidationStatus.INVALID, validation.status(),
+                System.getProperty("java.version")));
     }
 
     private ValidatedCandidates validateActive(Request request, List<RetrievalCandidate> candidates,
             IndexBuild expectedBuild) {
-        if (candidates.isEmpty()) return new ValidatedCandidates(List.of(), 0, false);
+        if (candidates.isEmpty()) return new ValidatedCandidates(List.of(), 0, EvidenceValidationStatus.NO_EVIDENCE);
         Map<Long, RetrievalUnit> activeById = new LinkedHashMap<>();
         units.findActiveByIds(request.datasetId(), candidates.stream()
                 .map(RetrievalCandidate::retrievalUnitId).distinct().toList())
@@ -107,16 +141,68 @@ public class RetrievalBenchmarkController {
                     || request.benchmarkIdentity().equals(fixture);
         }).toList();
         long stale = candidates.size() - valid.size();
-        return new ValidatedCandidates(valid, stale, stale == 0 && !valid.isEmpty());
+        return new ValidatedCandidates(valid, stale,
+                stale == 0 ? EvidenceValidationStatus.VALID : EvidenceValidationStatus.INVALID);
+    }
+
+    private List<String> timeoutComponents(RetrievalV2Stages stages) {
+        return stages.degradedComponents().stream().filter(component -> component.endsWith("_TIMEOUT")).toList();
+    }
+
+    @GetMapping("/retrieval/diagnostics")
+    public PerformanceDiagnostics diagnostics() {
+        Map<String, TimerStats> stages = metrics.find("modelrag.retrieval.v2.performance").timers().stream()
+                .collect(Collectors.toMap(timer -> timer.getId().getTag("stage"), this::stats,
+                        (left, right) -> right, LinkedHashMap::new));
+        Map<String, Long> cache = metrics.find("modelrag.retrieval.v2.embedding.cache").counters().stream()
+                .collect(Collectors.toMap(counter -> counter.getId().getTag("outcome"),
+                        counter -> Math.round(counter.count()), Long::sum, LinkedHashMap::new));
+        Map<String, Long> semantic = new LinkedHashMap<>();
+        semantic.put("annRequests", counter("modelrag.retrieval.v2.semantic.ann.requests"));
+        semantic.put("annRefilled", counter("modelrag.retrieval.v2.semantic.ann.refilled"));
+        semantic.put("annRefillRounds", counter("modelrag.retrieval.v2.semantic.ann.refill-rounds"));
+        semantic.put("annRefillExhausted", counter("modelrag.retrieval.v2.semantic.ann.refill-exhausted"));
+        semantic.put("dbStatementTimeouts",
+                counter("modelrag.retrieval.v2.semantic.db.statement-timeout"));
+        return new PerformanceDiagnostics(stages, cache, semantic, System.getProperty("java.version"));
+    }
+
+    private long counter(String name) {
+        Counter counter = metrics.find(name).counter();
+        return counter == null ? 0 : Math.round(counter.count());
+    }
+
+    private TimerStats stats(Timer timer) {
+        double p50 = 0;
+        double p95 = 0;
+        double p99 = 0;
+        for (ValueAtPercentile value : timer.takeSnapshot().percentileValues()) {
+            if (Math.abs(value.percentile() - .5) < .001) p50 = value.value(TimeUnit.MILLISECONDS);
+            if (Math.abs(value.percentile() - .95) < .001) p95 = value.value(TimeUnit.MILLISECONDS);
+            if (Math.abs(value.percentile() - .99) < .001) p99 = value.value(TimeUnit.MILLISECONDS);
+        }
+        return new TimerStats(timer.count(), p50, p95, p99,
+                timer.mean(TimeUnit.MILLISECONDS), timer.max(TimeUnit.MILLISECONDS));
     }
 
     public record Request(long datasetId, String query, String workload, String mode, Long documentId,
             Long staleBuildId, boolean activeBuildOverflow, String benchmarkIdentity) { }
 
     public record Response(boolean degraded, boolean timeout, Map<String, Long> stageLatencyMs,
+            Map<String, Double> performanceLatencyMs, Map<String, String> performanceAttributes,
+            List<String> timeoutComponents, List<String> degradedComponents, String timeoutStatus,
             int candidateCount, long staleCandidateCount, boolean activeBuildTruncated,
-            boolean boundedResults, boolean evidenceValid, String serverJavaVersion) { }
+            boolean sentinelRecall, boolean boundedResults, boolean evidenceValid,
+            EvidenceValidationStatus evidenceStatus, String serverJavaVersion) { }
 
     private record ValidatedCandidates(List<RetrievalCandidate> candidates, long staleCandidateCount,
-            boolean evidenceValid) { }
+            EvidenceValidationStatus status) { }
+
+    public record PerformanceDiagnostics(Map<String, TimerStats> stages, Map<String, Long> cacheOutcomes,
+            Map<String, Long> semanticOutcomes, String serverJavaVersion) { }
+
+    public record TimerStats(long count, double p50Ms, double p95Ms, double p99Ms,
+            double meanMs, double maxMs) { }
+
+    public enum EvidenceValidationStatus { NO_EVIDENCE, VALID, INVALID }
 }
