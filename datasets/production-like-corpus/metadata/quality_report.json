@@ -1,0 +1,788 @@
+{
+  "categoryCounts": {
+    "CROSS_DOCUMENT": 20,
+    "HYBRID": 30,
+    "KEYWORD_BM25": 25,
+    "SEMANTIC": 35,
+    "STRUCTURE_AGENTIC": 10,
+    "TABLE": 15,
+    "VERSION_CONFLICT": 15
+  },
+  "documentCount": 30,
+  "factCount": 100,
+  "failures": [],
+  "files": {
+    "ENG-001": {
+      "bytes": 234372,
+      "characters": 44823,
+      "pages": 48,
+      "sha256": "3bdb51e51f52fd42fdbef5ba039803eaa75f700cbc58ed71893bfd365deaf6f0"
+    },
+    "FIN-001": {
+      "bytes": 213311,
+      "characters": 35712,
+      "pages": 38,
+      "sha256": "29fca0825783c86a2d43b70dabde3d352c224eec9593954bacf1c25dd1a4b86c"
+    },
+    "FIN-002": {
+      "bytes": 13713,
+      "characters": 877,
+      "sha256": "cc90648c3b42d77a71bec4d9865c3fa7eb10151e1c606d4cee9dc1276604c32f",
+      "sheets": [
+        "城市等级",
+        "国内住宿标准",
+        "餐费标准",
+        "海外地区",
+        "特殊区域"
+      ],
+      "structured": [
+        {
+          "columns": 3,
+          "nonempty": 26,
+          "rows": 11,
+          "sheet": "城市等级",
+          "tables": 1
+        },
+        {
+          "columns": 5,
+          "nonempty": 27,
+          "rows": 8,
+          "sheet": "国内住宿标准",
+          "tables": 1
+        },
+        {
+          "columns": 4,
+          "nonempty": 14,
+          "rows": 6,
+          "sheet": "餐费标准",
+          "tables": 1
+        },
+        {
+          "columns": 5,
+          "nonempty": 22,
+          "rows": 7,
+          "sheet": "海外地区",
+          "tables": 1
+        },
+        {
+          "columns": 4,
+          "nonempty": 14,
+          "rows": 6,
+          "sheet": "特殊区域",
+          "tables": 1
+        }
+      ]
+    },
+    "FIN-003": {
+      "bytes": 40924,
+      "characters": 1807,
+      "paragraphs": 20,
+      "sha256": "edf4cf80a5df3b6d26337d4639cc1330c1a81a1c397e288e2e6738fe422b1a74",
+      "tables": 1
+    },
+    "FIN-004": {
+      "bytes": 178623,
+      "characters": 26140,
+      "pages": 28,
+      "sha256": "d3963d3d261e7d4856331d9eb6b2e98a7d8b610bec9d6cd271f624c18e277c87"
+    },
+    "FIN-005": {
+      "bytes": 90776,
+      "characters": 33902,
+      "qaCount": 200,
+      "sha256": "00992868fd79139ce90f0ad2d71e1558e5d5c1fe20066db0677f45a72bfdc958"
+    },
+    "HR-001": {
+      "bytes": 44795,
+      "characters": 35868,
+      "paragraphs": 353,
+      "sha256": "89d5f94c031ccdb8895c1fc9374bc84ec4f35e40de1661f2fb56dd5ef8770256",
+      "tables": 7
+    },
+    "HR-002": {
+      "bytes": 221789,
+      "characters": 40230,
+      "pages": 43,
+      "sha256": "43bc25cf02aacb47dd9df9ea6d2a40fbb386a5fef681a0aff19daebbc3a9579a"
+    },
+    "HR-003": {
+      "bytes": 203482,
+      "characters": 31242,
+      "pages": 33,
+      "sha256": "a2883a5a99fd6b42bda0179cb1afd034cd5c3a59a5eb107f5ba14ca8c96bf602"
+    },
+    "HR-004": {
+      "bytes": 43315,
+      "characters": 19842,
+      "paragraphs": 198,
+      "sha256": "288c19e5d8d1dfb5db278db39d78faff70cefd6687662c0789b731687a417711",
+      "tables": 4
+    },
+    "HR-005": {
+      "bytes": 161855,
+      "characters": 60059,
+      "qaCount": 350,
+      "sha256": "3c9266d24073a78569bfe8ec79ce14ba7c7fe1eede2bc8bf57a901d1e0f16039"
+    },
+    "IT-001": {
+      "bytes": 283876,
+      "characters": 58097,
+      "pages": 60,
+      "sha256": "e202728e15fcbdaab341da7cbe69ca9aecee74b284dcce673b0db30135c3ab38"
+    },
+    "IT-002": {
+      "bytes": 226951,
+      "characters": 38641,
+      "pages": 40,
+      "sha256": "b3ad82dbb4e5521db944e3a7032fea96d5d5ac74218564a49ee74efff0931a57"
+    },
+    "IT-003": {
+      "bytes": 316949,
+      "characters": 68592,
+      "pages": 70,
+      "sha256": "506b10b18f3228a7bb13a8bdc57756b3b200401fc2675d6e119b5aec03269b1b"
+    },
+    "IT-004": {
+      "bytes": 43570,
+      "characters": 20755,
+      "paragraphs": 201,
+      "sha256": "edbfde4182f436e547a1256e6e7ac0ed6ee0b819456f64c04a5d191646de81f2",
+      "tables": 4
+    },
+    "IT-005": {
+      "bytes": 177322,
+      "characters": 22028,
+      "pages": 23,
+      "sha256": "ad808ddcfd5a2f24cfa7748c270a8d70d6ba8816a05b6fb46b9bbbe48d991c5d"
+    },
+    "LEG-001": {
+      "bytes": 189792,
+      "characters": 30771,
+      "pages": 33,
+      "sha256": "d4ff6275dedaf6cd44cf43b3978d20074c9753fe8578c595f8ff8ff2658795dc"
+    },
+    "LEG-002": {
+      "bytes": 80773,
+      "characters": 30203,
+      "qaCount": 175,
+      "sha256": "8527aa394563a141f41bb7defbfce0e6c7ffab46bbc11006f0e0bb35998411f4"
+    },
+    "OPS-001": {
+      "bytes": 44527,
+      "characters": 29388,
+      "paragraphs": 272,
+      "sha256": "3c3efd6b59d59aa3deb61041e9478ebc4a1e39ea24a844be7174f6a84d70f32d",
+      "tables": 5
+    },
+    "OPS-002": {
+      "bytes": 309621,
+      "characters": 66651,
+      "pages": 65,
+      "sha256": "fd925752291feb8a8cbdcbce0d270cd16f71afb3ae842f15f4d625604c8c19a8"
+    },
+    "OPS-003": {
+      "bytes": 12100,
+      "characters": 762,
+      "sha256": "2ae44869e50d34d1df7b38df8134fa38a16def5893d820fba8101d4d70dbc3f5",
+      "sheets": [
+        "事故等级",
+        "响应时限",
+        "升级与沟通",
+        "判定示例"
+      ],
+      "structured": [
+        {
+          "columns": 4,
+          "nonempty": 18,
+          "rows": 7,
+          "sheet": "事故等级",
+          "tables": 1
+        },
+        {
+          "columns": 4,
+          "nonempty": 18,
+          "rows": 7,
+          "sheet": "响应时限",
+          "tables": 1
+        },
+        {
+          "columns": 4,
+          "nonempty": 18,
+          "rows": 7,
+          "sheet": "升级与沟通",
+          "tables": 1
+        },
+        {
+          "columns": 3,
+          "nonempty": 14,
+          "rows": 7,
+          "sheet": "判定示例",
+          "tables": 1
+        }
+      ]
+    },
+    "OPS-004": {
+      "bytes": 112295,
+      "characters": 41977,
+      "qaCount": 250,
+      "sha256": "e57b2e4b53b3faad864b908492a9d0442b767b9f2046bdab506df572dbf14ee6"
+    },
+    "PROC-001": {
+      "bytes": 203383,
+      "characters": 35286,
+      "pages": 38,
+      "sha256": "9d28f7a52c5ba08f62673233fa4f8ef2890650614452d7d8ab2797bf2e37cd7e"
+    },
+    "PROC-002": {
+      "bytes": 43368,
+      "characters": 19722,
+      "paragraphs": 199,
+      "sha256": "fc4c2b3480a87c751f530ed741e7350c4ffd85469c670d23c6f6411b8dd35e8d",
+      "tables": 4
+    },
+    "PROC-003": {
+      "bytes": 10300,
+      "characters": 783,
+      "sha256": "1845064a7a6b4d5e51fe70166d0f5f5c51096e6a9a3ded42744c6f03dddb088c",
+      "sheets": [
+        "审批矩阵",
+        "边界示例",
+        "适用说明"
+      ],
+      "structured": [
+        {
+          "columns": 5,
+          "nonempty": 26,
+          "rows": 8,
+          "sheet": "审批矩阵",
+          "tables": 1
+        },
+        {
+          "columns": 3,
+          "nonempty": 20,
+          "rows": 9,
+          "sheet": "边界示例",
+          "tables": 1
+        },
+        {
+          "columns": 3,
+          "nonempty": 14,
+          "rows": 7,
+          "sheet": "适用说明",
+          "tables": 1
+        }
+      ]
+    },
+    "SEC-001": {
+      "bytes": 258883,
+      "characters": 52937,
+      "pages": 55,
+      "sha256": "265365257eaac381673306e1a062a9ca1edeac946e58f3ba66d3379c219cf8bf"
+    },
+    "SEC-002": {
+      "bytes": 12143,
+      "characters": 823,
+      "sha256": "72b52e8b067d1e6a070665ac428869edd78fd385f668388447d46e4974c656a9",
+      "sheets": [
+        "分类等级",
+        "数据示例",
+        "存储与传输",
+        "加密要求"
+      ],
+      "structured": [
+        {
+          "columns": 4,
+          "nonempty": 22,
+          "rows": 8,
+          "sheet": "分类等级",
+          "tables": 1
+        },
+        {
+          "columns": 4,
+          "nonempty": 22,
+          "rows": 8,
+          "sheet": "数据示例",
+          "tables": 1
+        },
+        {
+          "columns": 4,
+          "nonempty": 22,
+          "rows": 8,
+          "sheet": "存储与传输",
+          "tables": 1
+        },
+        {
+          "columns": 5,
+          "nonempty": 25,
+          "rows": 8,
+          "sheet": "加密要求",
+          "tables": 1
+        }
+      ]
+    },
+    "SEC-003": {
+      "bytes": 43971,
+      "characters": 25626,
+      "paragraphs": 248,
+      "sha256": "47c8c9c44e15513803434384cc7baa151e424873010fe5cb34d85e5ac072c123",
+      "tables": 5
+    },
+    "SEC-004": {
+      "bytes": 193214,
+      "characters": 31986,
+      "pages": 33,
+      "sha256": "b32a94cd5217316ba25b3628ab6c8d1e23464ce2064657322761ec2611d928cb"
+    },
+    "SEC-005": {
+      "bytes": 79648,
+      "characters": 30160,
+      "qaCount": 175,
+      "sha256": "b9b3b8a400de5260174fd2b4838de959f160ed33462b8f915fec307dadbb44f7"
+    }
+  },
+  "formatCounts": {
+    "DOCX": 7,
+    "MD": 5,
+    "PDF": 14,
+    "XLSX": 4
+  },
+  "gates": {
+    "01_document_count": {
+      "detail": {
+        "documents": 30,
+        "uniqueIds": 30
+      },
+      "passed": true
+    },
+    "02_fact_count": {
+      "detail": {
+        "facts": 100,
+        "uniqueIds": 100
+      },
+      "passed": true
+    },
+    "03_question_count": {
+      "detail": 150,
+      "passed": true
+    },
+    "04_unanswerable_count": {
+      "detail": 20,
+      "passed": true
+    },
+    "05_fact_primary_source": {
+      "detail": "every fact has one or more manifest sources",
+      "passed": true
+    },
+    "06_question_fact_references": {
+      "detail": "all valid",
+      "passed": true
+    },
+    "07_question_document_references": {
+      "detail": "all valid",
+      "passed": true
+    },
+    "08_version_conflict_evidence": {
+      "detail": {
+        "questions": 15
+      },
+      "passed": true
+    },
+    "09_cross_document_completeness": {
+      "detail": {
+        "questions": 20
+      },
+      "passed": true
+    },
+    "10_table_sources": {
+      "detail": {
+        "questions": 15
+      },
+      "passed": true
+    },
+    "11_bm25_exact_identifiers": {
+      "detail": {
+        "exactIdentifierQuestions": 24,
+        "total": 25
+      },
+      "passed": true
+    },
+    "12_structure_agentic_sections": {
+      "detail": {
+        "questions": 10
+      },
+      "passed": true
+    },
+    "13_version_relation_consistency": {
+      "detail": "consistent",
+      "passed": true
+    },
+    "14_files_open": {
+      "detail": {
+        "corpusFiles": 30,
+        "errors": [],
+        "opened": 30
+      },
+      "passed": true
+    },
+    "15_xlsx_structured": {
+      "detail": {
+        "FIN-002": {
+          "passed": true,
+          "sheets": [
+            "城市等级",
+            "国内住宿标准",
+            "餐费标准",
+            "海外地区",
+            "特殊区域"
+          ],
+          "structuredSheets": 5
+        },
+        "OPS-003": {
+          "passed": true,
+          "sheets": [
+            "事故等级",
+            "响应时限",
+            "升级与沟通",
+            "判定示例"
+          ],
+          "structuredSheets": 4
+        },
+        "PROC-003": {
+          "passed": true,
+          "sheets": [
+            "审批矩阵",
+            "边界示例",
+            "适用说明"
+          ],
+          "structuredSheets": 3
+        },
+        "SEC-002": {
+          "passed": true,
+          "sheets": [
+            "分类等级",
+            "数据示例",
+            "存储与传输",
+            "加密要求"
+          ],
+          "structuredSheets": 4
+        }
+      },
+      "passed": true
+    },
+    "16_pdf_docx_substantive": {
+      "detail": {
+        "ENG-001": {
+          "characters": 44823,
+          "minimum": 21600,
+          "passed": true
+        },
+        "FIN-001": {
+          "characters": 35712,
+          "minimum": 17100,
+          "passed": true
+        },
+        "FIN-003": {
+          "characters": 1807,
+          "minimum": 1500,
+          "passed": true
+        },
+        "FIN-004": {
+          "characters": 26140,
+          "minimum": 12600,
+          "passed": true
+        },
+        "HR-001": {
+          "characters": 35868,
+          "minimum": 22500,
+          "passed": true
+        },
+        "HR-002": {
+          "characters": 40230,
+          "minimum": 19350,
+          "passed": true
+        },
+        "HR-003": {
+          "characters": 31242,
+          "minimum": 14850,
+          "passed": true
+        },
+        "HR-004": {
+          "characters": 19842,
+          "minimum": 12600,
+          "passed": true
+        },
+        "IT-001": {
+          "characters": 58097,
+          "minimum": 27000,
+          "passed": true
+        },
+        "IT-002": {
+          "characters": 38641,
+          "minimum": 18000,
+          "passed": true
+        },
+        "IT-003": {
+          "characters": 68592,
+          "minimum": 31500,
+          "passed": true
+        },
+        "IT-004": {
+          "characters": 20755,
+          "minimum": 12600,
+          "passed": true
+        },
+        "IT-005": {
+          "characters": 22028,
+          "minimum": 10350,
+          "passed": true
+        },
+        "LEG-001": {
+          "characters": 30771,
+          "minimum": 14850,
+          "passed": true
+        },
+        "OPS-001": {
+          "characters": 29388,
+          "minimum": 17100,
+          "passed": true
+        },
+        "OPS-002": {
+          "characters": 66651,
+          "minimum": 29250,
+          "passed": true
+        },
+        "PROC-001": {
+          "characters": 35286,
+          "minimum": 17100,
+          "passed": true
+        },
+        "PROC-002": {
+          "characters": 19722,
+          "minimum": 12600,
+          "passed": true
+        },
+        "SEC-001": {
+          "characters": 52937,
+          "minimum": 24750,
+          "passed": true
+        },
+        "SEC-003": {
+          "characters": 25626,
+          "minimum": 15750,
+          "passed": true
+        },
+        "SEC-004": {
+          "characters": 31986,
+          "minimum": 14850,
+          "passed": true
+        }
+      },
+      "passed": true
+    },
+    "17_no_immersion_breaking_phrases": {
+      "detail": "none",
+      "passed": true
+    },
+    "category_distribution": {
+      "detail": {
+        "CROSS_DOCUMENT": 20,
+        "HYBRID": 30,
+        "KEYWORD_BM25": 25,
+        "SEMANTIC": 35,
+        "STRUCTURE_AGENTIC": 10,
+        "TABLE": 15,
+        "VERSION_CONFLICT": 15
+      },
+      "passed": true
+    },
+    "content_scale": {
+      "detail": 935690,
+      "passed": true
+    },
+    "evidence_row_alignment": {
+      "detail": {
+        "evidenceRows": 150,
+        "questions": 150
+      },
+      "passed": true
+    },
+    "fact_statements_present_in_sources": {
+      "detail": "all present",
+      "passed": true
+    },
+    "faq_scale": {
+      "detail": {
+        "FIN-005": {
+          "count": 200,
+          "passed": true,
+          "range": [
+            190,
+            210
+          ]
+        },
+        "HR-005": {
+          "count": 350,
+          "passed": true,
+          "range": [
+            300,
+            400
+          ]
+        },
+        "LEG-002": {
+          "count": 175,
+          "passed": true,
+          "range": [
+            150,
+            200
+          ]
+        },
+        "OPS-004": {
+          "count": 250,
+          "passed": true,
+          "range": [
+            240,
+            260
+          ]
+        },
+        "SEC-005": {
+          "count": 175,
+          "passed": true,
+          "range": [
+            150,
+            200
+          ]
+        }
+      },
+      "passed": true
+    },
+    "hard_negative_coverage": {
+      "detail": {
+        "incident": {
+          "P0": 62,
+          "P1": 36,
+          "安全事件": 45,
+          "数据库性能下降": 31,
+          "普通故障": 31,
+          "核心业务不可用": 32
+        },
+        "leave": {
+          "事假": 4,
+          "产假": 10,
+          "婚假": 5,
+          "病假": 5,
+          "育儿假": 5,
+          "陪产假": 6
+        },
+        "lodging": {
+          "会议临时住宿标准": 31,
+          "普通差旅住宿": 48,
+          "海外住宿": 48,
+          "长期派驻住宿补贴": 49,
+          "驻场补助": 47
+        },
+        "permissions": {
+          "GitLab权限": 80,
+          "OA权限": 81,
+          "普通数据库权限": 77,
+          "生产数据库写权限": 70,
+          "生产数据库只读权限": 70,
+          "采购审批权限": 73
+        },
+        "procurement_contract": {
+          "付款审批": 22,
+          "供应商准入": 115,
+          "单一来源例外": 22,
+          "合同签署权限": 22,
+          "采购审批": 97
+        }
+      },
+      "passed": true
+    },
+    "pdf_page_targets": {
+      "detail": {
+        "ENG-001": {
+          "pages": 48,
+          "passed": true,
+          "target": 48
+        },
+        "FIN-001": {
+          "pages": 38,
+          "passed": true,
+          "target": 38
+        },
+        "FIN-004": {
+          "pages": 28,
+          "passed": true,
+          "target": 28
+        },
+        "HR-002": {
+          "pages": 43,
+          "passed": true,
+          "target": 43
+        },
+        "HR-003": {
+          "pages": 33,
+          "passed": true,
+          "target": 33
+        },
+        "IT-001": {
+          "pages": 60,
+          "passed": true,
+          "target": 60
+        },
+        "IT-002": {
+          "pages": 40,
+          "passed": true,
+          "target": 40
+        },
+        "IT-003": {
+          "pages": 70,
+          "passed": true,
+          "target": 70
+        },
+        "IT-005": {
+          "pages": 23,
+          "passed": true,
+          "target": 23
+        },
+        "LEG-001": {
+          "pages": 33,
+          "passed": true,
+          "target": 33
+        },
+        "OPS-002": {
+          "pages": 65,
+          "passed": true,
+          "target": 65
+        },
+        "PROC-001": {
+          "pages": 38,
+          "passed": true,
+          "target": 38
+        },
+        "SEC-001": {
+          "pages": 55,
+          "passed": true,
+          "target": 55
+        },
+        "SEC-004": {
+          "pages": 33,
+          "passed": true,
+          "target": 33
+        }
+      },
+      "passed": true
+    },
+    "unanswerable_behavior": {
+      "detail": {
+        "rows": 20
+      },
+      "passed": true
+    }
+  },
+  "questionCount": 150,
+  "specVersion": "1.1",
+  "status": "PASSED",
+  "totalCharacters": 935690,
+  "unanswerableCount": 20
+}

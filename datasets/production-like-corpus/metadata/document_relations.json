@@ -1,0 +1,94 @@
+{
+  "relations": [
+    {
+      "from": "HR-001",
+      "to": "HR-003",
+      "type": "REFERENCES"
+    },
+    {
+      "from": "HR-001",
+      "to": "HR-004",
+      "type": "REFERENCES"
+    },
+    {
+      "from": "HR-001",
+      "to": "HR-002",
+      "type": "SUPERSEDES"
+    },
+    {
+      "from": "FIN-001",
+      "to": "FIN-002",
+      "type": "REFERENCES"
+    },
+    {
+      "from": "FIN-001",
+      "to": "FIN-004",
+      "type": "RELATED"
+    },
+    {
+      "effectiveRange": {
+        "from": "2026-11-10",
+        "to": "2026-11-18"
+      },
+      "from": "FIN-003",
+      "to": "FIN-002",
+      "type": "OVERRIDES"
+    },
+    {
+      "from": "IT-001",
+      "to": "IT-002",
+      "type": "REFERENCES"
+    },
+    {
+      "from": "IT-001",
+      "to": "IT-003",
+      "type": "REFERENCES"
+    },
+    {
+      "from": "IT-001",
+      "to": "IT-004",
+      "type": "REFERENCES"
+    },
+    {
+      "from": "SEC-001",
+      "to": "SEC-002",
+      "type": "REFERENCES"
+    },
+    {
+      "from": "SEC-001",
+      "to": "SEC-003",
+      "type": "REFERENCES"
+    },
+    {
+      "from": "SEC-001",
+      "to": "SEC-004",
+      "type": "REFERENCES"
+    },
+    {
+      "from": "PROC-001",
+      "to": "PROC-003",
+      "type": "REFERENCES"
+    },
+    {
+      "from": "PROC-001",
+      "to": "PROC-002",
+      "type": "REFERENCES"
+    },
+    {
+      "from": "PROC-001",
+      "to": "LEG-001",
+      "type": "RELATED"
+    },
+    {
+      "from": "OPS-001",
+      "to": "OPS-002",
+      "type": "RELATED"
+    },
+    {
+      "from": "OPS-002",
+      "to": "OPS-003",
+      "type": "REFERENCES"
+    }
+  ],
+  "specVersion": "1.1"
+}

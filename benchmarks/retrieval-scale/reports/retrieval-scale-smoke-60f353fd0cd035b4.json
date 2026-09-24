@@ -1,0 +1,4747 @@
+{
+  "benchmarkIdentity": "60f353fd0cd035b438784cbcab6de607155742c2660acb50de00b7fc356a02e1",
+  "completedAt": "2026-09-15T14:57:45.440289+00:00",
+  "correctness": {
+    "activeBuildTruncationStatus": "NOT_APPLICABLE",
+    "boundedResults": true,
+    "noActiveBuildTruncation": true,
+    "noStaleBuildLeakage": true,
+    "sentinelRecall": true,
+    "validEvidence": true
+  },
+  "explainAnalyze": {
+    "candidateBudget": 80,
+    "finalTopK": 20,
+    "plan": [
+      {
+        "Execution Time": 22.745,
+        "Plan": {
+          "Actual Loops": 1,
+          "Actual Rows": 20,
+          "Actual Startup Time": 22.37,
+          "Actual Total Time": 22.375,
+          "Async Capable": false,
+          "Local Dirtied Blocks": 0,
+          "Local Hit Blocks": 0,
+          "Local Read Blocks": 0,
+          "Local Written Blocks": 0,
+          "Node Type": "Limit",
+          "Parallel Aware": false,
+          "Plan Rows": 1,
+          "Plan Width": 48,
+          "Plans": [
+            {
+              "Actual Loops": 1,
+              "Actual Rows": 80,
+              "Actual Startup Time": 12.872,
+              "Actual Total Time": 20.07,
+              "Async Capable": false,
+              "Local Dirtied Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Written Blocks": 0,
+              "Node Type": "Limit",
+              "Parallel Aware": false,
+              "Parent Relationship": "InitPlan",
+              "Plan Rows": 80,
+              "Plan Width": 56,
+              "Plans": [
+                {
+                  "Actual Loops": 1,
+                  "Actual Rows": 80,
+                  "Actual Startup Time": 12.871,
+                  "Actual Total Time": 20.052,
+                  "Alias": "e",
+                  "Async Capable": false,
+                  "Filter": "((dataset_id = '1'::smallint) AND ((embedding_profile)::text = 'qwen3-v1'::text))",
+                  "Index Name": "idx_vector_embedding_hnsw",
+                  "Local Dirtied Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Node Type": "Index Scan",
+                  "Order By": "(embedding <=> '[0.589742,0.3140381,0.3323201,0.7459906,-0.8499509,-0.8975344,0.8705061,0.538901,0.4915574,-0.2043539,0.8661407,0.4261968,-0.3975045,-0.066613,0.2543576,-0.4859504,-0.2041621,-0.7985514,0.8261693,-0.5883858,0.0103038,-0.9874695,-0.9230725,-0.150638,-0.7822687,-0.2945697,0.5304714,-0.9024528,0.0678217,0.9864978,0.0425564,0.4623963,0.7493717,0.3767677,-0.3122322,0.3553224,-0.1518194,0.7950253,-0.6781468,-0.885717,-0.0718363,0.0457389,-0.8319032,0.9064467,0.5087151,-0.5401886,0.4431649,0.4772786,0.9081462,0.2334171,0.7349211,0.7779762,-0.744412,-0.8853072,-0.8447341,0.0948042,-0.8830732,-0.8390813,-0.1926324,-0.9596357,-0.2784728,-0.2550779,-0.8669226,0.6021883,0.161991,-0.3176406,0.1846602,0.4573315,0.3247938,-0.5149315,0.5388036,-0.73013,0.4219073,0.0191925,-0.9356213,0.0844877,0.7184482,-0.9943128,-0.5989573,0.7752896,0.3676028,0.6566184,-0.3478804,-0.7666288,0.8888481,0.1653862,-0.7413546,0.5262463,0.0825612,0.2975895,-0.0153964,-0.608454,0.4636678,-0.3771247,-0.6774515,0.3511018,0.713644,-0.6580894,-0.5019297,0.1438681,-0.4794679,-0.8606936,0.5138673,0.292065,-0.7180741,-0.3095191,-0.461541,-0.4927355,0.9124656,0.1843523,0.681623,0.6143626,0.1790079,-0.901354,-0.8422167,-0.5454198,0.2884622,-0.6638223,-0.8343443,0.5447796,0.4858763,0.6891084,0.6383794,-0.4594653,0.5596528,-0.1693898,0.5422574,-0.7143587,-0.2916881,-0.3797211,0.8405581,-0.8353331,-0.6163071,-0.8507817,0.3282623,-0.8893236,0.665662,0.2429117,0.3178525,0.149017,0.6833161,0.7539925,0.5348532,0.7591693,0.4354173,-0.4374044,-0.3603523,0.8463587,0.9022109,0.2205859,-0.5879076,-0.7871148,-0.6869143,-0.7331109,0.6269777,0.6805199,0.752331,0.5130998,-0.2851583,0.0911844,-0.4033611,0.8842623,-0.9108075,0.4810205,0.2026176,-0.957916,0.0075903,-0.047398,-0.8134164,0.0910604,-0.1275245,-0.4657644,-0.5534014,0.8619095,0.916806,0.0696974,-0.0454211,-0.4669028,0.1052193,0.7170659,0.0316377,0.8043926,-0.3970932,-0.0678316,0.8803533,-0.0453908,-0.7834859,-0.5377036,-0.2373325,-0.6044639,0.0541002,-0.5382214,-0.8944405,-0.0752494,-0.6227714,0.3229017,-0.9022584,-0.9725209,0.4733495,-0.3354106,0.3633437,0.6575434,0.9483429,-0.0004281,0.6584334,0.9460187,0.3857543,-0.040853,0.3584186,0.7282644,0.7722246,0.1240709,-0.075855,-0.0118187,0.999162,-0.611771,0.6583503,-0.4389506,0.8653896,0.7416997,-0.4780625,-0.2551881,0.4626745,0.4288273,0.8524533,-0.6607651,-0.502198,0.7777158,0.6737059,-0.3339479,0.5281339,0.078139,-0.5097327,-0.6300041,0.7874708,-0.2143631,0.4106824,-0.8159967,0.2909728,-0.1346782,-0.62229,-0.2619528,0.7311442,0.6579464,-0.6578058,-0.8579396,0.0859447,0.2128769,0.4962032,0.2309543,0.4831387,-0.7868526,-0.5354557,0.9814638,0.2034442,-0.4315959,-0.5378207,0.5584641,0.8693308,0.5744902,-0.8660477,-0.244825,-0.5609509,0.596629,-0.5733054,0.7162119,-0.3353231,-0.2426364,-0.2136746,0.126779,-0.7828233,-0.2711925,-0.9841347,-0.7971809,-0.8573522,0.2859715,-0.9650743,0.4541168,-0.9129718,-0.4204282,-0.2127672,0.2062563,-0.2917326,0.3867007,-0.3702617,-0.037937,0.0114697,-0.4851275,0.3512756,0.9178909,0.2229653,0.7765715,0.840601,0.3524619,-0.2439629,-0.3580772,-0.5039144,0.7988917,0.2954523,0.2905077,-0.577597,-0.1685643,-0.8801736,0.8834487,0.712148,0.3062427,-0.5789762,-0.8917663,0.8917982,-0.1667544,0.3350051,0.5694794,0.0506656,-0.8744566,-0.6768062,-0.7164706,0.9508643,0.132623,0.5954268,0.8463176,0.1115237,-0.9765725,-0.0293449,-0.6889885,0.1262369,-0.8871059,-0.4215157,0.5027664,-0.6620381,0.1953383,-0.193552,-0.2792116,-0.7204656,-0.8040467,0.1216711,0.7227907,-0.6401062,-0.0888253,-0.7921286,-0.6411736,-0.9853038,0.3634437,0.4300814,0.5816977,-0.5455186,-0.7780218,-0.6156229,-0.6071135,0.3731096,-0.7269794,-0.1620699,0.1477483,-0.411319,0.1745651,-0.2967031,-0.4780494,0.9710467,-0.7662654,-0.3959692,-0.7560892,0.2741142,-0.1002055,0.8565225,-0.7263466,0.0957425,-0.1234519,-0.3779884,-0.6490308,-0.3812968,-0.7003715,0.4273994,0.6681492,0.4461145,-0.6916318,0.8723198,0.6018715,-0.0174212,-0.3831008,-0.0082111,0.6113001,0.5845135,0.1204892,0.1668892,-0.4261376,-0.4098682,-0.7376209,0.2712883,-0.203854,0.3401247,-0.4160119,0.0354662,-0.1685533,-0.551679,-0.5317571,-0.6499878,0.6782157,0.1405283,-0.6449266,0.9281504,0.3211559,0.966675,-0.760632,0.9909161,0.448349,-0.8682074,0.2198459,-0.8988839,-0.4883646,-0.3552332,0.4291775,-0.6187734,0.6887472,0.8938754,-0.6526222,0.7772122,-0.1150735,-0.0479239,-0.2222474,-0.685362,0.2854155,0.0118719,-0.6810388,-0.8781054,-0.8285952,-0.431769,0.3621301,-0.7053908,0.5305952,0.2364569,0.2707789,0.5650033,0.3875897,-0.4782586,0.4710992,-0.4803955,-0.5287225,-0.8583658,-0.472546,0.3491819,-0.0261012,0.5378037,-0.8982993,-0.307381,0.2780153,-0.224296,0.7158635,0.1957806,-0.7161099,-0.6851254,0.8508206,-0.0287077,0.9644308,0.9429135,-0.9596779,-0.1715498,-0.007878,0.3926712,-0.1586568,0.0177909,-0.9057447,0.0443738,-0.903226,-0.9346623,0.1607813,0.2218969,-0.4298324,0.2115479,0.4747282,-0.8531365,0.1661054,0.4166749,0.096304,-0.5000342,-0.0392564,-0.5107919,-0.629176,-0.7576015,0.3875745,-0.3611256,-0.5637408,0.3052482,0.4925487,-0.1854846,0.6220143,0.3673391,-0.6922322,-0.5339581,-0.9786992,0.6937246,-0.0749061,0.268807,-0.594625,-0.7656587,-0.3175774,0.9329185,-0.3396032,-0.6485226,0.6166417,0.6770563,0.9639895,0.9133145,0.2246363,0.1532096,-0.6266389,-0.7789624,0.2354185,0.2863201,-0.3248525,-0.5015397,0.8055261,-0.4527623,-0.635374,-0.1091255,-0.0479035,-0.7398146,0.2938605,-0.5924597,-0.7141662,0.3796347,-0.2979984,0.9180674,0.0977039,-0.1619159,0.2972796,0.1315205,0.7687952,-0.6180266,0.9424297,-0.2851601,-0.4243048,-0.6882406,-0.2114502,0.4572976,-0.9194287,-0.2220403,0.3373956,-0.117455,0.6058902,-0.7101711,0.0178341,-0.6392366,0.99862,-0.1316416,0.8496667,-0.5599826,0.9249234,-0.7935029,0.613042,-0.2899407,-0.9039742,-0.9880843,0.4123459,0.544887,-0.4290969,0.9442017,-0.2754037,0.6538815,0.4972489,0.9804886,0.3282554,0.9614734,0.8713092,0.8354999,-0.8025708,0.5582901,-0.5887529,0.7586126,0.131793,0.3372234,-0.4200708,0.4105528,0.9558567,-0.5541339,0.3987198,-0.3685546,0.0782035,-0.523528,-0.1374956,0.6559914,-0.098171,-0.6429297,0.8623364,0.9401347,-0.1363531,-0.692668,0.280625,0.2288745,-0.6065743,-0.33854,-0.1426855,0.1802198,-0.9892878,-0.1330548,-0.1269604,0.3707508,-0.9155521,-0.9916333,-0.6168768,-0.3945889,-0.9305434,0.0806158,0.2451867,-0.8897461,-0.1226923,0.4632111,-0.9141671,0.3316517,0.3227857,-0.7547072,0.3935536,0.7284737,0.014045,-0.4272097,0.1599864,-0.0785192,-0.3329598,-0.5554349,0.8169959,-0.005779,0.6831003,0.0379429,0.416457,0.8717642,-0.1213978,-0.5707539,-0.3999678,-0.9489766,0.6709328,-0.0027043,0.5369408,0.8004552,-0.7426965,0.5904862,0.6559608,-0.6053932,-0.0925972,-0.4534716,0.4130031,0.4523469,-0.7613696,0.6989947,0.4595042,0.9032089,0.6377411,-0.8619225,-0.0687562,-0.5505935,0.3541013,0.1261794,0.8649776,-0.9778361,-0.483159,0.9012052,-0.0882387,-0.4877763,0.1878182,-0.6581223,0.0927468,0.9540646,-0.9633132,0.8791118,0.0219817,-0.9327193,0.5133642,0.3021796,-0.3189821,-0.888818,0.9905136,0.5432941,-0.1272501,0.6615027,-0.0961511,0.2547154,-0.8645369,-0.7677875,0.4191813,0.3646072,0.1554221,0.0689189,0.6730007,0.339555,-0.1217186,0.4892123,0.4327719,-0.6691187,0.65546,0.2941991,0.6339576,-0.9424759,-0.1260752,-0.1524211,0.8608918,-0.1314564,0.5799539,0.9101691,-0.6579156,-0.385942,-0.3380017,-0.4734112,0.005915,0.8200244,-0.8185636,-0.8478984,0.5119374,0.196542,-0.0283647,0.1195294,0.6063669,-0.3332773,-0.0974313,-0.0098534,0.5487349,0.9314124,-0.2057086,0.7185004,0.2485856,0.8070938,-0.3644428,0.1724101,0.2842854,0.5569613,-0.5025548,-0.9950964,0.6020779,-0.6472458,-0.6899982,0.7008234,-0.3934617,0.1636735,0.7441974,-0.6074877,0.1141882,-0.5703218,0.1694085,-0.9401192,0.9907109,-0.9897277,0.6101763,-0.6349272,0.1492324,0.4482835,-0.0443035,-0.9845697,-0.4776216,-0.0184624,-0.2383983,0.558716,0.9657696,-0.6446112,-0.7605158,0.1792209,0.2192313,0.5130614,0.6314227,-0.7720396,0.4788231,-0.0502542,0.4427209,-0.954939,-0.0064754,0.3848636,-0.7609046,-0.9877821,-0.6088786,0.8502884,0.6736509,-0.8663068,-0.1349454,-0.6418255,0.6863897,0.7504102,0.2731291,-0.9383921,0.825916,0.5671932,-0.2592022,-0.6179547,-0.6869502,-0.4290457,-0.8622217,0.2244854,0.8920642,0.612812,0.8519836,0.6850346,0.0340917,-0.1299598,0.6220341,0.6540484,-0.9391031,0.5275577,0.7528209,0.9907507,0.2382047,-0.9561143,-0.4577308,-0.5960363,0.0194892,0.6371217,-0.2169329,0.9705944,0.1010434,-0.1889535,-0.6962693,-0.6789245,0.9795629,0.9971804,0.5880132,0.5236116,-0.6309326,0.7825694,-0.7854416,-0.9341659,-0.0899733,0.7832266,-0.6210384,0.8379385,-0.7294001,-0.3212212,0.8066581,0.4497948,-0.3625014,0.6203005,-0.2736061,0.0701234,-0.8744249,0.8651165,0.117963,-0.5453974,-0.5990131,-0.2482676,0.024665,-0.6043736,-0.1983966,0.463623,-0.9084366,0.5972002,-0.004863,0.3468971,0.2777478,-0.235836,0.6762293,0.4636969,-0.2366795,-0.9357965,-0.4655293,-0.1714777,-0.0449557,0.1521805,0.2463765,0.5335005,0.5629387,0.5551832,0.8782348,0.6260141,0.5789982,-0.6690497,-0.7885573,-0.8835785,0.120364,-0.1885631,0.6945549,-0.0476768,0.2154001,-0.5260934,-0.8673946,-0.5330804,-0.3139562,0.5150378,0.5298089,-0.4783097,0.0438999,0.087178,0.8601088,0.6330531,-0.0213685,-0.3798185,0.4427413,-0.9764625,0.0945668,-0.4526295,-0.2467253,0.4512213,-0.4544984,0.7517498,-0.8705951,-0.1017096,-0.78609,0.1676622,0.4057576,-0.0620004,-0.8597216,-0.2323378,-0.3394473,-0.32439,0.4589634,-0.7893605,-0.4419099,-0.2657196,-0.9629478,0.3709679,-0.4239105,-0.3680245,-0.1119826,0.405378,-0.4744259,-0.6162403,-0.5209662,-0.6659794,-0.820172,-0.0868151,-0.368502,-0.5161448,0.1118702,-0.4739975,-0.3153804,0.4364362,0.4187289,0.1614797,0.7923872,0.4531822,0.6242502,0.1148107,-0.4321853,0.5671599,0.8940097,0.9640873,0.0283786,-0.9201905,-0.3881373,-0.794947,0.3612549,-0.2334449,-0.8698321,-0.9829971,0.2527397,-0.9919079,-0.986746,0.5798883,-0.8707649,-0.62385,0.921919,0.81944,0.9714839,-0.3291905,-0.3542587,0.4759749,-0.6312236,-0.4128415,-0.5829819,0.0837877,0.7097822,0.0789254,0.3556427,-0.7984579,-0.4203926,0.2958585,-0.5397648,0.2513929,-0.8117384,0.7191915,-0.5121888,0.9771995,-0.0331433,-0.4502208,0.8324118,0.9838653,-0.0003219,0.1644758,0.5001586,0.2282474,-0.3359047,0.1079658,0.0736121,-0.6121526,-0.9212996,-0.5715877,0.042652,-0.6365843,0.2534778,0.4876076,-0.7683581,-0.1916057,0.179486,0.7087484,-0.5629521,0.8984513,0.9478964,-0.2290012,-0.5407532,0.8434532,0.6584355,0.6238468,-0.9174624,0.7558824,-0.5594419,-0.745826,-0.5282339,-0.0318723,-0.6851472,0.1680497,-0.2454268,-0.1980302,-0.2245447,-0.8571142,-0.3118171,0.7882565,-0.9004867,0.8126761,0.4756457,-0.4714765,0.9243992,0.5919903,-0.087771,-0.4844938,0.836789,0.0487,0.651989,0.2997615,0.9849246,-0.9009147,0.6723197,0.6353403,-0.8861448]'::vector)",
+                  "Parallel Aware": false,
+                  "Parent Relationship": "Outer",
+                  "Plan Rows": 20200,
+                  "Plan Width": 56,
+                  "Relation Name": "kb_vector_embedding",
+                  "Rows Removed by Filter": 0,
+                  "Scan Direction": "Forward",
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Hit Blocks": 2245,
+                  "Shared Read Blocks": 1012,
+                  "Shared Written Blocks": 0,
+                  "Startup Cost": 293.39,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0,
+                  "Total Cost": 82515.5
+                }
+              ],
+              "Shared Dirtied Blocks": 0,
+              "Shared Hit Blocks": 2245,
+              "Shared Read Blocks": 1012,
+              "Shared Written Blocks": 0,
+              "Startup Cost": 293.39,
+              "Subplan Name": "CTE ann",
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0,
+              "Total Cost": 619.02
+            },
+            {
+              "Actual Loops": 1,
+              "Actual Rows": 20,
+              "Actual Startup Time": 22.369,
+              "Actual Total Time": 22.372,
+              "Async Capable": false,
+              "Local Dirtied Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Written Blocks": 0,
+              "Node Type": "Sort",
+              "Parallel Aware": false,
+              "Parent Relationship": "Outer",
+              "Plan Rows": 1,
+              "Plan Width": 48,
+              "Plans": [
+                {
+                  "Actual Loops": 1,
+                  "Actual Rows": 78,
+                  "Actual Startup Time": 12.968,
+                  "Actual Total Time": 22.322,
+                  "Async Capable": false,
+                  "Inner Unique": true,
+                  "Join Type": "Inner",
+                  "Local Dirtied Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Node Type": "Nested Loop",
+                  "Parallel Aware": false,
+                  "Parent Relationship": "Outer",
+                  "Plan Rows": 1,
+                  "Plan Width": 48,
+                  "Plans": [
+                    {
+                      "Actual Loops": 1,
+                      "Actual Rows": 78,
+                      "Actual Startup Time": 12.954,
+                      "Actual Total Time": 21.925,
+                      "Async Capable": false,
+                      "Inner Unique": true,
+                      "Join Filter": "((ann.retrieval_unit_id = u.id) AND (u.dataset_id = ann.dataset_id) AND (u.document_id = ann.document_id) AND (ann.document_version_id = u.document_version_id) AND (u.index_build_id = ann.index_build_id))",
+                      "Join Type": "Inner",
+                      "Local Dirtied Blocks": 0,
+                      "Local Hit Blocks": 0,
+                      "Local Read Blocks": 0,
+                      "Local Written Blocks": 0,
+                      "Node Type": "Nested Loop",
+                      "Parallel Aware": false,
+                      "Parent Relationship": "Outer",
+                      "Plan Rows": 1,
+                      "Plan Width": 56,
+                      "Plans": [
+                        {
+                          "Actual Loops": 1,
+                          "Actual Rows": 78,
+                          "Actual Startup Time": 12.939,
+                          "Actual Total Time": 20.616,
+                          "Async Capable": false,
+                          "Inner Unique": true,
+                          "Join Type": "Inner",
+                          "Local Dirtied Blocks": 0,
+                          "Local Hit Blocks": 0,
+                          "Local Read Blocks": 0,
+                          "Local Written Blocks": 0,
+                          "Node Type": "Nested Loop",
+                          "Parallel Aware": false,
+                          "Parent Relationship": "Outer",
+                          "Plan Rows": 1,
+                          "Plan Width": 80,
+                          "Plans": [
+                            {
+                              "Actual Loops": 1,
+                              "Actual Rows": 80,
+                              "Actual Startup Time": 12.918,
+                              "Actual Total Time": 20.257,
+                              "Async Capable": false,
+                              "Hash Cond": "(ann.dataset_id = ds.id)",
+                              "Inner Unique": true,
+                              "Join Type": "Inner",
+                              "Local Dirtied Blocks": 0,
+                              "Local Hit Blocks": 0,
+                              "Local Read Blocks": 0,
+                              "Local Written Blocks": 0,
+                              "Node Type": "Hash Join",
+                              "Parallel Aware": false,
+                              "Parent Relationship": "Outer",
+                              "Plan Rows": 1,
+                              "Plan Width": 56,
+                              "Plans": [
+                                {
+                                  "Actual Loops": 1,
+                                  "Actual Rows": 80,
+                                  "Actual Startup Time": 12.876,
+                                  "Actual Total Time": 20.164,
+                                  "Alias": "ann",
+                                  "Async Capable": false,
+                                  "CTE Name": "ann",
+                                  "Local Dirtied Blocks": 0,
+                                  "Local Hit Blocks": 0,
+                                  "Local Read Blocks": 0,
+                                  "Local Written Blocks": 0,
+                                  "Node Type": "CTE Scan",
+                                  "Parallel Aware": false,
+                                  "Parent Relationship": "Outer",
+                                  "Plan Rows": 80,
+                                  "Plan Width": 48,
+                                  "Shared Dirtied Blocks": 0,
+                                  "Shared Hit Blocks": 2245,
+                                  "Shared Read Blocks": 1012,
+                                  "Shared Written Blocks": 0,
+                                  "Startup Cost": 0.0,
+                                  "Temp Read Blocks": 0,
+                                  "Temp Written Blocks": 0,
+                                  "Total Cost": 1.6
+                                },
+                                {
+                                  "Actual Loops": 1,
+                                  "Actual Rows": 1,
+                                  "Actual Startup Time": 0.021,
+                                  "Actual Total Time": 0.021,
+                                  "Async Capable": false,
+                                  "Hash Batches": 1,
+                                  "Hash Buckets": 1024,
+                                  "Local Dirtied Blocks": 0,
+                                  "Local Hit Blocks": 0,
+                                  "Local Read Blocks": 0,
+                                  "Local Written Blocks": 0,
+                                  "Node Type": "Hash",
+                                  "Original Hash Batches": 1,
+                                  "Original Hash Buckets": 1024,
+                                  "Parallel Aware": false,
+                                  "Parent Relationship": "Inner",
+                                  "Peak Memory Usage": 9,
+                                  "Plan Rows": 1,
+                                  "Plan Width": 8,
+                                  "Plans": [
+                                    {
+                                      "Actual Loops": 1,
+                                      "Actual Rows": 1,
+                                      "Actual Startup Time": 0.013,
+                                      "Actual Total Time": 0.013,
+                                      "Alias": "ds",
+                                      "Async Capable": false,
+                                      "Filter": "(delete_time IS NULL)",
+                                      "Local Dirtied Blocks": 0,
+                                      "Local Hit Blocks": 0,
+                                      "Local Read Blocks": 0,
+                                      "Local Written Blocks": 0,
+                                      "Node Type": "Seq Scan",
+                                      "Parallel Aware": false,
+                                      "Parent Relationship": "Outer",
+                                      "Plan Rows": 1,
+                                      "Plan Width": 8,
+                                      "Relation Name": "kb_dataset",
+                                      "Rows Removed by Filter": 0,
+                                      "Shared Dirtied Blocks": 0,
+                                      "Shared Hit Blocks": 1,
+                                      "Shared Read Blocks": 0,
+                                      "Shared Written Blocks": 0,
+                                      "Startup Cost": 0.0,
+                                      "Temp Read Blocks": 0,
+                                      "Temp Written Blocks": 0,
+                                      "Total Cost": 10.4
+                                    }
+                                  ],
+                                  "Shared Dirtied Blocks": 0,
+                                  "Shared Hit Blocks": 1,
+                                  "Shared Read Blocks": 0,
+                                  "Shared Written Blocks": 0,
+                                  "Startup Cost": 10.4,
+                                  "Temp Read Blocks": 0,
+                                  "Temp Written Blocks": 0,
+                                  "Total Cost": 10.4
+                                }
+                              ],
+                              "Shared Dirtied Blocks": 0,
+                              "Shared Hit Blocks": 2246,
+                              "Shared Read Blocks": 1012,
+                              "Shared Written Blocks": 0,
+                              "Startup Cost": 10.41,
+                              "Temp Read Blocks": 0,
+                              "Temp Written Blocks": 0,
+                              "Total Cost": 12.23
+                            },
+                            {
+                              "Actual Loops": 80,
+                              "Actual Rows": 1,
+                              "Actual Startup Time": 0.004,
+                              "Actual Total Time": 0.004,
+                              "Alias": "d",
+                              "Async Capable": false,
+                              "Filter": "((delete_time IS NULL) AND (ann.document_id = id) AND (ann.document_version_id = active_version_id))",
+                              "Index Cond": "(active_index_build_id = ann.index_build_id)",
+                              "Index Name": "idx_document_active_index_build",
+                              "Local Dirtied Blocks": 0,
+                              "Local Hit Blocks": 0,
+                              "Local Read Blocks": 0,
+                              "Local Written Blocks": 0,
+                              "Node Type": "Index Scan",
+                              "Parallel Aware": false,
+                              "Parent Relationship": "Inner",
+                              "Plan Rows": 1,
+                              "Plan Width": 24,
+                              "Relation Name": "kb_document",
+                              "Rows Removed by Filter": 0,
+                              "Rows Removed by Index Recheck": 0,
+                              "Scan Direction": "Forward",
+                              "Shared Dirtied Blocks": 0,
+                              "Shared Hit Blocks": 238,
+                              "Shared Read Blocks": 0,
+                              "Shared Written Blocks": 0,
+                              "Startup Cost": 0.28,
+                              "Temp Read Blocks": 0,
+                              "Temp Written Blocks": 0,
+                              "Total Cost": 3.55
+                            }
+                          ],
+                          "Shared Dirtied Blocks": 0,
+                          "Shared Hit Blocks": 2484,
+                          "Shared Read Blocks": 1012,
+                          "Shared Written Blocks": 0,
+                          "Startup Cost": 10.69,
+                          "Temp Read Blocks": 0,
+                          "Temp Written Blocks": 0,
+                          "Total Cost": 15.79
+                        },
+                        {
+                          "Actual Loops": 78,
+                          "Actual Rows": 5,
+                          "Actual Startup Time": 0.005,
+                          "Actual Total Time": 0.016,
+                          "Alias": "u",
+                          "Async Capable": false,
+                          "Filter": "((document_id = d.id) AND (document_version_id = d.active_version_id))",
+                          "Index Cond": "(index_build_id = d.active_index_build_id)",
+                          "Index Name": "idx_retrieval_unit_build_node",
+                          "Local Dirtied Blocks": 0,
+                          "Local Hit Blocks": 0,
+                          "Local Read Blocks": 0,
+                          "Local Written Blocks": 0,
+                          "Node Type": "Index Scan",
+                          "Parallel Aware": false,
+                          "Parent Relationship": "Inner",
+                          "Plan Rows": 1,
+                          "Plan Width": 48,
+                          "Relation Name": "kb_retrieval_unit",
+                          "Rows Removed by Filter": 0,
+                          "Rows Removed by Index Recheck": 0,
+                          "Scan Direction": "Forward",
+                          "Shared Dirtied Blocks": 0,
+                          "Shared Hit Blocks": 532,
+                          "Shared Read Blocks": 25,
+                          "Shared Written Blocks": 0,
+                          "Startup Cost": 0.29,
+                          "Temp Read Blocks": 0,
+                          "Temp Written Blocks": 0,
+                          "Total Cost": 2.29
+                        }
+                      ],
+                      "Rows Removed by Join Filter": 323,
+                      "Shared Dirtied Blocks": 0,
+                      "Shared Hit Blocks": 3016,
+                      "Shared Read Blocks": 1037,
+                      "Shared Written Blocks": 0,
+                      "Startup Cost": 10.98,
+                      "Temp Read Blocks": 0,
+                      "Temp Written Blocks": 0,
+                      "Total Cost": 18.11
+                    },
+                    {
+                      "Actual Loops": 78,
+                      "Actual Rows": 1,
+                      "Actual Startup Time": 0.004,
+                      "Actual Total Time": 0.004,
+                      "Alias": "b",
+                      "Async Capable": false,
+                      "Filter": "((state)::text = 'ACTIVE'::text)",
+                      "Index Cond": "(id = u.index_build_id)",
+                      "Index Name": "kb_index_build_pkey",
+                      "Local Dirtied Blocks": 0,
+                      "Local Hit Blocks": 0,
+                      "Local Read Blocks": 0,
+                      "Local Written Blocks": 0,
+                      "Node Type": "Index Scan",
+                      "Parallel Aware": false,
+                      "Parent Relationship": "Inner",
+                      "Plan Rows": 1,
+                      "Plan Width": 8,
+                      "Relation Name": "kb_index_build",
+                      "Rows Removed by Filter": 0,
+                      "Rows Removed by Index Recheck": 0,
+                      "Scan Direction": "Forward",
+                      "Shared Dirtied Blocks": 0,
+                      "Shared Hit Blocks": 234,
+                      "Shared Read Blocks": 0,
+                      "Shared Written Blocks": 0,
+                      "Startup Cost": 0.28,
+                      "Temp Read Blocks": 0,
+                      "Temp Written Blocks": 0,
+                      "Total Cost": 0.33
+                    }
+                  ],
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Hit Blocks": 3250,
+                  "Shared Read Blocks": 1037,
+                  "Shared Written Blocks": 0,
+                  "Startup Cost": 11.26,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0,
+                  "Total Cost": 18.44
+                }
+              ],
+              "Shared Dirtied Blocks": 0,
+              "Shared Hit Blocks": 3250,
+              "Shared Read Blocks": 1037,
+              "Shared Written Blocks": 0,
+              "Sort Key": [
+                "ann.distance"
+              ],
+              "Sort Method": "top-N heapsort",
+              "Sort Space Type": "Memory",
+              "Sort Space Used": 26,
+              "Startup Cost": 18.45,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0,
+              "Total Cost": 18.46
+            }
+          ],
+          "Shared Dirtied Blocks": 0,
+          "Shared Hit Blocks": 3250,
+          "Shared Read Blocks": 1037,
+          "Shared Written Blocks": 0,
+          "Startup Cost": 637.47,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0,
+          "Total Cost": 637.47
+        },
+        "Planning": {
+          "Local Dirtied Blocks": 0,
+          "Local Hit Blocks": 0,
+          "Local Read Blocks": 0,
+          "Local Written Blocks": 0,
+          "Shared Dirtied Blocks": 2,
+          "Shared Hit Blocks": 493,
+          "Shared Read Blocks": 29,
+          "Shared Written Blocks": 0,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0
+        },
+        "Planning Time": 5.856,
+        "Triggers": []
+      }
+    ],
+    "query": "ann_first_semantic_retrieval"
+  },
+  "fixtureIdentity": "60f353fd0cd035b438784cbcab6de607155742c2660acb50de00b7fc356a02e1",
+  "fixtureManifestSha256": "8de95714f0c96633df1e43f554e1f596a5e7ffad1aa872ce00f0aa178de3a545",
+  "gitCommit": "51729d6a5b534ba341f92add8bd55823f6685516",
+  "mode": "smoke",
+  "performanceDiagnostics": {
+    "cacheOutcomes": {
+      "HIT": 1161,
+      "MISS_REMOTE": 39
+    },
+    "degradedComponents": {},
+    "lexicalOutcomes": {
+      "admissionTimeouts": 0,
+      "executionTimeouts": 0,
+      "rejected": 0
+    },
+    "requestCount": 2100,
+    "semanticOutcomes": {
+      "admissionTimeouts": 0,
+      "annRefillExhausted": 0,
+      "annRefillRounds": 0,
+      "annRefilled": 0,
+      "annRequests": 1200,
+      "dbStatementTimeouts": 0,
+      "executionTimeouts": 0,
+      "rejected": 0
+    },
+    "stages": {
+      "lexical.activeValidationMs": {
+        "count": 1500,
+        "p50Ms": 9.771,
+        "p95Ms": 25.374,
+        "p99Ms": 43.132
+      },
+      "lexical.channelMs": {
+        "count": 1500,
+        "p50Ms": 79.196,
+        "p95Ms": 420.514,
+        "p99Ms": 507.605
+      },
+      "lexical.elasticsearchMs": {
+        "count": 1500,
+        "p50Ms": 59.943,
+        "p95Ms": 118.901,
+        "p99Ms": 145.384
+      },
+      "lexical.executionMs": {
+        "count": 1500,
+        "p50Ms": 72.22,
+        "p95Ms": 143.967,
+        "p99Ms": 182.157
+      },
+      "lexical.internalFusionMs": {
+        "count": 1500,
+        "p50Ms": 0.087,
+        "p95Ms": 0.243,
+        "p99Ms": 0.408
+      },
+      "lexical.queueWaitMs": {
+        "count": 1500,
+        "p50Ms": 0.082,
+        "p95Ms": 304.761,
+        "p99Ms": 361.297
+      },
+      "lexical.requestObservedMs": {
+        "count": 1500,
+        "p50Ms": 79.212,
+        "p95Ms": 420.533,
+        "p99Ms": 507.623
+      },
+      "semantic.channelMs": {
+        "count": 1200,
+        "p50Ms": 37.879,
+        "p95Ms": 146.64,
+        "p99Ms": 258.917
+      },
+      "semantic.embeddingCacheLookupMs": {
+        "count": 1200,
+        "p50Ms": 0.01,
+        "p95Ms": 0.056,
+        "p99Ms": 0.122
+      },
+      "semantic.embeddingMs": {
+        "count": 1200,
+        "p50Ms": 0.03,
+        "p95Ms": 0.206,
+        "p99Ms": 229.558
+      },
+      "semantic.embeddingRemoteMs": {
+        "count": 1200,
+        "p50Ms": 0.0,
+        "p95Ms": 0.0,
+        "p99Ms": 226.375
+      },
+      "semantic.executionMs": {
+        "count": 1200,
+        "p50Ms": 36.633,
+        "p95Ms": 77.31,
+        "p99Ms": 258.841
+      },
+      "semantic.queueWaitMs": {
+        "count": 1200,
+        "p50Ms": 0.074,
+        "p95Ms": 76.596,
+        "p99Ms": 105.903
+      },
+      "semantic.requestObservedMs": {
+        "count": 1200,
+        "p50Ms": 37.892,
+        "p95Ms": 146.749,
+        "p99Ms": 258.928
+      },
+      "semantic.vectorSearchMs": {
+        "count": 1200,
+        "p50Ms": 35.092,
+        "p95Ms": 62.584,
+        "p99Ms": 84.237
+      }
+    }
+  },
+  "preflight": {
+    "elasticsearch": {
+      "benchmarkIdentity": "60f353fd0cd035b438784cbcab6de607155742c2660acb50de00b7fc356a02e1",
+      "datasetRetrievalUnits": 20200,
+      "fixtureIdentity": "60f353fd0cd035b438784cbcab6de607155742c2660acb50de00b7fc356a02e1",
+      "fixtureRetrievalUnits": 20200,
+      "index": "modelrag-retrieval-units-v2"
+    },
+    "expected": {
+      "activeBuildCount": 2000,
+      "activeDocuments": 2000,
+      "activeRetrievalUnits": 20000,
+      "embeddingProfile": "qwen3-v1",
+      "fixtureIdentity": "60f353fd0cd035b438784cbcab6de607155742c2660acb50de00b7fc356a02e1",
+      "staleRetrievalUnits": 200,
+      "vectorDimension": 1024
+    },
+    "postgres": {
+      "activeBuildCount": 2000,
+      "activeDocuments": 2000,
+      "activeRetrievalUnits": 20000,
+      "embeddingProfile": "qwen3-v1",
+      "fixtureIdentity": "60f353fd0cd035b438784cbcab6de607155742c2660acb50de00b7fc356a02e1",
+      "staleRetrievalUnits": 200,
+      "vectorCount": 20200,
+      "vectorDimension": 1024
+    }
+  },
+  "results": [
+    {
+      "activeBuildTruncationCount": 0,
+      "boundedResultFailures": 0,
+      "concurrency": 1,
+      "degraded": 0,
+      "degradedRate": 0.0,
+      "durationSeconds": 6.83,
+      "embeddingCacheOutcomes": {
+        "HIT": 91,
+        "MISS_REMOTE": 9
+      },
+      "errorRate": 0.0,
+      "errors": 0,
+      "invalidEvidenceCount": 0,
+      "missingServerJavaVersionCount": 0,
+      "mode": "semantic",
+      "noEvidenceCount": 0,
+      "p50Ms": 45.394,
+      "p95Ms": 278.919,
+      "p99Ms": 299.339,
+      "performanceLatencyMs": {
+        "semantic.channelMs": {
+          "count": 100,
+          "p50": 17.752,
+          "p95": 253.845,
+          "p99": 262.73
+        },
+        "semantic.embeddingCacheLookupMs": {
+          "count": 100,
+          "p50": 0.033,
+          "p95": 0.065,
+          "p99": 0.077
+        },
+        "semantic.embeddingMs": {
+          "count": 100,
+          "p50": 0.089,
+          "p95": 214.768,
+          "p99": 231.236
+        },
+        "semantic.embeddingRemoteMs": {
+          "count": 100,
+          "p50": 0.0,
+          "p95": 212.456,
+          "p99": 228.75
+        },
+        "semantic.executionMs": {
+          "count": 100,
+          "p50": 17.509,
+          "p95": 253.668,
+          "p99": 262.567
+        },
+        "semantic.queueWaitMs": {
+          "count": 100,
+          "p50": 0.078,
+          "p95": 0.116,
+          "p99": 0.143
+        },
+        "semantic.requestObservedMs": {
+          "count": 100,
+          "p50": 17.779,
+          "p95": 253.866,
+          "p99": 262.749
+        },
+        "semantic.vectorSearchMs": {
+          "count": 100,
+          "p50": 17.384,
+          "p95": 25.926,
+          "p99": 53.303
+        }
+      },
+      "requestLatencyMs": {
+        "p50": 45.394,
+        "p95": 278.919,
+        "p99": 299.339
+      },
+      "requests": 100,
+      "sentinelRecallFailures": 0,
+      "serverJavaVersions": [
+        "21.0.10"
+      ],
+      "stageP95Ms": {
+        "endpointTotal": 270.0,
+        "fusion": 0.0,
+        "semantic": 253.0,
+        "total": 261.0
+      },
+      "staleCandidateCount": 0,
+      "throughputRequestsPerSecond": 14.64,
+      "timeoutComponents": {},
+      "timeoutPlateauCount": 0,
+      "timeoutRate": 0.0,
+      "timeouts": 0,
+      "warmupDiagnostics": {
+        "cacheOutcomes": {
+          "MISS_REMOTE": 10
+        },
+        "degradedComponents": {
+          "SEMANTIC_TIMEOUT": 2
+        },
+        "lexicalOutcomes": {
+          "admissionTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "requestCount": 10,
+        "semanticOutcomes": {
+          "admissionTimeouts": 0,
+          "annRefillExhausted": 0,
+          "annRefillRounds": 0,
+          "annRefilled": 0,
+          "annRequests": 8,
+          "dbStatementTimeouts": 0,
+          "executionTimeouts": 2,
+          "rejected": 0
+        },
+        "stages": {
+          "semantic.channelMs": {
+            "count": 9,
+            "p50Ms": 344.656,
+            "p95Ms": 822.446,
+            "p99Ms": 822.446
+          },
+          "semantic.embeddingCacheLookupMs": {
+            "count": 10,
+            "p50Ms": 0.012,
+            "p95Ms": 0.017,
+            "p99Ms": 0.017
+          },
+          "semantic.embeddingMs": {
+            "count": 10,
+            "p50Ms": 223.859,
+            "p95Ms": 407.257,
+            "p99Ms": 407.257
+          },
+          "semantic.embeddingRemoteMs": {
+            "count": 10,
+            "p50Ms": 221.65,
+            "p95Ms": 402.051,
+            "p99Ms": 402.051
+          },
+          "semantic.executionMs": {
+            "count": 9,
+            "p50Ms": 343.995,
+            "p95Ms": 821.034,
+            "p99Ms": 821.034
+          },
+          "semantic.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.509,
+            "p95Ms": 1.582,
+            "p99Ms": 1.582
+          },
+          "semantic.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 344.714,
+            "p95Ms": 810.596,
+            "p99Ms": 810.596
+          },
+          "semantic.vectorSearchMs": {
+            "count": 9,
+            "p50Ms": 127.385,
+            "p95Ms": 530.837,
+            "p99Ms": 530.837
+          }
+        }
+      },
+      "warmupRequests": 10,
+      "workload": "semantic-only"
+    },
+    {
+      "activeBuildTruncationCount": 0,
+      "boundedResultFailures": 0,
+      "concurrency": 8,
+      "degraded": 0,
+      "degradedRate": 0.0,
+      "durationSeconds": 1.197,
+      "embeddingCacheOutcomes": {
+        "HIT": 100
+      },
+      "errorRate": 0.0,
+      "errors": 0,
+      "invalidEvidenceCount": 0,
+      "missingServerJavaVersionCount": 0,
+      "mode": "semantic",
+      "noEvidenceCount": 0,
+      "p50Ms": 97.269,
+      "p95Ms": 147.996,
+      "p99Ms": 158.073,
+      "performanceLatencyMs": {
+        "semantic.channelMs": {
+          "count": 100,
+          "p50": 40.086,
+          "p95": 59.24,
+          "p99": 69.266
+        },
+        "semantic.embeddingCacheLookupMs": {
+          "count": 100,
+          "p50": 0.043,
+          "p95": 0.134,
+          "p99": 0.229
+        },
+        "semantic.embeddingMs": {
+          "count": 100,
+          "p50": 0.095,
+          "p95": 0.263,
+          "p99": 0.374
+        },
+        "semantic.embeddingRemoteMs": {
+          "count": 100,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0
+        },
+        "semantic.executionMs": {
+          "count": 100,
+          "p50": 39.894,
+          "p95": 59.103,
+          "p99": 68.876
+        },
+        "semantic.queueWaitMs": {
+          "count": 100,
+          "p50": 0.118,
+          "p95": 0.585,
+          "p99": 2.001
+        },
+        "semantic.requestObservedMs": {
+          "count": 100,
+          "p50": 40.108,
+          "p95": 59.268,
+          "p99": 69.283
+        },
+        "semantic.vectorSearchMs": {
+          "count": 100,
+          "p50": 39.565,
+          "p95": 58.974,
+          "p99": 68.636
+        }
+      },
+      "requestLatencyMs": {
+        "p50": 97.269,
+        "p95": 147.996,
+        "p99": 158.073
+      },
+      "requests": 100,
+      "sentinelRecallFailures": 0,
+      "serverJavaVersions": [
+        "21.0.10"
+      ],
+      "stageP95Ms": {
+        "endpointTotal": 131.0,
+        "fusion": 0.0,
+        "semantic": 59.0,
+        "total": 98.0
+      },
+      "staleCandidateCount": 0,
+      "throughputRequestsPerSecond": 83.546,
+      "timeoutComponents": {},
+      "timeoutPlateauCount": 0,
+      "timeoutRate": 0.0,
+      "timeouts": 0,
+      "warmupDiagnostics": {
+        "cacheOutcomes": {
+          "HIT": 10
+        },
+        "degradedComponents": {},
+        "lexicalOutcomes": {
+          "admissionTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "requestCount": 10,
+        "semanticOutcomes": {
+          "admissionTimeouts": 0,
+          "annRefillExhausted": 0,
+          "annRefillRounds": 0,
+          "annRefilled": 0,
+          "annRequests": 10,
+          "dbStatementTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "stages": {
+          "semantic.channelMs": {
+            "count": 10,
+            "p50Ms": 45.469,
+            "p95Ms": 67.136,
+            "p99Ms": 67.136
+          },
+          "semantic.embeddingCacheLookupMs": {
+            "count": 10,
+            "p50Ms": 0.047,
+            "p95Ms": 0.072,
+            "p99Ms": 0.072
+          },
+          "semantic.embeddingMs": {
+            "count": 10,
+            "p50Ms": 0.092,
+            "p95Ms": 0.295,
+            "p99Ms": 0.295
+          },
+          "semantic.embeddingRemoteMs": {
+            "count": 10,
+            "p50Ms": 0.0,
+            "p95Ms": 0.0,
+            "p99Ms": 0.0
+          },
+          "semantic.executionMs": {
+            "count": 10,
+            "p50Ms": 45.198,
+            "p95Ms": 66.961,
+            "p99Ms": 66.961
+          },
+          "semantic.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.104,
+            "p95Ms": 0.354,
+            "p99Ms": 0.354
+          },
+          "semantic.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 45.486,
+            "p95Ms": 67.318,
+            "p99Ms": 67.318
+          },
+          "semantic.vectorSearchMs": {
+            "count": 10,
+            "p50Ms": 45.074,
+            "p95Ms": 66.532,
+            "p99Ms": 66.532
+          }
+        }
+      },
+      "warmupRequests": 10,
+      "workload": "semantic-only"
+    },
+    {
+      "activeBuildTruncationCount": 0,
+      "boundedResultFailures": 0,
+      "concurrency": 32,
+      "degraded": 0,
+      "degradedRate": 0.0,
+      "durationSeconds": 0.617,
+      "embeddingCacheOutcomes": {
+        "HIT": 100
+      },
+      "errorRate": 0.0,
+      "errors": 0,
+      "invalidEvidenceCount": 0,
+      "missingServerJavaVersionCount": 0,
+      "mode": "semantic",
+      "noEvidenceCount": 0,
+      "p50Ms": 185.966,
+      "p95Ms": 237.154,
+      "p99Ms": 246.607,
+      "performanceLatencyMs": {
+        "semantic.channelMs": {
+          "count": 100,
+          "p50": 110.36,
+          "p95": 136.651,
+          "p99": 155.582
+        },
+        "semantic.embeddingCacheLookupMs": {
+          "count": 100,
+          "p50": 0.023,
+          "p95": 0.086,
+          "p99": 0.333
+        },
+        "semantic.embeddingMs": {
+          "count": 100,
+          "p50": 0.065,
+          "p95": 0.21,
+          "p99": 0.67
+        },
+        "semantic.embeddingRemoteMs": {
+          "count": 100,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0
+        },
+        "semantic.executionMs": {
+          "count": 100,
+          "p50": 42.222,
+          "p95": 64.457,
+          "p99": 80.335
+        },
+        "semantic.queueWaitMs": {
+          "count": 100,
+          "p50": 66.426,
+          "p95": 94.033,
+          "p99": 105.903
+        },
+        "semantic.requestObservedMs": {
+          "count": 100,
+          "p50": 110.381,
+          "p95": 136.674,
+          "p99": 155.605
+        },
+        "semantic.vectorSearchMs": {
+          "count": 100,
+          "p50": 41.723,
+          "p95": 64.358,
+          "p99": 80.272
+        }
+      },
+      "requestLatencyMs": {
+        "p50": 185.966,
+        "p95": 237.154,
+        "p99": 246.607
+      },
+      "requests": 100,
+      "sentinelRecallFailures": 0,
+      "serverJavaVersions": [
+        "21.0.10"
+      ],
+      "stageP95Ms": {
+        "endpointTotal": 187.0,
+        "fusion": 0.0,
+        "semantic": 64.0,
+        "total": 161.0
+      },
+      "staleCandidateCount": 0,
+      "throughputRequestsPerSecond": 162.066,
+      "timeoutComponents": {},
+      "timeoutPlateauCount": 0,
+      "timeoutRate": 0.0,
+      "timeouts": 0,
+      "warmupDiagnostics": {
+        "cacheOutcomes": {
+          "HIT": 10
+        },
+        "degradedComponents": {},
+        "lexicalOutcomes": {
+          "admissionTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "requestCount": 10,
+        "semanticOutcomes": {
+          "admissionTimeouts": 0,
+          "annRefillExhausted": 0,
+          "annRefillRounds": 0,
+          "annRefilled": 0,
+          "annRequests": 10,
+          "dbStatementTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "stages": {
+          "semantic.channelMs": {
+            "count": 10,
+            "p50Ms": 30.064,
+            "p95Ms": 51.195,
+            "p99Ms": 51.195
+          },
+          "semantic.embeddingCacheLookupMs": {
+            "count": 10,
+            "p50Ms": 0.015,
+            "p95Ms": 0.22,
+            "p99Ms": 0.22
+          },
+          "semantic.embeddingMs": {
+            "count": 10,
+            "p50Ms": 0.057,
+            "p95Ms": 4.206,
+            "p99Ms": 4.206
+          },
+          "semantic.embeddingRemoteMs": {
+            "count": 10,
+            "p50Ms": 0.0,
+            "p95Ms": 0.0,
+            "p99Ms": 0.0
+          },
+          "semantic.executionMs": {
+            "count": 10,
+            "p50Ms": 28.27,
+            "p95Ms": 31.878,
+            "p99Ms": 31.878
+          },
+          "semantic.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.235,
+            "p95Ms": 22.208,
+            "p99Ms": 22.208
+          },
+          "semantic.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 30.09,
+            "p95Ms": 51.235,
+            "p99Ms": 51.235
+          },
+          "semantic.vectorSearchMs": {
+            "count": 10,
+            "p50Ms": 27.95,
+            "p95Ms": 31.833,
+            "p99Ms": 31.833
+          }
+        }
+      },
+      "warmupRequests": 10,
+      "workload": "semantic-only"
+    },
+    {
+      "activeBuildTruncationCount": 0,
+      "boundedResultFailures": 0,
+      "concurrency": 1,
+      "degraded": 0,
+      "degradedRate": 0.0,
+      "durationSeconds": 9.463,
+      "embeddingCacheOutcomes": {},
+      "errorRate": 0.0,
+      "errors": 0,
+      "invalidEvidenceCount": 0,
+      "missingServerJavaVersionCount": 0,
+      "mode": "lexical",
+      "noEvidenceCount": 0,
+      "p50Ms": 91.589,
+      "p95Ms": 121.073,
+      "p99Ms": 141.614,
+      "performanceLatencyMs": {
+        "lexical.activeValidationMs": {
+          "count": 100,
+          "p50": 7.425,
+          "p95": 10.303,
+          "p99": 14.422
+        },
+        "lexical.channelMs": {
+          "count": 100,
+          "p50": 58.572,
+          "p95": 83.235,
+          "p99": 102.612
+        },
+        "lexical.elasticsearchMs": {
+          "count": 100,
+          "p50": 49.46,
+          "p95": 70.322,
+          "p99": 86.876
+        },
+        "lexical.executionMs": {
+          "count": 100,
+          "p50": 58.449,
+          "p95": 83.099,
+          "p99": 102.503
+        },
+        "lexical.internalFusionMs": {
+          "count": 100,
+          "p50": 0.2,
+          "p95": 0.332,
+          "p99": 0.573
+        },
+        "lexical.queueWaitMs": {
+          "count": 100,
+          "p50": 0.08,
+          "p95": 0.113,
+          "p99": 0.132
+        },
+        "lexical.requestObservedMs": {
+          "count": 100,
+          "p50": 58.599,
+          "p95": 83.247,
+          "p99": 102.632
+        }
+      },
+      "requestLatencyMs": {
+        "p50": 91.589,
+        "p95": 121.073,
+        "p99": 141.614
+      },
+      "requests": 100,
+      "sentinelRecallFailures": 0,
+      "serverJavaVersions": [
+        "21.0.10"
+      ],
+      "stageP95Ms": {
+        "endpointTotal": 106.0,
+        "fusion": 0.0,
+        "lexical": 83.0,
+        "total": 98.0
+      },
+      "staleCandidateCount": 0,
+      "throughputRequestsPerSecond": 10.567,
+      "timeoutComponents": {},
+      "timeoutPlateauCount": 0,
+      "timeoutRate": 0.0,
+      "timeouts": 0,
+      "warmupDiagnostics": {
+        "cacheOutcomes": {},
+        "degradedComponents": {},
+        "lexicalOutcomes": {
+          "admissionTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "requestCount": 10,
+        "semanticOutcomes": {
+          "admissionTimeouts": 0,
+          "annRefillExhausted": 0,
+          "annRefillRounds": 0,
+          "annRefilled": 0,
+          "annRequests": 0,
+          "dbStatementTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "stages": {
+          "lexical.activeValidationMs": {
+            "count": 10,
+            "p50Ms": 10.177,
+            "p95Ms": 18.163,
+            "p99Ms": 18.163
+          },
+          "lexical.channelMs": {
+            "count": 10,
+            "p50Ms": 101.869,
+            "p95Ms": 493.682,
+            "p99Ms": 493.682
+          },
+          "lexical.elasticsearchMs": {
+            "count": 10,
+            "p50Ms": 87.978,
+            "p95Ms": 430.664,
+            "p99Ms": 430.664
+          },
+          "lexical.executionMs": {
+            "count": 10,
+            "p50Ms": 101.254,
+            "p95Ms": 486.289,
+            "p99Ms": 486.289
+          },
+          "lexical.internalFusionMs": {
+            "count": 10,
+            "p50Ms": 0.443,
+            "p95Ms": 4.338,
+            "p99Ms": 4.338
+          },
+          "lexical.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.607,
+            "p95Ms": 5.202,
+            "p99Ms": 5.202
+          },
+          "lexical.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 101.895,
+            "p95Ms": 494.376,
+            "p99Ms": 494.376
+          }
+        }
+      },
+      "warmupRequests": 10,
+      "workload": "lexical-only"
+    },
+    {
+      "activeBuildTruncationCount": 0,
+      "boundedResultFailures": 0,
+      "concurrency": 8,
+      "degraded": 0,
+      "degradedRate": 0.0,
+      "durationSeconds": 2.239,
+      "embeddingCacheOutcomes": {},
+      "errorRate": 0.0,
+      "errors": 0,
+      "invalidEvidenceCount": 0,
+      "missingServerJavaVersionCount": 0,
+      "mode": "lexical",
+      "noEvidenceCount": 0,
+      "p50Ms": 175.41,
+      "p95Ms": 235.321,
+      "p99Ms": 253.291,
+      "performanceLatencyMs": {
+        "lexical.activeValidationMs": {
+          "count": 100,
+          "p50": 17.563,
+          "p95": 26.198,
+          "p99": 29.759
+        },
+        "lexical.channelMs": {
+          "count": 100,
+          "p50": 111.9,
+          "p95": 149.303,
+          "p99": 164.036
+        },
+        "lexical.elasticsearchMs": {
+          "count": 100,
+          "p50": 92.383,
+          "p95": 128.385,
+          "p99": 139.999
+        },
+        "lexical.executionMs": {
+          "count": 100,
+          "p50": 111.808,
+          "p95": 149.133,
+          "p99": 163.882
+        },
+        "lexical.internalFusionMs": {
+          "count": 100,
+          "p50": 0.149,
+          "p95": 0.376,
+          "p99": 0.439
+        },
+        "lexical.queueWaitMs": {
+          "count": 100,
+          "p50": 0.106,
+          "p95": 0.325,
+          "p99": 0.464
+        },
+        "lexical.requestObservedMs": {
+          "count": 100,
+          "p50": 111.939,
+          "p95": 149.324,
+          "p99": 164.053
+        }
+      },
+      "requestLatencyMs": {
+        "p50": 175.41,
+        "p95": 235.321,
+        "p99": 253.291
+      },
+      "requests": 100,
+      "sentinelRecallFailures": 0,
+      "serverJavaVersions": [
+        "21.0.10"
+      ],
+      "stageP95Ms": {
+        "endpointTotal": 224.0,
+        "fusion": 0.0,
+        "lexical": 149.0,
+        "total": 194.0
+      },
+      "staleCandidateCount": 0,
+      "throughputRequestsPerSecond": 44.66,
+      "timeoutComponents": {},
+      "timeoutPlateauCount": 0,
+      "timeoutRate": 0.0,
+      "timeouts": 0,
+      "warmupDiagnostics": {
+        "cacheOutcomes": {},
+        "degradedComponents": {},
+        "lexicalOutcomes": {
+          "admissionTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "requestCount": 10,
+        "semanticOutcomes": {
+          "admissionTimeouts": 0,
+          "annRefillExhausted": 0,
+          "annRefillRounds": 0,
+          "annRefilled": 0,
+          "annRequests": 0,
+          "dbStatementTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "stages": {
+          "lexical.activeValidationMs": {
+            "count": 10,
+            "p50Ms": 16.487,
+            "p95Ms": 21.502,
+            "p99Ms": 21.502
+          },
+          "lexical.channelMs": {
+            "count": 10,
+            "p50Ms": 101.453,
+            "p95Ms": 120.341,
+            "p99Ms": 120.341
+          },
+          "lexical.elasticsearchMs": {
+            "count": 10,
+            "p50Ms": 81.192,
+            "p95Ms": 105.416,
+            "p99Ms": 105.416
+          },
+          "lexical.executionMs": {
+            "count": 10,
+            "p50Ms": 101.183,
+            "p95Ms": 120.272,
+            "p99Ms": 120.272
+          },
+          "lexical.internalFusionMs": {
+            "count": 10,
+            "p50Ms": 0.128,
+            "p95Ms": 0.19,
+            "p99Ms": 0.19
+          },
+          "lexical.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.062,
+            "p95Ms": 0.389,
+            "p99Ms": 0.389
+          },
+          "lexical.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 101.517,
+            "p95Ms": 120.363,
+            "p99Ms": 120.363
+          }
+        }
+      },
+      "warmupRequests": 10,
+      "workload": "lexical-only"
+    },
+    {
+      "activeBuildTruncationCount": 0,
+      "boundedResultFailures": 0,
+      "concurrency": 32,
+      "degraded": 0,
+      "degradedRate": 0.0,
+      "durationSeconds": 1.486,
+      "embeddingCacheOutcomes": {},
+      "errorRate": 0.0,
+      "errors": 0,
+      "invalidEvidenceCount": 0,
+      "missingServerJavaVersionCount": 0,
+      "mode": "lexical",
+      "noEvidenceCount": 0,
+      "p50Ms": 435.811,
+      "p95Ms": 558.564,
+      "p99Ms": 595.036,
+      "performanceLatencyMs": {
+        "lexical.activeValidationMs": {
+          "count": 100,
+          "p50": 16.403,
+          "p95": 37.231,
+          "p99": 52.007
+        },
+        "lexical.channelMs": {
+          "count": 100,
+          "p50": 370.218,
+          "p95": 447.959,
+          "p99": 464.152
+        },
+        "lexical.elasticsearchMs": {
+          "count": 100,
+          "p50": 89.633,
+          "p95": 125.312,
+          "p99": 144.724
+        },
+        "lexical.executionMs": {
+          "count": 100,
+          "p50": 108.755,
+          "p95": 154.579,
+          "p99": 162.699
+        },
+        "lexical.internalFusionMs": {
+          "count": 100,
+          "p50": 0.14,
+          "p95": 0.454,
+          "p99": 0.867
+        },
+        "lexical.queueWaitMs": {
+          "count": 100,
+          "p50": 269.215,
+          "p95": 318.38,
+          "p99": 329.329
+        },
+        "lexical.requestObservedMs": {
+          "count": 100,
+          "p50": 370.233,
+          "p95": 448.277,
+          "p99": 464.161
+        }
+      },
+      "requestLatencyMs": {
+        "p50": 435.811,
+        "p95": 558.564,
+        "p99": 595.036
+      },
+      "requests": 100,
+      "sentinelRecallFailures": 0,
+      "serverJavaVersions": [
+        "21.0.10"
+      ],
+      "stageP95Ms": {
+        "endpointTotal": 551.0,
+        "fusion": 0.0,
+        "lexical": 154.0,
+        "total": 502.0
+      },
+      "staleCandidateCount": 0,
+      "throughputRequestsPerSecond": 67.295,
+      "timeoutComponents": {},
+      "timeoutPlateauCount": 0,
+      "timeoutRate": 0.0,
+      "timeouts": 0,
+      "warmupDiagnostics": {
+        "cacheOutcomes": {},
+        "degradedComponents": {},
+        "lexicalOutcomes": {
+          "admissionTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "requestCount": 10,
+        "semanticOutcomes": {
+          "admissionTimeouts": 0,
+          "annRefillExhausted": 0,
+          "annRefillRounds": 0,
+          "annRefilled": 0,
+          "annRequests": 0,
+          "dbStatementTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "stages": {
+          "lexical.activeValidationMs": {
+            "count": 10,
+            "p50Ms": 12.731,
+            "p95Ms": 16.529,
+            "p99Ms": 16.529
+          },
+          "lexical.channelMs": {
+            "count": 10,
+            "p50Ms": 105.852,
+            "p95Ms": 151.322,
+            "p99Ms": 151.322
+          },
+          "lexical.elasticsearchMs": {
+            "count": 10,
+            "p50Ms": 81.903,
+            "p95Ms": 96.519,
+            "p99Ms": 96.519
+          },
+          "lexical.executionMs": {
+            "count": 10,
+            "p50Ms": 97.58,
+            "p95Ms": 112.377,
+            "p99Ms": 112.377
+          },
+          "lexical.internalFusionMs": {
+            "count": 10,
+            "p50Ms": 0.134,
+            "p95Ms": 0.31,
+            "p99Ms": 0.31
+          },
+          "lexical.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.153,
+            "p95Ms": 71.788,
+            "p99Ms": 71.788
+          },
+          "lexical.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 105.867,
+            "p95Ms": 151.337,
+            "p99Ms": 151.337
+          }
+        }
+      },
+      "warmupRequests": 10,
+      "workload": "lexical-only"
+    },
+    {
+      "activeBuildTruncationCount": 0,
+      "boundedResultFailures": 0,
+      "concurrency": 1,
+      "degraded": 0,
+      "degradedRate": 0.0,
+      "durationSeconds": 9.617,
+      "embeddingCacheOutcomes": {
+        "HIT": 90,
+        "MISS_REMOTE": 10
+      },
+      "errorRate": 0.0,
+      "errors": 0,
+      "invalidEvidenceCount": 0,
+      "missingServerJavaVersionCount": 0,
+      "mode": "hybrid",
+      "noEvidenceCount": 0,
+      "p50Ms": 73.8,
+      "p95Ms": 256.403,
+      "p99Ms": 332.664,
+      "performanceLatencyMs": {
+        "lexical.activeValidationMs": {
+          "count": 100,
+          "p50": 7.937,
+          "p95": 9.836,
+          "p99": 12.418
+        },
+        "lexical.channelMs": {
+          "count": 100,
+          "p50": 45.447,
+          "p95": 52.228,
+          "p99": 67.277
+        },
+        "lexical.elasticsearchMs": {
+          "count": 100,
+          "p50": 36.084,
+          "p95": 41.019,
+          "p99": 52.69
+        },
+        "lexical.executionMs": {
+          "count": 100,
+          "p50": 45.364,
+          "p95": 52.15,
+          "p99": 67.087
+        },
+        "lexical.internalFusionMs": {
+          "count": 100,
+          "p50": 0.098,
+          "p95": 0.141,
+          "p99": 0.238
+        },
+        "lexical.queueWaitMs": {
+          "count": 100,
+          "p50": 0.064,
+          "p95": 0.094,
+          "p99": 0.173
+        },
+        "lexical.requestObservedMs": {
+          "count": 100,
+          "p50": 45.459,
+          "p95": 52.24,
+          "p99": 67.292
+        },
+        "semantic.channelMs": {
+          "count": 100,
+          "p50": 18.587,
+          "p95": 221.782,
+          "p99": 301.653
+        },
+        "semantic.embeddingCacheLookupMs": {
+          "count": 100,
+          "p50": 0.01,
+          "p95": 0.028,
+          "p99": 0.039
+        },
+        "semantic.embeddingMs": {
+          "count": 100,
+          "p50": 0.04,
+          "p95": 204.77,
+          "p99": 285.479
+        },
+        "semantic.embeddingRemoteMs": {
+          "count": 100,
+          "p50": 0.0,
+          "p95": 201.201,
+          "p99": 280.963
+        },
+        "semantic.executionMs": {
+          "count": 100,
+          "p50": 18.514,
+          "p95": 221.699,
+          "p99": 301.553
+        },
+        "semantic.queueWaitMs": {
+          "count": 100,
+          "p50": 0.058,
+          "p95": 0.082,
+          "p99": 0.13
+        },
+        "semantic.requestObservedMs": {
+          "count": 100,
+          "p50": 18.628,
+          "p95": 221.793,
+          "p99": 301.663
+        },
+        "semantic.vectorSearchMs": {
+          "count": 100,
+          "p50": 18.174,
+          "p95": 24.826,
+          "p99": 26.332
+        }
+      },
+      "requestLatencyMs": {
+        "p50": 73.8,
+        "p95": 256.403,
+        "p99": 332.664
+      },
+      "requests": 100,
+      "sentinelRecallFailures": 0,
+      "serverJavaVersions": [
+        "21.0.10"
+      ],
+      "stageP95Ms": {
+        "endpointTotal": 235.0,
+        "fusion": 0.0,
+        "lexical": 52.0,
+        "semantic": 221.0,
+        "total": 228.0
+      },
+      "staleCandidateCount": 0,
+      "throughputRequestsPerSecond": 10.398,
+      "timeoutComponents": {},
+      "timeoutPlateauCount": 0,
+      "timeoutRate": 0.0,
+      "timeouts": 0,
+      "warmupDiagnostics": {
+        "cacheOutcomes": {
+          "MISS_REMOTE": 10
+        },
+        "degradedComponents": {},
+        "lexicalOutcomes": {
+          "admissionTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "requestCount": 10,
+        "semanticOutcomes": {
+          "admissionTimeouts": 0,
+          "annRefillExhausted": 0,
+          "annRefillRounds": 0,
+          "annRefilled": 0,
+          "annRequests": 10,
+          "dbStatementTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "stages": {
+          "lexical.activeValidationMs": {
+            "count": 10,
+            "p50Ms": 8.106,
+            "p95Ms": 16.284,
+            "p99Ms": 16.284
+          },
+          "lexical.channelMs": {
+            "count": 10,
+            "p50Ms": 46.884,
+            "p95Ms": 74.673,
+            "p99Ms": 74.673
+          },
+          "lexical.elasticsearchMs": {
+            "count": 10,
+            "p50Ms": 36.996,
+            "p95Ms": 56.631,
+            "p99Ms": 56.631
+          },
+          "lexical.executionMs": {
+            "count": 10,
+            "p50Ms": 46.708,
+            "p95Ms": 74.535,
+            "p99Ms": 74.535
+          },
+          "lexical.internalFusionMs": {
+            "count": 10,
+            "p50Ms": 0.104,
+            "p95Ms": 0.193,
+            "p99Ms": 0.193
+          },
+          "lexical.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.061,
+            "p95Ms": 0.113,
+            "p99Ms": 0.113
+          },
+          "lexical.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 46.896,
+            "p95Ms": 74.754,
+            "p99Ms": 74.754
+          },
+          "semantic.channelMs": {
+            "count": 10,
+            "p50Ms": 260.376,
+            "p95Ms": 444.941,
+            "p99Ms": 444.941
+          },
+          "semantic.embeddingCacheLookupMs": {
+            "count": 10,
+            "p50Ms": 0.011,
+            "p95Ms": 0.014,
+            "p99Ms": 0.014
+          },
+          "semantic.embeddingMs": {
+            "count": 10,
+            "p50Ms": 234.515,
+            "p95Ms": 397.567,
+            "p99Ms": 397.567
+          },
+          "semantic.embeddingRemoteMs": {
+            "count": 10,
+            "p50Ms": 229.732,
+            "p95Ms": 389.268,
+            "p99Ms": 389.268
+          },
+          "semantic.executionMs": {
+            "count": 10,
+            "p50Ms": 260.285,
+            "p95Ms": 444.748,
+            "p99Ms": 444.748
+          },
+          "semantic.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.072,
+            "p95Ms": 0.109,
+            "p99Ms": 0.109
+          },
+          "semantic.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 260.389,
+            "p95Ms": 444.956,
+            "p99Ms": 444.956
+          },
+          "semantic.vectorSearchMs": {
+            "count": 10,
+            "p50Ms": 23.247,
+            "p95Ms": 47.133,
+            "p99Ms": 47.133
+          }
+        }
+      },
+      "warmupRequests": 10,
+      "workload": "hybrid"
+    },
+    {
+      "activeBuildTruncationCount": 0,
+      "boundedResultFailures": 0,
+      "concurrency": 8,
+      "degraded": 0,
+      "degradedRate": 0.0,
+      "durationSeconds": 1.789,
+      "embeddingCacheOutcomes": {
+        "HIT": 100
+      },
+      "errorRate": 0.0,
+      "errors": 0,
+      "invalidEvidenceCount": 0,
+      "missingServerJavaVersionCount": 0,
+      "mode": "hybrid",
+      "noEvidenceCount": 0,
+      "p50Ms": 130.579,
+      "p95Ms": 245.107,
+      "p99Ms": 259.975,
+      "performanceLatencyMs": {
+        "lexical.activeValidationMs": {
+          "count": 100,
+          "p50": 11.737,
+          "p95": 21.082,
+          "p99": 33.259
+        },
+        "lexical.channelMs": {
+          "count": 100,
+          "p50": 79.459,
+          "p95": 170.671,
+          "p99": 197.117
+        },
+        "lexical.elasticsearchMs": {
+          "count": 100,
+          "p50": 65.303,
+          "p95": 141.758,
+          "p99": 164.866
+        },
+        "lexical.executionMs": {
+          "count": 100,
+          "p50": 79.389,
+          "p95": 170.591,
+          "p99": 197.034
+        },
+        "lexical.internalFusionMs": {
+          "count": 100,
+          "p50": 0.106,
+          "p95": 0.252,
+          "p99": 0.31
+        },
+        "lexical.queueWaitMs": {
+          "count": 100,
+          "p50": 0.073,
+          "p95": 0.207,
+          "p99": 0.423
+        },
+        "lexical.requestObservedMs": {
+          "count": 100,
+          "p50": 79.465,
+          "p95": 170.69,
+          "p99": 197.13
+        },
+        "semantic.channelMs": {
+          "count": 100,
+          "p50": 39.319,
+          "p95": 84.501,
+          "p99": 100.853
+        },
+        "semantic.embeddingCacheLookupMs": {
+          "count": 100,
+          "p50": 0.01,
+          "p95": 0.05,
+          "p99": 0.064
+        },
+        "semantic.embeddingMs": {
+          "count": 100,
+          "p50": 0.03,
+          "p95": 0.106,
+          "p99": 0.161
+        },
+        "semantic.embeddingRemoteMs": {
+          "count": 100,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0
+        },
+        "semantic.executionMs": {
+          "count": 100,
+          "p50": 39.234,
+          "p95": 84.297,
+          "p99": 100.674
+        },
+        "semantic.queueWaitMs": {
+          "count": 100,
+          "p50": 0.072,
+          "p95": 0.332,
+          "p99": 0.928
+        },
+        "semantic.requestObservedMs": {
+          "count": 100,
+          "p50": 39.348,
+          "p95": 84.514,
+          "p99": 100.865
+        },
+        "semantic.vectorSearchMs": {
+          "count": 100,
+          "p50": 39.158,
+          "p95": 84.237,
+          "p99": 100.608
+        }
+      },
+      "requestLatencyMs": {
+        "p50": 130.579,
+        "p95": 245.107,
+        "p99": 259.975
+      },
+      "requests": 100,
+      "sentinelRecallFailures": 0,
+      "serverJavaVersions": [
+        "21.0.10"
+      ],
+      "stageP95Ms": {
+        "endpointTotal": 235.0,
+        "fusion": 0.0,
+        "lexical": 170.0,
+        "semantic": 84.0,
+        "total": 210.0
+      },
+      "staleCandidateCount": 0,
+      "throughputRequestsPerSecond": 55.889,
+      "timeoutComponents": {},
+      "timeoutPlateauCount": 0,
+      "timeoutRate": 0.0,
+      "timeouts": 0,
+      "warmupDiagnostics": {
+        "cacheOutcomes": {
+          "HIT": 10
+        },
+        "degradedComponents": {},
+        "lexicalOutcomes": {
+          "admissionTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "requestCount": 10,
+        "semanticOutcomes": {
+          "admissionTimeouts": 0,
+          "annRefillExhausted": 0,
+          "annRefillRounds": 0,
+          "annRefilled": 0,
+          "annRequests": 10,
+          "dbStatementTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "stages": {
+          "lexical.activeValidationMs": {
+            "count": 10,
+            "p50Ms": 16.5,
+            "p95Ms": 28.773,
+            "p99Ms": 28.773
+          },
+          "lexical.channelMs": {
+            "count": 10,
+            "p50Ms": 113.056,
+            "p95Ms": 138.739,
+            "p99Ms": 138.739
+          },
+          "lexical.elasticsearchMs": {
+            "count": 10,
+            "p50Ms": 91.388,
+            "p95Ms": 122.476,
+            "p99Ms": 122.476
+          },
+          "lexical.executionMs": {
+            "count": 10,
+            "p50Ms": 112.962,
+            "p95Ms": 138.651,
+            "p99Ms": 138.651
+          },
+          "lexical.internalFusionMs": {
+            "count": 10,
+            "p50Ms": 0.125,
+            "p95Ms": 0.284,
+            "p99Ms": 0.284
+          },
+          "lexical.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.063,
+            "p95Ms": 0.109,
+            "p99Ms": 0.109
+          },
+          "lexical.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 113.065,
+            "p95Ms": 138.752,
+            "p99Ms": 138.752
+          },
+          "semantic.channelMs": {
+            "count": 10,
+            "p50Ms": 68.594,
+            "p95Ms": 80.725,
+            "p99Ms": 80.725
+          },
+          "semantic.embeddingCacheLookupMs": {
+            "count": 10,
+            "p50Ms": 0.006,
+            "p95Ms": 0.435,
+            "p99Ms": 0.435
+          },
+          "semantic.embeddingMs": {
+            "count": 10,
+            "p50Ms": 0.03,
+            "p95Ms": 0.456,
+            "p99Ms": 0.456
+          },
+          "semantic.embeddingRemoteMs": {
+            "count": 10,
+            "p50Ms": 0.0,
+            "p95Ms": 0.0,
+            "p99Ms": 0.0
+          },
+          "semantic.executionMs": {
+            "count": 10,
+            "p50Ms": 68.545,
+            "p95Ms": 80.633,
+            "p99Ms": 80.633
+          },
+          "semantic.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.074,
+            "p95Ms": 0.179,
+            "p99Ms": 0.179
+          },
+          "semantic.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 68.61,
+            "p95Ms": 80.739,
+            "p99Ms": 80.739
+          },
+          "semantic.vectorSearchMs": {
+            "count": 10,
+            "p50Ms": 68.518,
+            "p95Ms": 80.577,
+            "p99Ms": 80.577
+          }
+        }
+      },
+      "warmupRequests": 10,
+      "workload": "hybrid"
+    },
+    {
+      "activeBuildTruncationCount": 0,
+      "boundedResultFailures": 0,
+      "concurrency": 32,
+      "degraded": 0,
+      "degradedRate": 0.0,
+      "durationSeconds": 1.583,
+      "embeddingCacheOutcomes": {
+        "HIT": 100
+      },
+      "errorRate": 0.0,
+      "errors": 0,
+      "invalidEvidenceCount": 0,
+      "missingServerJavaVersionCount": 0,
+      "mode": "hybrid",
+      "noEvidenceCount": 0,
+      "p50Ms": 484.052,
+      "p95Ms": 640.252,
+      "p99Ms": 664.806,
+      "performanceLatencyMs": {
+        "lexical.activeValidationMs": {
+          "count": 100,
+          "p50": 18.937,
+          "p95": 42.259,
+          "p99": 52.212
+        },
+        "lexical.channelMs": {
+          "count": 100,
+          "p50": 370.512,
+          "p95": 531.379,
+          "p99": 553.237
+        },
+        "lexical.elasticsearchMs": {
+          "count": 100,
+          "p50": 99.636,
+          "p95": 145.384,
+          "p99": 170.812
+        },
+        "lexical.executionMs": {
+          "count": 100,
+          "p50": 121.132,
+          "p95": 175.374,
+          "p99": 199.188
+        },
+        "lexical.internalFusionMs": {
+          "count": 100,
+          "p50": 0.102,
+          "p95": 0.254,
+          "p99": 0.375
+        },
+        "lexical.queueWaitMs": {
+          "count": 100,
+          "p50": 284.259,
+          "p95": 393.577,
+          "p99": 411.201
+        },
+        "lexical.requestObservedMs": {
+          "count": 100,
+          "p50": 370.52,
+          "p95": 531.447,
+          "p99": 553.253
+        },
+        "semantic.channelMs": {
+          "count": 100,
+          "p50": 55.756,
+          "p95": 159.849,
+          "p99": 174.372
+        },
+        "semantic.embeddingCacheLookupMs": {
+          "count": 100,
+          "p50": 0.01,
+          "p95": 0.015,
+          "p99": 0.06
+        },
+        "semantic.embeddingMs": {
+          "count": 100,
+          "p50": 0.031,
+          "p95": 0.068,
+          "p99": 0.302
+        },
+        "semantic.embeddingRemoteMs": {
+          "count": 100,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0
+        },
+        "semantic.executionMs": {
+          "count": 100,
+          "p50": 53.425,
+          "p95": 76.928,
+          "p99": 84.877
+        },
+        "semantic.queueWaitMs": {
+          "count": 100,
+          "p50": 0.15,
+          "p95": 105.51,
+          "p99": 116.11
+        },
+        "semantic.requestObservedMs": {
+          "count": 100,
+          "p50": 55.77,
+          "p95": 159.865,
+          "p99": 174.386
+        },
+        "semantic.vectorSearchMs": {
+          "count": 100,
+          "p50": 53.368,
+          "p95": 76.867,
+          "p99": 84.838
+        }
+      },
+      "requestLatencyMs": {
+        "p50": 484.052,
+        "p95": 640.252,
+        "p99": 664.806
+      },
+      "requests": 100,
+      "sentinelRecallFailures": 0,
+      "serverJavaVersions": [
+        "21.0.10"
+      ],
+      "stageP95Ms": {
+        "endpointTotal": 629.0,
+        "fusion": 0.0,
+        "lexical": 175.0,
+        "semantic": 76.0,
+        "total": 589.0
+      },
+      "staleCandidateCount": 0,
+      "throughputRequestsPerSecond": 63.157,
+      "timeoutComponents": {},
+      "timeoutPlateauCount": 0,
+      "timeoutRate": 0.0,
+      "timeouts": 0,
+      "warmupDiagnostics": {
+        "cacheOutcomes": {
+          "HIT": 10
+        },
+        "degradedComponents": {},
+        "lexicalOutcomes": {
+          "admissionTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "requestCount": 10,
+        "semanticOutcomes": {
+          "admissionTimeouts": 0,
+          "annRefillExhausted": 0,
+          "annRefillRounds": 0,
+          "annRefilled": 0,
+          "annRequests": 10,
+          "dbStatementTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "stages": {
+          "lexical.activeValidationMs": {
+            "count": 10,
+            "p50Ms": 10.737,
+            "p95Ms": 14.992,
+            "p99Ms": 14.992
+          },
+          "lexical.channelMs": {
+            "count": 10,
+            "p50Ms": 98.115,
+            "p95Ms": 129.59,
+            "p99Ms": 129.59
+          },
+          "lexical.elasticsearchMs": {
+            "count": 10,
+            "p50Ms": 82.466,
+            "p95Ms": 90.358,
+            "p99Ms": 90.358
+          },
+          "lexical.executionMs": {
+            "count": 10,
+            "p50Ms": 94.64,
+            "p95Ms": 102.267,
+            "p99Ms": 102.267
+          },
+          "lexical.internalFusionMs": {
+            "count": 10,
+            "p50Ms": 0.082,
+            "p95Ms": 0.173,
+            "p99Ms": 0.173
+          },
+          "lexical.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.072,
+            "p95Ms": 82.551,
+            "p99Ms": 82.551
+          },
+          "lexical.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 98.129,
+            "p95Ms": 129.594,
+            "p99Ms": 129.594
+          },
+          "semantic.channelMs": {
+            "count": 10,
+            "p50Ms": 45.179,
+            "p95Ms": 74.677,
+            "p99Ms": 74.677
+          },
+          "semantic.embeddingCacheLookupMs": {
+            "count": 10,
+            "p50Ms": 0.003,
+            "p95Ms": 0.068,
+            "p99Ms": 0.068
+          },
+          "semantic.embeddingMs": {
+            "count": 10,
+            "p50Ms": 0.033,
+            "p95Ms": 0.443,
+            "p99Ms": 0.443
+          },
+          "semantic.embeddingRemoteMs": {
+            "count": 10,
+            "p50Ms": 0.0,
+            "p95Ms": 0.0,
+            "p99Ms": 0.0
+          },
+          "semantic.executionMs": {
+            "count": 10,
+            "p50Ms": 40.282,
+            "p95Ms": 49.151,
+            "p99Ms": 49.151
+          },
+          "semantic.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.171,
+            "p95Ms": 40.225,
+            "p99Ms": 40.225
+          },
+          "semantic.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 45.192,
+            "p95Ms": 74.69,
+            "p99Ms": 74.69
+          },
+          "semantic.vectorSearchMs": {
+            "count": 10,
+            "p50Ms": 40.203,
+            "p95Ms": 49.125,
+            "p99Ms": 49.125
+          }
+        }
+      },
+      "warmupRequests": 10,
+      "workload": "hybrid"
+    },
+    {
+      "activeBuildTruncationCount": 0,
+      "boundedResultFailures": 0,
+      "concurrency": 1,
+      "degraded": 0,
+      "degradedRate": 0.0,
+      "durationSeconds": 2.135,
+      "embeddingCacheOutcomes": {},
+      "errorRate": 0.0,
+      "errors": 0,
+      "invalidEvidenceCount": 0,
+      "missingServerJavaVersionCount": 0,
+      "mode": "hybrid",
+      "noEvidenceCount": 0,
+      "p50Ms": 15.334,
+      "p95Ms": 34.159,
+      "p99Ms": 35.948,
+      "performanceLatencyMs": {},
+      "requestLatencyMs": {
+        "p50": 15.334,
+        "p95": 34.159,
+        "p99": 35.948
+      },
+      "requests": 100,
+      "sentinelRecallFailures": 0,
+      "serverJavaVersions": [
+        "21.0.10"
+      ],
+      "stageP95Ms": {
+        "lexical": 12.0
+      },
+      "staleCandidateCount": 0,
+      "throughputRequestsPerSecond": 46.835,
+      "timeoutComponents": {},
+      "timeoutPlateauCount": 0,
+      "timeoutRate": 0.0,
+      "timeouts": 0,
+      "warmupDiagnostics": {
+        "cacheOutcomes": {},
+        "degradedComponents": {},
+        "lexicalOutcomes": {
+          "admissionTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "requestCount": 10,
+        "semanticOutcomes": {
+          "admissionTimeouts": 0,
+          "annRefillExhausted": 0,
+          "annRefillRounds": 0,
+          "annRefilled": 0,
+          "annRequests": 0,
+          "dbStatementTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "stages": {}
+      },
+      "warmupRequests": 10,
+      "workload": "document-scoped"
+    },
+    {
+      "activeBuildTruncationCount": 0,
+      "boundedResultFailures": 0,
+      "concurrency": 8,
+      "degraded": 0,
+      "degradedRate": 0.0,
+      "durationSeconds": 0.331,
+      "embeddingCacheOutcomes": {},
+      "errorRate": 0.0,
+      "errors": 0,
+      "invalidEvidenceCount": 0,
+      "missingServerJavaVersionCount": 0,
+      "mode": "hybrid",
+      "noEvidenceCount": 0,
+      "p50Ms": 23.767,
+      "p95Ms": 37.771,
+      "p99Ms": 44.6,
+      "performanceLatencyMs": {},
+      "requestLatencyMs": {
+        "p50": 23.767,
+        "p95": 37.771,
+        "p99": 44.6
+      },
+      "requests": 100,
+      "sentinelRecallFailures": 0,
+      "serverJavaVersions": [
+        "21.0.10"
+      ],
+      "stageP95Ms": {
+        "lexical": 23.0
+      },
+      "staleCandidateCount": 0,
+      "throughputRequestsPerSecond": 302.107,
+      "timeoutComponents": {},
+      "timeoutPlateauCount": 0,
+      "timeoutRate": 0.0,
+      "timeouts": 0,
+      "warmupDiagnostics": {
+        "cacheOutcomes": {},
+        "degradedComponents": {},
+        "lexicalOutcomes": {
+          "admissionTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "requestCount": 10,
+        "semanticOutcomes": {
+          "admissionTimeouts": 0,
+          "annRefillExhausted": 0,
+          "annRefillRounds": 0,
+          "annRefilled": 0,
+          "annRequests": 0,
+          "dbStatementTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "stages": {}
+      },
+      "warmupRequests": 10,
+      "workload": "document-scoped"
+    },
+    {
+      "activeBuildTruncationCount": 0,
+      "boundedResultFailures": 0,
+      "concurrency": 32,
+      "degraded": 0,
+      "degradedRate": 0.0,
+      "durationSeconds": 0.26,
+      "embeddingCacheOutcomes": {},
+      "errorRate": 0.0,
+      "errors": 0,
+      "invalidEvidenceCount": 0,
+      "missingServerJavaVersionCount": 0,
+      "mode": "hybrid",
+      "noEvidenceCount": 0,
+      "p50Ms": 63.236,
+      "p95Ms": 101.493,
+      "p99Ms": 112.632,
+      "performanceLatencyMs": {},
+      "requestLatencyMs": {
+        "p50": 63.236,
+        "p95": 101.493,
+        "p99": 112.632
+      },
+      "requests": 100,
+      "sentinelRecallFailures": 0,
+      "serverJavaVersions": [
+        "21.0.10"
+      ],
+      "stageP95Ms": {
+        "lexical": 82.0
+      },
+      "staleCandidateCount": 0,
+      "throughputRequestsPerSecond": 384.118,
+      "timeoutComponents": {},
+      "timeoutPlateauCount": 0,
+      "timeoutRate": 0.0,
+      "timeouts": 0,
+      "warmupDiagnostics": {
+        "cacheOutcomes": {},
+        "degradedComponents": {},
+        "lexicalOutcomes": {
+          "admissionTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "requestCount": 10,
+        "semanticOutcomes": {
+          "admissionTimeouts": 0,
+          "annRefillExhausted": 0,
+          "annRefillRounds": 0,
+          "annRefilled": 0,
+          "annRequests": 0,
+          "dbStatementTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "stages": {}
+      },
+      "warmupRequests": 10,
+      "workload": "document-scoped"
+    },
+    {
+      "activeBuildTruncationCount": 0,
+      "boundedResultFailures": 0,
+      "concurrency": 1,
+      "degraded": 0,
+      "degradedRate": 0.0,
+      "durationSeconds": 9.31,
+      "embeddingCacheOutcomes": {
+        "HIT": 90,
+        "MISS_REMOTE": 10
+      },
+      "errorRate": 0.0,
+      "errors": 0,
+      "invalidEvidenceCount": 0,
+      "missingServerJavaVersionCount": 0,
+      "mode": "hybrid",
+      "noEvidenceCount": 0,
+      "p50Ms": 69.118,
+      "p95Ms": 276.68,
+      "p99Ms": 327.914,
+      "performanceLatencyMs": {
+        "lexical.activeValidationMs": {
+          "count": 100,
+          "p50": 7.089,
+          "p95": 9.424,
+          "p99": 11.961
+        },
+        "lexical.channelMs": {
+          "count": 100,
+          "p50": 41.616,
+          "p95": 47.041,
+          "p99": 83.639
+        },
+        "lexical.elasticsearchMs": {
+          "count": 100,
+          "p50": 33.403,
+          "p95": 37.972,
+          "p99": 71.012
+        },
+        "lexical.executionMs": {
+          "count": 100,
+          "p50": 41.534,
+          "p95": 46.967,
+          "p99": 83.553
+        },
+        "lexical.internalFusionMs": {
+          "count": 100,
+          "p50": 0.071,
+          "p95": 0.106,
+          "p99": 0.13
+        },
+        "lexical.queueWaitMs": {
+          "count": 100,
+          "p50": 0.061,
+          "p95": 0.094,
+          "p99": 0.139
+        },
+        "lexical.requestObservedMs": {
+          "count": 100,
+          "p50": 41.626,
+          "p95": 47.054,
+          "p99": 83.655
+        },
+        "semantic.channelMs": {
+          "count": 100,
+          "p50": 18.155,
+          "p95": 249.147,
+          "p99": 308.713
+        },
+        "semantic.embeddingCacheLookupMs": {
+          "count": 100,
+          "p50": 0.007,
+          "p95": 0.009,
+          "p99": 0.012
+        },
+        "semantic.embeddingMs": {
+          "count": 100,
+          "p50": 0.022,
+          "p95": 229.558,
+          "p99": 291.233
+        },
+        "semantic.embeddingRemoteMs": {
+          "count": 100,
+          "p50": 0.0,
+          "p95": 226.375,
+          "p99": 286.937
+        },
+        "semantic.executionMs": {
+          "count": 100,
+          "p50": 18.071,
+          "p95": 249.083,
+          "p99": 308.624
+        },
+        "semantic.queueWaitMs": {
+          "count": 100,
+          "p50": 0.053,
+          "p95": 0.079,
+          "p99": 0.091
+        },
+        "semantic.requestObservedMs": {
+          "count": 100,
+          "p50": 18.177,
+          "p95": 249.155,
+          "p99": 308.72
+        },
+        "semantic.vectorSearchMs": {
+          "count": 100,
+          "p50": 17.752,
+          "p95": 22.635,
+          "p99": 26.45
+        }
+      },
+      "requestLatencyMs": {
+        "p50": 69.118,
+        "p95": 276.68,
+        "p99": 327.914
+      },
+      "requests": 100,
+      "sentinelRecallFailures": 0,
+      "serverJavaVersions": [
+        "21.0.10"
+      ],
+      "stageP95Ms": {
+        "endpointTotal": 264.0,
+        "fusion": 0.0,
+        "lexical": 46.0,
+        "semantic": 249.0,
+        "total": 256.0
+      },
+      "staleCandidateCount": 0,
+      "throughputRequestsPerSecond": 10.741,
+      "timeoutComponents": {},
+      "timeoutPlateauCount": 0,
+      "timeoutRate": 0.0,
+      "timeouts": 0,
+      "warmupDiagnostics": {
+        "cacheOutcomes": {
+          "MISS_REMOTE": 10
+        },
+        "degradedComponents": {},
+        "lexicalOutcomes": {
+          "admissionTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "requestCount": 10,
+        "semanticOutcomes": {
+          "admissionTimeouts": 0,
+          "annRefillExhausted": 0,
+          "annRefillRounds": 0,
+          "annRefilled": 0,
+          "annRequests": 10,
+          "dbStatementTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "stages": {
+          "lexical.activeValidationMs": {
+            "count": 10,
+            "p50Ms": 8.37,
+            "p95Ms": 10.965,
+            "p99Ms": 10.965
+          },
+          "lexical.channelMs": {
+            "count": 10,
+            "p50Ms": 46.299,
+            "p95Ms": 64.15,
+            "p99Ms": 64.15
+          },
+          "lexical.elasticsearchMs": {
+            "count": 10,
+            "p50Ms": 36.512,
+            "p95Ms": 51.474,
+            "p99Ms": 51.474
+          },
+          "lexical.executionMs": {
+            "count": 10,
+            "p50Ms": 46.204,
+            "p95Ms": 64.071,
+            "p99Ms": 64.071
+          },
+          "lexical.internalFusionMs": {
+            "count": 10,
+            "p50Ms": 0.081,
+            "p95Ms": 0.17,
+            "p99Ms": 0.17
+          },
+          "lexical.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.054,
+            "p95Ms": 0.069,
+            "p99Ms": 0.069
+          },
+          "lexical.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 46.316,
+            "p95Ms": 64.165,
+            "p99Ms": 64.165
+          },
+          "semantic.channelMs": {
+            "count": 10,
+            "p50Ms": 254.428,
+            "p95Ms": 324.366,
+            "p99Ms": 324.366
+          },
+          "semantic.embeddingCacheLookupMs": {
+            "count": 10,
+            "p50Ms": 0.002,
+            "p95Ms": 0.031,
+            "p99Ms": 0.031
+          },
+          "semantic.embeddingMs": {
+            "count": 10,
+            "p50Ms": 233.335,
+            "p95Ms": 297.006,
+            "p99Ms": 297.006
+          },
+          "semantic.embeddingRemoteMs": {
+            "count": 10,
+            "p50Ms": 230.783,
+            "p95Ms": 293.838,
+            "p99Ms": 293.838
+          },
+          "semantic.executionMs": {
+            "count": 10,
+            "p50Ms": 254.344,
+            "p95Ms": 324.269,
+            "p99Ms": 324.269
+          },
+          "semantic.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.057,
+            "p95Ms": 0.074,
+            "p99Ms": 0.074
+          },
+          "semantic.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 254.443,
+            "p95Ms": 324.382,
+            "p99Ms": 324.382
+          },
+          "semantic.vectorSearchMs": {
+            "count": 10,
+            "p50Ms": 16.878,
+            "p95Ms": 29.629,
+            "p99Ms": 29.629
+          }
+        }
+      },
+      "warmupRequests": 10,
+      "workload": "broad"
+    },
+    {
+      "activeBuildTruncationCount": 0,
+      "boundedResultFailures": 0,
+      "concurrency": 8,
+      "degraded": 0,
+      "degradedRate": 0.0,
+      "durationSeconds": 1.905,
+      "embeddingCacheOutcomes": {
+        "HIT": 100
+      },
+      "errorRate": 0.0,
+      "errors": 0,
+      "invalidEvidenceCount": 0,
+      "missingServerJavaVersionCount": 0,
+      "mode": "hybrid",
+      "noEvidenceCount": 0,
+      "p50Ms": 147.981,
+      "p95Ms": 212.518,
+      "p99Ms": 226.621,
+      "performanceLatencyMs": {
+        "lexical.activeValidationMs": {
+          "count": 100,
+          "p50": 12.265,
+          "p95": 21.884,
+          "p99": 25.446
+        },
+        "lexical.channelMs": {
+          "count": 100,
+          "p50": 84.428,
+          "p95": 129.923,
+          "p99": 154.456
+        },
+        "lexical.elasticsearchMs": {
+          "count": 100,
+          "p50": 70.592,
+          "p95": 106.539,
+          "p99": 126.519
+        },
+        "lexical.executionMs": {
+          "count": 100,
+          "p50": 84.322,
+          "p95": 129.872,
+          "p99": 154.355
+        },
+        "lexical.internalFusionMs": {
+          "count": 100,
+          "p50": 0.087,
+          "p95": 0.164,
+          "p99": 0.248
+        },
+        "lexical.queueWaitMs": {
+          "count": 100,
+          "p50": 0.071,
+          "p95": 0.336,
+          "p99": 0.664
+        },
+        "lexical.requestObservedMs": {
+          "count": 100,
+          "p50": 84.443,
+          "p95": 129.93,
+          "p99": 154.474
+        },
+        "semantic.channelMs": {
+          "count": 100,
+          "p50": 40.387,
+          "p95": 60.85,
+          "p99": 66.871
+        },
+        "semantic.embeddingCacheLookupMs": {
+          "count": 100,
+          "p50": 0.009,
+          "p95": 0.021,
+          "p99": 0.174
+        },
+        "semantic.embeddingMs": {
+          "count": 100,
+          "p50": 0.026,
+          "p95": 0.057,
+          "p99": 0.206
+        },
+        "semantic.embeddingRemoteMs": {
+          "count": 100,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0
+        },
+        "semantic.executionMs": {
+          "count": 100,
+          "p50": 40.152,
+          "p95": 60.492,
+          "p99": 66.693
+        },
+        "semantic.queueWaitMs": {
+          "count": 100,
+          "p50": 0.07,
+          "p95": 0.389,
+          "p99": 1.204
+        },
+        "semantic.requestObservedMs": {
+          "count": 100,
+          "p50": 40.403,
+          "p95": 60.863,
+          "p99": 66.887
+        },
+        "semantic.vectorSearchMs": {
+          "count": 100,
+          "p50": 40.118,
+          "p95": 60.442,
+          "p99": 66.629
+        }
+      },
+      "requestLatencyMs": {
+        "p50": 147.981,
+        "p95": 212.518,
+        "p99": 226.621
+      },
+      "requests": 100,
+      "sentinelRecallFailures": 0,
+      "serverJavaVersions": [
+        "21.0.10"
+      ],
+      "stageP95Ms": {
+        "endpointTotal": 208.0,
+        "fusion": 0.0,
+        "lexical": 129.0,
+        "semantic": 60.0,
+        "total": 170.0
+      },
+      "staleCandidateCount": 0,
+      "throughputRequestsPerSecond": 52.506,
+      "timeoutComponents": {},
+      "timeoutPlateauCount": 0,
+      "timeoutRate": 0.0,
+      "timeouts": 0,
+      "warmupDiagnostics": {
+        "cacheOutcomes": {
+          "HIT": 10
+        },
+        "degradedComponents": {},
+        "lexicalOutcomes": {
+          "admissionTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "requestCount": 10,
+        "semanticOutcomes": {
+          "admissionTimeouts": 0,
+          "annRefillExhausted": 0,
+          "annRefillRounds": 0,
+          "annRefilled": 0,
+          "annRequests": 10,
+          "dbStatementTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "stages": {
+          "lexical.activeValidationMs": {
+            "count": 10,
+            "p50Ms": 10.706,
+            "p95Ms": 17.967,
+            "p99Ms": 17.967
+          },
+          "lexical.channelMs": {
+            "count": 10,
+            "p50Ms": 76.713,
+            "p95Ms": 85.528,
+            "p99Ms": 85.528
+          },
+          "lexical.elasticsearchMs": {
+            "count": 10,
+            "p50Ms": 62.912,
+            "p95Ms": 69.509,
+            "p99Ms": 69.509
+          },
+          "lexical.executionMs": {
+            "count": 10,
+            "p50Ms": 76.599,
+            "p95Ms": 85.384,
+            "p99Ms": 85.384
+          },
+          "lexical.internalFusionMs": {
+            "count": 10,
+            "p50Ms": 0.074,
+            "p95Ms": 0.098,
+            "p99Ms": 0.098
+          },
+          "lexical.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.075,
+            "p95Ms": 0.132,
+            "p99Ms": 0.132
+          },
+          "lexical.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 76.728,
+            "p95Ms": 85.573,
+            "p99Ms": 85.573
+          },
+          "semantic.channelMs": {
+            "count": 10,
+            "p50Ms": 44.97,
+            "p95Ms": 71.332,
+            "p99Ms": 71.332
+          },
+          "semantic.embeddingCacheLookupMs": {
+            "count": 10,
+            "p50Ms": 0.005,
+            "p95Ms": 0.016,
+            "p99Ms": 0.016
+          },
+          "semantic.embeddingMs": {
+            "count": 10,
+            "p50Ms": 0.018,
+            "p95Ms": 0.046,
+            "p99Ms": 0.046
+          },
+          "semantic.embeddingRemoteMs": {
+            "count": 10,
+            "p50Ms": 0.0,
+            "p95Ms": 0.0,
+            "p99Ms": 0.0
+          },
+          "semantic.executionMs": {
+            "count": 10,
+            "p50Ms": 44.913,
+            "p95Ms": 71.022,
+            "p99Ms": 71.022
+          },
+          "semantic.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.047,
+            "p95Ms": 0.299,
+            "p99Ms": 0.299
+          },
+          "semantic.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 44.978,
+            "p95Ms": 71.345,
+            "p99Ms": 71.345
+          },
+          "semantic.vectorSearchMs": {
+            "count": 10,
+            "p50Ms": 44.877,
+            "p95Ms": 70.991,
+            "p99Ms": 70.991
+          }
+        }
+      },
+      "warmupRequests": 10,
+      "workload": "broad"
+    },
+    {
+      "activeBuildTruncationCount": 0,
+      "boundedResultFailures": 0,
+      "concurrency": 32,
+      "degraded": 0,
+      "degradedRate": 0.0,
+      "durationSeconds": 1.611,
+      "embeddingCacheOutcomes": {
+        "HIT": 100
+      },
+      "errorRate": 0.0,
+      "errors": 0,
+      "invalidEvidenceCount": 0,
+      "missingServerJavaVersionCount": 0,
+      "mode": "hybrid",
+      "noEvidenceCount": 0,
+      "p50Ms": 472.563,
+      "p95Ms": 575.729,
+      "p99Ms": 603.429,
+      "performanceLatencyMs": {
+        "lexical.activeValidationMs": {
+          "count": 100,
+          "p50": 16.948,
+          "p95": 53.591,
+          "p99": 75.054
+        },
+        "lexical.channelMs": {
+          "count": 100,
+          "p50": 390.976,
+          "p95": 464.276,
+          "p99": 479.222
+        },
+        "lexical.elasticsearchMs": {
+          "count": 100,
+          "p50": 98.091,
+          "p95": 136.687,
+          "p99": 152.22
+        },
+        "lexical.executionMs": {
+          "count": 100,
+          "p50": 117.65,
+          "p95": 177.366,
+          "p99": 217.032
+        },
+        "lexical.internalFusionMs": {
+          "count": 100,
+          "p50": 0.091,
+          "p95": 0.197,
+          "p99": 0.221
+        },
+        "lexical.queueWaitMs": {
+          "count": 100,
+          "p50": 271.458,
+          "p95": 333.827,
+          "p99": 360.993
+        },
+        "lexical.requestObservedMs": {
+          "count": 100,
+          "p50": 390.991,
+          "p95": 464.293,
+          "p99": 479.234
+        },
+        "semantic.channelMs": {
+          "count": 100,
+          "p50": 51.178,
+          "p95": 162.476,
+          "p99": 187.636
+        },
+        "semantic.embeddingCacheLookupMs": {
+          "count": 100,
+          "p50": 0.01,
+          "p95": 0.016,
+          "p99": 0.057
+        },
+        "semantic.embeddingMs": {
+          "count": 100,
+          "p50": 0.026,
+          "p95": 0.087,
+          "p99": 0.126
+        },
+        "semantic.embeddingRemoteMs": {
+          "count": 100,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0
+        },
+        "semantic.executionMs": {
+          "count": 100,
+          "p50": 47.502,
+          "p95": 69.423,
+          "p99": 102.966
+        },
+        "semantic.queueWaitMs": {
+          "count": 100,
+          "p50": 0.112,
+          "p95": 112.053,
+          "p99": 132.521
+        },
+        "semantic.requestObservedMs": {
+          "count": 100,
+          "p50": 51.194,
+          "p95": 162.488,
+          "p99": 187.651
+        },
+        "semantic.vectorSearchMs": {
+          "count": 100,
+          "p50": 47.411,
+          "p95": 69.392,
+          "p99": 102.825
+        }
+      },
+      "requestLatencyMs": {
+        "p50": 472.563,
+        "p95": 575.729,
+        "p99": 603.429
+      },
+      "requests": 100,
+      "sentinelRecallFailures": 0,
+      "serverJavaVersions": [
+        "21.0.10"
+      ],
+      "stageP95Ms": {
+        "endpointTotal": 571.0,
+        "fusion": 0.0,
+        "lexical": 177.0,
+        "semantic": 69.0,
+        "total": 516.0
+      },
+      "staleCandidateCount": 0,
+      "throughputRequestsPerSecond": 62.083,
+      "timeoutComponents": {},
+      "timeoutPlateauCount": 0,
+      "timeoutRate": 0.0,
+      "timeouts": 0,
+      "warmupDiagnostics": {
+        "cacheOutcomes": {
+          "HIT": 10
+        },
+        "degradedComponents": {},
+        "lexicalOutcomes": {
+          "admissionTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "requestCount": 10,
+        "semanticOutcomes": {
+          "admissionTimeouts": 0,
+          "annRefillExhausted": 0,
+          "annRefillRounds": 0,
+          "annRefilled": 0,
+          "annRequests": 10,
+          "dbStatementTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "stages": {
+          "lexical.activeValidationMs": {
+            "count": 10,
+            "p50Ms": 16.001,
+            "p95Ms": 21.921,
+            "p99Ms": 21.921
+          },
+          "lexical.channelMs": {
+            "count": 10,
+            "p50Ms": 117.886,
+            "p95Ms": 149.465,
+            "p99Ms": 149.465
+          },
+          "lexical.elasticsearchMs": {
+            "count": 10,
+            "p50Ms": 88.613,
+            "p95Ms": 113.839,
+            "p99Ms": 113.839
+          },
+          "lexical.executionMs": {
+            "count": 10,
+            "p50Ms": 106.146,
+            "p95Ms": 132.217,
+            "p99Ms": 132.217
+          },
+          "lexical.internalFusionMs": {
+            "count": 10,
+            "p50Ms": 0.087,
+            "p95Ms": 0.16,
+            "p99Ms": 0.16
+          },
+          "lexical.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.115,
+            "p95Ms": 92.173,
+            "p99Ms": 92.173
+          },
+          "lexical.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 117.896,
+            "p95Ms": 149.483,
+            "p99Ms": 149.483
+          },
+          "semantic.channelMs": {
+            "count": 10,
+            "p50Ms": 54.973,
+            "p95Ms": 81.854,
+            "p99Ms": 81.854
+          },
+          "semantic.embeddingCacheLookupMs": {
+            "count": 10,
+            "p50Ms": 0.009,
+            "p95Ms": 0.012,
+            "p99Ms": 0.012
+          },
+          "semantic.embeddingMs": {
+            "count": 10,
+            "p50Ms": 0.023,
+            "p95Ms": 0.032,
+            "p99Ms": 0.032
+          },
+          "semantic.embeddingRemoteMs": {
+            "count": 10,
+            "p50Ms": 0.0,
+            "p95Ms": 0.0,
+            "p99Ms": 0.0
+          },
+          "semantic.executionMs": {
+            "count": 10,
+            "p50Ms": 54.217,
+            "p95Ms": 76.699,
+            "p99Ms": 76.699
+          },
+          "semantic.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.064,
+            "p95Ms": 28.793,
+            "p99Ms": 28.793
+          },
+          "semantic.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 54.979,
+            "p95Ms": 81.871,
+            "p99Ms": 81.871
+          },
+          "semantic.vectorSearchMs": {
+            "count": 10,
+            "p50Ms": 54.192,
+            "p95Ms": 76.65,
+            "p99Ms": 76.65
+          }
+        }
+      },
+      "warmupRequests": 10,
+      "workload": "broad"
+    },
+    {
+      "activeBuildTruncationCount": 0,
+      "boundedResultFailures": 0,
+      "concurrency": 1,
+      "degraded": 0,
+      "degradedRate": 0.0,
+      "durationSeconds": 9.886,
+      "embeddingCacheOutcomes": {
+        "HIT": 90,
+        "MISS_REMOTE": 10
+      },
+      "errorRate": 0.0,
+      "errors": 0,
+      "invalidEvidenceCount": 0,
+      "missingServerJavaVersionCount": 0,
+      "mode": "hybrid",
+      "noEvidenceCount": 0,
+      "p50Ms": 79.126,
+      "p95Ms": 252.92,
+      "p99Ms": 275.131,
+      "performanceLatencyMs": {
+        "lexical.activeValidationMs": {
+          "count": 100,
+          "p50": 6.766,
+          "p95": 9.893,
+          "p99": 20.997
+        },
+        "lexical.channelMs": {
+          "count": 100,
+          "p50": 47.448,
+          "p95": 58.471,
+          "p99": 122.134
+        },
+        "lexical.elasticsearchMs": {
+          "count": 100,
+          "p50": 39.531,
+          "p95": 47.21,
+          "p99": 99.415
+        },
+        "lexical.executionMs": {
+          "count": 100,
+          "p50": 47.386,
+          "p95": 58.366,
+          "p99": 121.976
+        },
+        "lexical.internalFusionMs": {
+          "count": 100,
+          "p50": 0.067,
+          "p95": 0.108,
+          "p99": 0.129
+        },
+        "lexical.queueWaitMs": {
+          "count": 100,
+          "p50": 0.059,
+          "p95": 0.086,
+          "p99": 0.101
+        },
+        "lexical.requestObservedMs": {
+          "count": 100,
+          "p50": 47.458,
+          "p95": 58.481,
+          "p99": 122.149
+        },
+        "semantic.channelMs": {
+          "count": 100,
+          "p50": 17.708,
+          "p95": 235.93,
+          "p99": 247.178
+        },
+        "semantic.embeddingCacheLookupMs": {
+          "count": 100,
+          "p50": 0.007,
+          "p95": 0.01,
+          "p99": 0.01
+        },
+        "semantic.embeddingMs": {
+          "count": 100,
+          "p50": 0.021,
+          "p95": 217.835,
+          "p99": 224.604
+        },
+        "semantic.embeddingRemoteMs": {
+          "count": 100,
+          "p50": 0.0,
+          "p95": 214.974,
+          "p99": 221.758
+        },
+        "semantic.executionMs": {
+          "count": 100,
+          "p50": 17.646,
+          "p95": 235.86,
+          "p99": 247.099
+        },
+        "semantic.queueWaitMs": {
+          "count": 100,
+          "p50": 0.053,
+          "p95": 0.086,
+          "p99": 0.115
+        },
+        "semantic.requestObservedMs": {
+          "count": 100,
+          "p50": 17.716,
+          "p95": 235.938,
+          "p99": 247.19
+        },
+        "semantic.vectorSearchMs": {
+          "count": 100,
+          "p50": 17.454,
+          "p95": 27.462,
+          "p99": 59.358
+        }
+      },
+      "requestLatencyMs": {
+        "p50": 79.126,
+        "p95": 252.92,
+        "p99": 275.131
+      },
+      "requests": 100,
+      "sentinelRecallFailures": 0,
+      "serverJavaVersions": [
+        "21.0.10"
+      ],
+      "stageP95Ms": {
+        "endpointTotal": 248.0,
+        "fusion": 0.0,
+        "lexical": 58.0,
+        "semantic": 235.0,
+        "total": 241.0
+      },
+      "staleCandidateCount": 0,
+      "throughputRequestsPerSecond": 10.116,
+      "timeoutComponents": {},
+      "timeoutPlateauCount": 0,
+      "timeoutRate": 0.0,
+      "timeouts": 0,
+      "warmupDiagnostics": {
+        "cacheOutcomes": {
+          "MISS_REMOTE": 10
+        },
+        "degradedComponents": {},
+        "lexicalOutcomes": {
+          "admissionTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "requestCount": 10,
+        "semanticOutcomes": {
+          "admissionTimeouts": 0,
+          "annRefillExhausted": 0,
+          "annRefillRounds": 0,
+          "annRefilled": 0,
+          "annRequests": 10,
+          "dbStatementTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "stages": {
+          "lexical.activeValidationMs": {
+            "count": 10,
+            "p50Ms": 7.918,
+            "p95Ms": 10.05,
+            "p99Ms": 10.05
+          },
+          "lexical.channelMs": {
+            "count": 10,
+            "p50Ms": 50.736,
+            "p95Ms": 64.609,
+            "p99Ms": 64.609
+          },
+          "lexical.elasticsearchMs": {
+            "count": 10,
+            "p50Ms": 42.333,
+            "p95Ms": 54.564,
+            "p99Ms": 54.564
+          },
+          "lexical.executionMs": {
+            "count": 10,
+            "p50Ms": 50.648,
+            "p95Ms": 64.533,
+            "p99Ms": 64.533
+          },
+          "lexical.internalFusionMs": {
+            "count": 10,
+            "p50Ms": 0.084,
+            "p95Ms": 0.102,
+            "p99Ms": 0.102
+          },
+          "lexical.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.063,
+            "p95Ms": 0.274,
+            "p99Ms": 0.274
+          },
+          "lexical.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 50.752,
+            "p95Ms": 64.621,
+            "p99Ms": 64.621
+          },
+          "semantic.channelMs": {
+            "count": 10,
+            "p50Ms": 234.337,
+            "p95Ms": 333.791,
+            "p99Ms": 333.791
+          },
+          "semantic.embeddingCacheLookupMs": {
+            "count": 10,
+            "p50Ms": 0.002,
+            "p95Ms": 0.003,
+            "p99Ms": 0.003
+          },
+          "semantic.embeddingMs": {
+            "count": 10,
+            "p50Ms": 218.357,
+            "p95Ms": 314.674,
+            "p99Ms": 314.674
+          },
+          "semantic.embeddingRemoteMs": {
+            "count": 10,
+            "p50Ms": 215.083,
+            "p95Ms": 311.817,
+            "p99Ms": 311.817
+          },
+          "semantic.executionMs": {
+            "count": 10,
+            "p50Ms": 234.274,
+            "p95Ms": 333.709,
+            "p99Ms": 333.709
+          },
+          "semantic.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.057,
+            "p95Ms": 0.084,
+            "p99Ms": 0.084
+          },
+          "semantic.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 234.347,
+            "p95Ms": 333.801,
+            "p99Ms": 333.801
+          },
+          "semantic.vectorSearchMs": {
+            "count": 10,
+            "p50Ms": 18.516,
+            "p95Ms": 23.742,
+            "p99Ms": 23.742
+          }
+        }
+      },
+      "warmupRequests": 10,
+      "workload": "stale-build-exclusion"
+    },
+    {
+      "activeBuildTruncationCount": 0,
+      "boundedResultFailures": 0,
+      "concurrency": 8,
+      "degraded": 0,
+      "degradedRate": 0.0,
+      "durationSeconds": 1.482,
+      "embeddingCacheOutcomes": {
+        "HIT": 100
+      },
+      "errorRate": 0.0,
+      "errors": 0,
+      "invalidEvidenceCount": 0,
+      "missingServerJavaVersionCount": 0,
+      "mode": "hybrid",
+      "noEvidenceCount": 0,
+      "p50Ms": 114.869,
+      "p95Ms": 135.98,
+      "p99Ms": 146.673,
+      "performanceLatencyMs": {
+        "lexical.activeValidationMs": {
+          "count": 100,
+          "p50": 9.574,
+          "p95": 13.256,
+          "p99": 14.71
+        },
+        "lexical.channelMs": {
+          "count": 100,
+          "p50": 74.237,
+          "p95": 86.972,
+          "p99": 91.777
+        },
+        "lexical.elasticsearchMs": {
+          "count": 100,
+          "p50": 62.447,
+          "p95": 74.347,
+          "p99": 80.745
+        },
+        "lexical.executionMs": {
+          "count": 100,
+          "p50": 74.075,
+          "p95": 86.726,
+          "p99": 91.695
+        },
+        "lexical.internalFusionMs": {
+          "count": 100,
+          "p50": 0.079,
+          "p95": 0.133,
+          "p99": 0.177
+        },
+        "lexical.queueWaitMs": {
+          "count": 100,
+          "p50": 0.069,
+          "p95": 0.219,
+          "p99": 0.353
+        },
+        "lexical.requestObservedMs": {
+          "count": 100,
+          "p50": 74.253,
+          "p95": 86.981,
+          "p99": 91.786
+        },
+        "semantic.channelMs": {
+          "count": 100,
+          "p50": 33.131,
+          "p95": 44.216,
+          "p99": 49.582
+        },
+        "semantic.embeddingCacheLookupMs": {
+          "count": 100,
+          "p50": 0.009,
+          "p95": 0.031,
+          "p99": 0.049
+        },
+        "semantic.embeddingMs": {
+          "count": 100,
+          "p50": 0.027,
+          "p95": 0.066,
+          "p99": 0.089
+        },
+        "semantic.embeddingRemoteMs": {
+          "count": 100,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0
+        },
+        "semantic.executionMs": {
+          "count": 100,
+          "p50": 33.04,
+          "p95": 43.919,
+          "p99": 49.511
+        },
+        "semantic.queueWaitMs": {
+          "count": 100,
+          "p50": 0.069,
+          "p95": 0.182,
+          "p99": 2.197
+        },
+        "semantic.requestObservedMs": {
+          "count": 100,
+          "p50": 33.142,
+          "p95": 44.227,
+          "p99": 49.587
+        },
+        "semantic.vectorSearchMs": {
+          "count": 100,
+          "p50": 32.967,
+          "p95": 43.877,
+          "p99": 49.474
+        }
+      },
+      "requestLatencyMs": {
+        "p50": 114.869,
+        "p95": 135.98,
+        "p99": 146.673
+      },
+      "requests": 100,
+      "sentinelRecallFailures": 0,
+      "serverJavaVersions": [
+        "21.0.10"
+      ],
+      "stageP95Ms": {
+        "endpointTotal": 118.0,
+        "fusion": 0.0,
+        "lexical": 86.0,
+        "semantic": 43.0,
+        "total": 107.0
+      },
+      "staleCandidateCount": 0,
+      "throughputRequestsPerSecond": 67.486,
+      "timeoutComponents": {},
+      "timeoutPlateauCount": 0,
+      "timeoutRate": 0.0,
+      "timeouts": 0,
+      "warmupDiagnostics": {
+        "cacheOutcomes": {
+          "HIT": 10
+        },
+        "degradedComponents": {},
+        "lexicalOutcomes": {
+          "admissionTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "requestCount": 10,
+        "semanticOutcomes": {
+          "admissionTimeouts": 0,
+          "annRefillExhausted": 0,
+          "annRefillRounds": 0,
+          "annRefilled": 0,
+          "annRequests": 10,
+          "dbStatementTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "stages": {
+          "lexical.activeValidationMs": {
+            "count": 10,
+            "p50Ms": 8.471,
+            "p95Ms": 12.812,
+            "p99Ms": 12.812
+          },
+          "lexical.channelMs": {
+            "count": 10,
+            "p50Ms": 75.665,
+            "p95Ms": 87.465,
+            "p99Ms": 87.465
+          },
+          "lexical.elasticsearchMs": {
+            "count": 10,
+            "p50Ms": 65.022,
+            "p95Ms": 77.754,
+            "p99Ms": 77.754
+          },
+          "lexical.executionMs": {
+            "count": 10,
+            "p50Ms": 75.578,
+            "p95Ms": 87.351,
+            "p99Ms": 87.351
+          },
+          "lexical.internalFusionMs": {
+            "count": 10,
+            "p50Ms": 0.064,
+            "p95Ms": 0.082,
+            "p99Ms": 0.082
+          },
+          "lexical.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.078,
+            "p95Ms": 0.531,
+            "p99Ms": 0.531
+          },
+          "lexical.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 75.674,
+            "p95Ms": 87.475,
+            "p99Ms": 87.475
+          },
+          "semantic.channelMs": {
+            "count": 10,
+            "p50Ms": 34.652,
+            "p95Ms": 58.032,
+            "p99Ms": 58.032
+          },
+          "semantic.embeddingCacheLookupMs": {
+            "count": 10,
+            "p50Ms": 0.003,
+            "p95Ms": 0.013,
+            "p99Ms": 0.013
+          },
+          "semantic.embeddingMs": {
+            "count": 10,
+            "p50Ms": 0.014,
+            "p95Ms": 0.047,
+            "p99Ms": 0.047
+          },
+          "semantic.embeddingRemoteMs": {
+            "count": 10,
+            "p50Ms": 0.0,
+            "p95Ms": 0.0,
+            "p99Ms": 0.0
+          },
+          "semantic.executionMs": {
+            "count": 10,
+            "p50Ms": 34.608,
+            "p95Ms": 57.971,
+            "p99Ms": 57.971
+          },
+          "semantic.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.044,
+            "p95Ms": 0.095,
+            "p99Ms": 0.095
+          },
+          "semantic.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 34.664,
+            "p95Ms": 58.045,
+            "p99Ms": 58.045
+          },
+          "semantic.vectorSearchMs": {
+            "count": 10,
+            "p50Ms": 34.563,
+            "p95Ms": 57.941,
+            "p99Ms": 57.941
+          }
+        }
+      },
+      "warmupRequests": 10,
+      "workload": "stale-build-exclusion"
+    },
+    {
+      "activeBuildTruncationCount": 0,
+      "boundedResultFailures": 0,
+      "concurrency": 32,
+      "degraded": 0,
+      "degradedRate": 0.0,
+      "durationSeconds": 1.473,
+      "embeddingCacheOutcomes": {
+        "HIT": 100
+      },
+      "errorRate": 0.0,
+      "errors": 0,
+      "invalidEvidenceCount": 0,
+      "missingServerJavaVersionCount": 0,
+      "mode": "hybrid",
+      "noEvidenceCount": 0,
+      "p50Ms": 457.103,
+      "p95Ms": 505.455,
+      "p99Ms": 534.646,
+      "performanceLatencyMs": {
+        "lexical.activeValidationMs": {
+          "count": 100,
+          "p50": 13.49,
+          "p95": 22.317,
+          "p99": 31.578
+        },
+        "lexical.channelMs": {
+          "count": 100,
+          "p50": 392.17,
+          "p95": 422.212,
+          "p99": 438.83
+        },
+        "lexical.elasticsearchMs": {
+          "count": 100,
+          "p50": 96.427,
+          "p95": 119.719,
+          "p99": 131.707
+        },
+        "lexical.executionMs": {
+          "count": 100,
+          "p50": 114.538,
+          "p95": 139.384,
+          "p99": 149.679
+        },
+        "lexical.internalFusionMs": {
+          "count": 100,
+          "p50": 0.08,
+          "p95": 0.174,
+          "p99": 0.285
+        },
+        "lexical.queueWaitMs": {
+          "count": 100,
+          "p50": 280.771,
+          "p95": 307.669,
+          "p99": 316.853
+        },
+        "lexical.requestObservedMs": {
+          "count": 100,
+          "p50": 392.185,
+          "p95": 422.229,
+          "p99": 438.846
+        },
+        "semantic.channelMs": {
+          "count": 100,
+          "p50": 46.494,
+          "p95": 121.657,
+          "p99": 135.2
+        },
+        "semantic.embeddingCacheLookupMs": {
+          "count": 100,
+          "p50": 0.009,
+          "p95": 0.012,
+          "p99": 0.04
+        },
+        "semantic.embeddingMs": {
+          "count": 100,
+          "p50": 0.027,
+          "p95": 0.058,
+          "p99": 0.082
+        },
+        "semantic.embeddingRemoteMs": {
+          "count": 100,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0
+        },
+        "semantic.executionMs": {
+          "count": 100,
+          "p50": 41.856,
+          "p95": 62.235,
+          "p99": 71.373
+        },
+        "semantic.queueWaitMs": {
+          "count": 100,
+          "p50": 0.086,
+          "p95": 82.442,
+          "p99": 92.322
+        },
+        "semantic.requestObservedMs": {
+          "count": 100,
+          "p50": 46.509,
+          "p95": 121.674,
+          "p99": 135.215
+        },
+        "semantic.vectorSearchMs": {
+          "count": 100,
+          "p50": 41.802,
+          "p95": 62.2,
+          "p99": 71.346
+        }
+      },
+      "requestLatencyMs": {
+        "p50": 457.103,
+        "p95": 505.455,
+        "p99": 534.646
+      },
+      "requests": 100,
+      "sentinelRecallFailures": 0,
+      "serverJavaVersions": [
+        "21.0.10"
+      ],
+      "stageP95Ms": {
+        "endpointTotal": 500.0,
+        "fusion": 0.0,
+        "lexical": 139.0,
+        "semantic": 62.0,
+        "total": 459.0
+      },
+      "staleCandidateCount": 0,
+      "throughputRequestsPerSecond": 67.875,
+      "timeoutComponents": {},
+      "timeoutPlateauCount": 0,
+      "timeoutRate": 0.0,
+      "timeouts": 0,
+      "warmupDiagnostics": {
+        "cacheOutcomes": {
+          "HIT": 10
+        },
+        "degradedComponents": {},
+        "lexicalOutcomes": {
+          "admissionTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "requestCount": 10,
+        "semanticOutcomes": {
+          "admissionTimeouts": 0,
+          "annRefillExhausted": 0,
+          "annRefillRounds": 0,
+          "annRefilled": 0,
+          "annRequests": 10,
+          "dbStatementTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "stages": {
+          "lexical.activeValidationMs": {
+            "count": 10,
+            "p50Ms": 9.603,
+            "p95Ms": 13.795,
+            "p99Ms": 13.795
+          },
+          "lexical.channelMs": {
+            "count": 10,
+            "p50Ms": 83.129,
+            "p95Ms": 129.281,
+            "p99Ms": 129.281
+          },
+          "lexical.elasticsearchMs": {
+            "count": 10,
+            "p50Ms": 70.716,
+            "p95Ms": 78.535,
+            "p99Ms": 78.535
+          },
+          "lexical.executionMs": {
+            "count": 10,
+            "p50Ms": 81.649,
+            "p95Ms": 89.389,
+            "p99Ms": 89.389
+          },
+          "lexical.internalFusionMs": {
+            "count": 10,
+            "p50Ms": 0.062,
+            "p95Ms": 0.103,
+            "p99Ms": 0.103
+          },
+          "lexical.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.099,
+            "p95Ms": 75.674,
+            "p99Ms": 75.674
+          },
+          "lexical.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 83.144,
+            "p95Ms": 129.293,
+            "p99Ms": 129.293
+          },
+          "semantic.channelMs": {
+            "count": 10,
+            "p50Ms": 39.719,
+            "p95Ms": 55.615,
+            "p99Ms": 55.615
+          },
+          "semantic.embeddingCacheLookupMs": {
+            "count": 10,
+            "p50Ms": 0.005,
+            "p95Ms": 0.012,
+            "p99Ms": 0.012
+          },
+          "semantic.embeddingMs": {
+            "count": 10,
+            "p50Ms": 0.021,
+            "p95Ms": 0.061,
+            "p99Ms": 0.061
+          },
+          "semantic.embeddingRemoteMs": {
+            "count": 10,
+            "p50Ms": 0.0,
+            "p95Ms": 0.0,
+            "p99Ms": 0.0
+          },
+          "semantic.executionMs": {
+            "count": 10,
+            "p50Ms": 32.915,
+            "p95Ms": 52.474,
+            "p99Ms": 52.474
+          },
+          "semantic.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.082,
+            "p95Ms": 27.19,
+            "p99Ms": 27.19
+          },
+          "semantic.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 39.783,
+            "p95Ms": 55.622,
+            "p99Ms": 55.622
+          },
+          "semantic.vectorSearchMs": {
+            "count": 10,
+            "p50Ms": 32.888,
+            "p95Ms": 52.404,
+            "p99Ms": 52.404
+          }
+        }
+      },
+      "warmupRequests": 10,
+      "workload": "stale-build-exclusion"
+    },
+    {
+      "activeBuildTruncationCount": 0,
+      "boundedResultFailures": 0,
+      "concurrency": 1,
+      "degraded": 0,
+      "degradedRate": 0.0,
+      "durationSeconds": 5.991,
+      "embeddingCacheOutcomes": {},
+      "errorRate": 0.0,
+      "errors": 0,
+      "invalidEvidenceCount": 0,
+      "missingServerJavaVersionCount": 0,
+      "mode": "lexical",
+      "noEvidenceCount": 0,
+      "p50Ms": 53.171,
+      "p95Ms": 79.237,
+      "p99Ms": 133.983,
+      "performanceLatencyMs": {
+        "lexical.activeValidationMs": {
+          "count": 100,
+          "p50": 3.961,
+          "p95": 7.166,
+          "p99": 12.409
+        },
+        "lexical.channelMs": {
+          "count": 100,
+          "p50": 28.379,
+          "p95": 40.89,
+          "p99": 73.148
+        },
+        "lexical.elasticsearchMs": {
+          "count": 100,
+          "p50": 23.396,
+          "p95": 33.609,
+          "p99": 54.959
+        },
+        "lexical.executionMs": {
+          "count": 100,
+          "p50": 28.315,
+          "p95": 40.806,
+          "p99": 73.058
+        },
+        "lexical.internalFusionMs": {
+          "count": 100,
+          "p50": 0.035,
+          "p95": 0.126,
+          "p99": 0.173
+        },
+        "lexical.queueWaitMs": {
+          "count": 100,
+          "p50": 0.057,
+          "p95": 0.078,
+          "p99": 0.088
+        },
+        "lexical.requestObservedMs": {
+          "count": 100,
+          "p50": 28.393,
+          "p95": 40.904,
+          "p99": 73.162
+        }
+      },
+      "requestLatencyMs": {
+        "p50": 53.171,
+        "p95": 79.237,
+        "p99": 133.983
+      },
+      "requests": 100,
+      "sentinelRecallFailures": 0,
+      "serverJavaVersions": [
+        "21.0.10"
+      ],
+      "stageP95Ms": {
+        "endpointTotal": 67.0,
+        "fusion": 0.0,
+        "lexical": 40.0,
+        "total": 57.0
+      },
+      "staleCandidateCount": 0,
+      "throughputRequestsPerSecond": 16.693,
+      "timeoutComponents": {},
+      "timeoutPlateauCount": 0,
+      "timeoutRate": 0.0,
+      "timeouts": 0,
+      "warmupDiagnostics": {
+        "cacheOutcomes": {},
+        "degradedComponents": {},
+        "lexicalOutcomes": {
+          "admissionTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "requestCount": 10,
+        "semanticOutcomes": {
+          "admissionTimeouts": 0,
+          "annRefillExhausted": 0,
+          "annRefillRounds": 0,
+          "annRefilled": 0,
+          "annRequests": 0,
+          "dbStatementTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "stages": {
+          "lexical.activeValidationMs": {
+            "count": 10,
+            "p50Ms": 5.661,
+            "p95Ms": 7.923,
+            "p99Ms": 7.923
+          },
+          "lexical.channelMs": {
+            "count": 10,
+            "p50Ms": 32.195,
+            "p95Ms": 38.305,
+            "p99Ms": 38.305
+          },
+          "lexical.elasticsearchMs": {
+            "count": 10,
+            "p50Ms": 25.0,
+            "p95Ms": 29.271,
+            "p99Ms": 29.271
+          },
+          "lexical.executionMs": {
+            "count": 10,
+            "p50Ms": 32.124,
+            "p95Ms": 38.237,
+            "p99Ms": 38.237
+          },
+          "lexical.internalFusionMs": {
+            "count": 10,
+            "p50Ms": 0.101,
+            "p95Ms": 0.272,
+            "p99Ms": 0.272
+          },
+          "lexical.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.056,
+            "p95Ms": 0.21,
+            "p99Ms": 0.21
+          },
+          "lexical.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 32.209,
+            "p95Ms": 38.318,
+            "p99Ms": 38.318
+          }
+        }
+      },
+      "warmupRequests": 10,
+      "workload": "high-active-build-count"
+    },
+    {
+      "activeBuildTruncationCount": 0,
+      "boundedResultFailures": 0,
+      "concurrency": 8,
+      "degraded": 0,
+      "degradedRate": 0.0,
+      "durationSeconds": 1.147,
+      "embeddingCacheOutcomes": {},
+      "errorRate": 0.0,
+      "errors": 0,
+      "invalidEvidenceCount": 0,
+      "missingServerJavaVersionCount": 0,
+      "mode": "lexical",
+      "noEvidenceCount": 0,
+      "p50Ms": 89.009,
+      "p95Ms": 120.083,
+      "p99Ms": 132.582,
+      "performanceLatencyMs": {
+        "lexical.activeValidationMs": {
+          "count": 100,
+          "p50": 6.121,
+          "p95": 9.966,
+          "p99": 11.735
+        },
+        "lexical.channelMs": {
+          "count": 100,
+          "p50": 46.294,
+          "p95": 62.461,
+          "p99": 70.345
+        },
+        "lexical.elasticsearchMs": {
+          "count": 100,
+          "p50": 38.416,
+          "p95": 54.29,
+          "p99": 61.47
+        },
+        "lexical.executionMs": {
+          "count": 100,
+          "p50": 46.179,
+          "p95": 62.372,
+          "p99": 70.274
+        },
+        "lexical.internalFusionMs": {
+          "count": 100,
+          "p50": 0.051,
+          "p95": 0.09,
+          "p99": 0.153
+        },
+        "lexical.queueWaitMs": {
+          "count": 100,
+          "p50": 0.062,
+          "p95": 0.162,
+          "p99": 0.547
+        },
+        "lexical.requestObservedMs": {
+          "count": 100,
+          "p50": 46.308,
+          "p95": 62.478,
+          "p99": 70.362
+        }
+      },
+      "requestLatencyMs": {
+        "p50": 89.009,
+        "p95": 120.083,
+        "p99": 132.582
+      },
+      "requests": 100,
+      "sentinelRecallFailures": 0,
+      "serverJavaVersions": [
+        "21.0.10"
+      ],
+      "stageP95Ms": {
+        "endpointTotal": 107.0,
+        "fusion": 0.0,
+        "lexical": 62.0,
+        "total": 91.0
+      },
+      "staleCandidateCount": 0,
+      "throughputRequestsPerSecond": 87.19,
+      "timeoutComponents": {},
+      "timeoutPlateauCount": 0,
+      "timeoutRate": 0.0,
+      "timeouts": 0,
+      "warmupDiagnostics": {
+        "cacheOutcomes": {},
+        "degradedComponents": {},
+        "lexicalOutcomes": {
+          "admissionTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "requestCount": 10,
+        "semanticOutcomes": {
+          "admissionTimeouts": 0,
+          "annRefillExhausted": 0,
+          "annRefillRounds": 0,
+          "annRefilled": 0,
+          "annRequests": 0,
+          "dbStatementTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "stages": {
+          "lexical.activeValidationMs": {
+            "count": 10,
+            "p50Ms": 5.555,
+            "p95Ms": 8.111,
+            "p99Ms": 8.111
+          },
+          "lexical.channelMs": {
+            "count": 10,
+            "p50Ms": 39.809,
+            "p95Ms": 55.623,
+            "p99Ms": 55.623
+          },
+          "lexical.elasticsearchMs": {
+            "count": 10,
+            "p50Ms": 31.837,
+            "p95Ms": 48.529,
+            "p99Ms": 48.529
+          },
+          "lexical.executionMs": {
+            "count": 10,
+            "p50Ms": 39.74,
+            "p95Ms": 55.542,
+            "p99Ms": 55.542
+          },
+          "lexical.internalFusionMs": {
+            "count": 10,
+            "p50Ms": 0.035,
+            "p95Ms": 0.045,
+            "p99Ms": 0.045
+          },
+          "lexical.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.05,
+            "p95Ms": 0.161,
+            "p99Ms": 0.161
+          },
+          "lexical.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 39.816,
+            "p95Ms": 55.634,
+            "p99Ms": 55.634
+          }
+        }
+      },
+      "warmupRequests": 10,
+      "workload": "high-active-build-count"
+    },
+    {
+      "activeBuildTruncationCount": 0,
+      "boundedResultFailures": 0,
+      "concurrency": 32,
+      "degraded": 0,
+      "degradedRate": 0.0,
+      "durationSeconds": 0.944,
+      "embeddingCacheOutcomes": {},
+      "errorRate": 0.0,
+      "errors": 0,
+      "invalidEvidenceCount": 0,
+      "missingServerJavaVersionCount": 0,
+      "mode": "lexical",
+      "noEvidenceCount": 0,
+      "p50Ms": 266.509,
+      "p95Ms": 335.562,
+      "p99Ms": 346.612,
+      "performanceLatencyMs": {
+        "lexical.activeValidationMs": {
+          "count": 100,
+          "p50": 8.812,
+          "p95": 17.812,
+          "p99": 20.911
+        },
+        "lexical.channelMs": {
+          "count": 100,
+          "p50": 199.129,
+          "p95": 256.242,
+          "p99": 265.383
+        },
+        "lexical.elasticsearchMs": {
+          "count": 100,
+          "p50": 57.992,
+          "p95": 73.986,
+          "p99": 85.726
+        },
+        "lexical.executionMs": {
+          "count": 100,
+          "p50": 69.336,
+          "p95": 87.461,
+          "p99": 102.22
+        },
+        "lexical.internalFusionMs": {
+          "count": 100,
+          "p50": 0.05,
+          "p95": 0.113,
+          "p99": 0.171
+        },
+        "lexical.queueWaitMs": {
+          "count": 100,
+          "p50": 134.026,
+          "p95": 177.532,
+          "p99": 189.649
+        },
+        "lexical.requestObservedMs": {
+          "count": 100,
+          "p50": 199.144,
+          "p95": 256.254,
+          "p99": 265.397
+        }
+      },
+      "requestLatencyMs": {
+        "p50": 266.509,
+        "p95": 335.562,
+        "p99": 346.612
+      },
+      "requests": 100,
+      "sentinelRecallFailures": 0,
+      "serverJavaVersions": [
+        "21.0.10"
+      ],
+      "stageP95Ms": {
+        "endpointTotal": 319.0,
+        "fusion": 0.0,
+        "lexical": 87.0,
+        "total": 294.0
+      },
+      "staleCandidateCount": 0,
+      "throughputRequestsPerSecond": 105.983,
+      "timeoutComponents": {},
+      "timeoutPlateauCount": 0,
+      "timeoutRate": 0.0,
+      "timeouts": 0,
+      "warmupDiagnostics": {
+        "cacheOutcomes": {},
+        "degradedComponents": {},
+        "lexicalOutcomes": {
+          "admissionTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "requestCount": 10,
+        "semanticOutcomes": {
+          "admissionTimeouts": 0,
+          "annRefillExhausted": 0,
+          "annRefillRounds": 0,
+          "annRefilled": 0,
+          "annRequests": 0,
+          "dbStatementTimeouts": 0,
+          "executionTimeouts": 0,
+          "rejected": 0
+        },
+        "stages": {
+          "lexical.activeValidationMs": {
+            "count": 10,
+            "p50Ms": 4.438,
+            "p95Ms": 4.915,
+            "p99Ms": 4.915
+          },
+          "lexical.channelMs": {
+            "count": 10,
+            "p50Ms": 42.094,
+            "p95Ms": 72.334,
+            "p99Ms": 72.334
+          },
+          "lexical.elasticsearchMs": {
+            "count": 10,
+            "p50Ms": 34.662,
+            "p95Ms": 39.541,
+            "p99Ms": 39.541
+          },
+          "lexical.executionMs": {
+            "count": 10,
+            "p50Ms": 40.41,
+            "p95Ms": 45.269,
+            "p99Ms": 45.269
+          },
+          "lexical.internalFusionMs": {
+            "count": 10,
+            "p50Ms": 0.034,
+            "p95Ms": 0.051,
+            "p99Ms": 0.051
+          },
+          "lexical.queueWaitMs": {
+            "count": 10,
+            "p50Ms": 0.059,
+            "p95Ms": 36.998,
+            "p99Ms": 36.998
+          },
+          "lexical.requestObservedMs": {
+            "count": 10,
+            "p50Ms": 42.099,
+            "p95Ms": 72.344,
+            "p99Ms": 72.344
+          }
+        }
+      },
+      "warmupRequests": 10,
+      "workload": "high-active-build-count"
+    }
+  ],
+  "runtime": {
+    "elasticsearch": "http://127.0.0.1",
+    "platform": "Windows-11-10.0.22621-SP0",
+    "processor": "AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD",
+    "python": "3.12.14",
+    "runnerJavaVersion": "java version \"17.0.7\" 2023-04-18 LTS",
+    "serverJavaVersion": "21.0.10",
+    "target": "http://127.0.0.1/internal/benchmarks/retrieval"
+  },
+  "serverLifetimeDiagnostics": {
+    "cacheOutcomes": {
+      "HIT": 1241,
+      "MISS_REMOTE": 80
+    },
+    "semanticOutcomes": {
+      "annRefillExhausted": 0,
+      "annRefillRounds": 0,
+      "annRefilled": 0,
+      "annRequests": 1318,
+      "dbStatementTimeouts": 0
+    },
+    "serverJavaVersion": "21.0.10",
+    "stages": {
+      "lexical.activeValidationMs": {
+        "count": 1650,
+        "maxMs": 88.2882,
+        "meanMs": 11.91948309090909,
+        "p50Ms": 9.306112,
+        "p95Ms": 23.986176,
+        "p99Ms": 41.811968
+      },
+      "lexical.channelMs": {
+        "count": 1650,
+        "maxMs": 603.7299,
+        "meanMs": 145.57720127272728,
+        "p50Ms": 74.448896,
+        "p95Ms": 435.15904,
+        "p99Ms": 519.04512
+      },
+      "lexical.elasticsearchMs": {
+        "count": 1650,
+        "maxMs": 430.6638,
+        "meanMs": 64.85963266666667,
+        "p50Ms": 55.574528,
+        "p95Ms": 116.391936,
+        "p99Ms": 149.946368
+      },
+      "lexical.executionMs": {
+        "count": 1650,
+        "maxMs": 486.2895,
+        "meanMs": 78.38198703030304,
+        "p50Ms": 66.060288,
+        "p95Ms": 141.55776,
+        "p99Ms": 191.889408
+      },
+      "lexical.internalFusionMs": {
+        "count": 1650,
+        "maxMs": 4.3375,
+        "meanMs": 0.11053830303030304,
+        "p50Ms": 0.0768,
+        "p95Ms": 0.171008,
+        "p99Ms": 0.277504
+      },
+      "lexical.queueWaitMs": {
+        "count": 1650,
+        "maxMs": 412.7678,
+        "meanMs": 67.16553612121213,
+        "p50Ms": 0.07168,
+        "p95Ms": 318.765056,
+        "p99Ms": 369.096704
+      },
+      "lexical.requestObservedMs": {
+        "count": 1650,
+        "maxMs": 603.9876,
+        "meanMs": 145.5946816969697,
+        "p50Ms": 74.448896,
+        "p95Ms": 435.15904,
+        "p99Ms": 519.04512
+      },
+      "semantic.channelMs": {
+        "count": 1321,
+        "maxMs": 885.4293,
+        "meanMs": 61.12160249810749,
+        "p50Ms": 39.3216,
+        "p95Ms": 175.63648,
+        "p99Ms": 284.688384
+      },
+      "semantic.embeddingCacheLookupMs": {
+        "count": 1321,
+        "maxMs": 0.6791,
+        "meanMs": 0.019778342165026493,
+        "p50Ms": 0.00864,
+        "p95Ms": 0.022464,
+        "p99Ms": 0.069568
+      },
+      "semantic.embeddingMs": {
+        "count": 1321,
+        "maxMs": 408.7275,
+        "meanMs": 14.569701589704769,
+        "p50Ms": 0.026368,
+        "p95Ms": 0.237312,
+        "p99Ms": 260.046592
+      },
+      "semantic.embeddingRemoteMs": {
+        "count": 80,
+        "maxMs": 405.2514,
+        "meanMs": 236.4032174625,
+        "p50Ms": 218.103808,
+        "p95Ms": 293.60128,
+        "p99Ms": 360.710144
+      },
+      "semantic.executionMs": {
+        "count": 1321,
+        "maxMs": 859.2387,
+        "meanMs": 52.15355791067373,
+        "p50Ms": 39.3216,
+        "p95Ms": 91.7504,
+        "p99Ms": 284.688384
+      },
+      "semantic.queueWaitMs": {
+        "count": 1321,
+        "maxMs": 132.579,
+        "meanMs": 8.911872672218017,
+        "p50Ms": 0.064512,
+        "p95Ms": 60.816384,
+        "p99Ms": 109.05088
+      },
+      "semantic.requestObservedMs": {
+        "count": 1321,
+        "maxMs": 810.596,
+        "meanMs": 61.03412997728993,
+        "p50Ms": 39.3216,
+        "p95Ms": 175.63648,
+        "p99Ms": 284.688384
+      },
+      "semantic.vectorSearchMs": {
+        "count": 1321,
+        "maxMs": 600.5232,
+        "meanMs": 37.54547305071915,
+        "p50Ms": 37.224448,
+        "p95Ms": 66.584576,
+        "p99Ms": 87.556096
+      }
+    }
+  },
+  "status": "COMPLETED",
+  "summary": {
+    "degradedRate": 0.0,
+    "errorRate": 0.0,
+    "invalidEvidenceCount": 0,
+    "noEvidenceCount": 0,
+    "p50Ms": 97.269,
+    "p95Ms": 640.252,
+    "p99Ms": 664.806,
+    "timeoutRate": 0.0
+  },
+  "topology": {
+    "activeBuildCount": 2000,
+    "activeBuildFilterLimit": 10000,
+    "activeBuildSentinel": "G11_ACTIVE_BUILD_SENTINEL_2000",
+    "activeBuildSentinelBuildId": 2000,
+    "activeBuildSentinelDocumentId": 2000,
+    "activeBuildSentinelRetrievalUnitId": 2000,
+    "activeDocuments": 2000,
+    "activeRetrievalUnits": 20000,
+    "files": {
+      "documents": "documents.jsonl",
+      "retrievalUnits": "retrieval_units.jsonl"
+    },
+    "fixtureIdentity": "60f353fd0cd035b438784cbcab6de607155742c2660acb50de00b7fc356a02e1",
+    "hasStaleBuilds": true,
+    "mode": "smoke",
+    "schemaVersion": 1,
+    "seed": 20260226,
+    "sharedV2Index": "modelrag-retrieval-units-v2",
+    "staleRetrievalUnits": 200,
+    "vectorDimension": 1024,
+    "vectorsMaterialized": false
+  },
+  "warmupDiagnostics": {
+    "cacheOutcomes": {
+      "HIT": 80,
+      "MISS_REMOTE": 40
+    },
+    "degradedComponents": {
+      "SEMANTIC_TIMEOUT": 2
+    },
+    "lexicalOutcomes": {
+      "admissionTimeouts": 0,
+      "executionTimeouts": 0,
+      "rejected": 0
+    },
+    "requestCount": 210,
+    "semanticOutcomes": {
+      "admissionTimeouts": 0,
+      "annRefillExhausted": 0,
+      "annRefillRounds": 0,
+      "annRefilled": 0,
+      "annRequests": 118,
+      "dbStatementTimeouts": 0,
+      "executionTimeouts": 2,
+      "rejected": 0
+    },
+    "stages": {
+      "lexical.activeValidationMs": {
+        "count": 150,
+        "p50Ms": 9.245,
+        "p95Ms": 20.185,
+        "p99Ms": 21.921
+      },
+      "lexical.channelMs": {
+        "count": 150,
+        "p50Ms": 78.784,
+        "p95Ms": 132.734,
+        "p99Ms": 154.276
+      },
+      "lexical.elasticsearchMs": {
+        "count": 150,
+        "p50Ms": 62.912,
+        "p95Ms": 105.416,
+        "p99Ms": 134.007
+      },
+      "lexical.executionMs": {
+        "count": 150,
+        "p50Ms": 75.705,
+        "p95Ms": 122.169,
+        "p99Ms": 153.287
+      },
+      "lexical.internalFusionMs": {
+        "count": 150,
+        "p50Ms": 0.084,
+        "p95Ms": 0.314,
+        "p99Ms": 0.818
+      },
+      "lexical.queueWaitMs": {
+        "count": 150,
+        "p50Ms": 0.068,
+        "p95Ms": 60.431,
+        "p99Ms": 82.551
+      },
+      "lexical.requestObservedMs": {
+        "count": 150,
+        "p50Ms": 78.799,
+        "p95Ms": 132.748,
+        "p99Ms": 154.296
+      },
+      "semantic.channelMs": {
+        "count": 119,
+        "p50Ms": 55.615,
+        "p95Ms": 333.791,
+        "p99Ms": 711.587
+      },
+      "semantic.embeddingCacheLookupMs": {
+        "count": 120,
+        "p50Ms": 0.008,
+        "p95Ms": 0.058,
+        "p99Ms": 0.22
+      },
+      "semantic.embeddingMs": {
+        "count": 120,
+        "p50Ms": 0.085,
+        "p95Ms": 273.227,
+        "p99Ms": 397.567
+      },
+      "semantic.embeddingRemoteMs": {
+        "count": 120,
+        "p50Ms": 0.0,
+        "p95Ms": 270.333,
+        "p99Ms": 389.268
+      },
+      "semantic.executionMs": {
+        "count": 119,
+        "p50Ms": 52.474,
+        "p95Ms": 333.709,
+        "p99Ms": 710.694
+      },
+      "semantic.queueWaitMs": {
+        "count": 120,
+        "p50Ms": 0.076,
+        "p95Ms": 21.764,
+        "p99Ms": 36.771
+      },
+      "semantic.requestObservedMs": {
+        "count": 120,
+        "p50Ms": 55.995,
+        "p95Ms": 344.714,
+        "p99Ms": 805.807
+      },
+      "semantic.vectorSearchMs": {
+        "count": 119,
+        "p50Ms": 37.449,
+        "p95Ms": 80.577,
+        "p99Ms": 490.506
+      }
+    }
+  },
+  "workloads": [
+    "semantic-only",
+    "lexical-only",
+    "hybrid",
+    "document-scoped",
+    "broad",
+    "stale-build-exclusion",
+    "high-active-build-count"
+  ]
+}

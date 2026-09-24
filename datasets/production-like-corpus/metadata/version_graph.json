@@ -1,0 +1,201 @@
+{
+  "edges": [
+    {
+      "from": "HR-001",
+      "to": "HR-002",
+      "type": "SUPERSEDES"
+    },
+    {
+      "effectiveRange": {
+        "from": "2026-11-10",
+        "to": "2026-11-18"
+      },
+      "from": "FIN-003",
+      "to": "FIN-002",
+      "type": "OVERRIDES"
+    }
+  ],
+  "nodes": [
+    {
+      "documentId": "HR-001",
+      "effectiveDate": "2026-02-01",
+      "status": "ACTIVE",
+      "version": "V5.0"
+    },
+    {
+      "documentId": "HR-002",
+      "effectiveDate": "2024-02-01",
+      "status": "SUPERSEDED",
+      "version": "V3.1"
+    },
+    {
+      "documentId": "HR-003",
+      "effectiveDate": "2026-02-01",
+      "status": "ACTIVE",
+      "version": "V4.0"
+    },
+    {
+      "documentId": "HR-004",
+      "effectiveDate": "2026-02-01",
+      "status": "ACTIVE",
+      "version": "V3.0"
+    },
+    {
+      "documentId": "HR-005",
+      "effectiveDate": "2026-02-01",
+      "status": "ACTIVE",
+      "version": "V2.4"
+    },
+    {
+      "documentId": "FIN-001",
+      "effectiveDate": "2026-03-01",
+      "status": "ACTIVE",
+      "version": "V3.2"
+    },
+    {
+      "documentId": "FIN-002",
+      "effectiveDate": "2026-03-01",
+      "status": "ACTIVE",
+      "version": "V2.0"
+    },
+    {
+      "documentId": "FIN-003",
+      "effectiveDate": "2026-11-10",
+      "status": "ACTIVE",
+      "version": "V1.0"
+    },
+    {
+      "documentId": "FIN-004",
+      "effectiveDate": "2026-03-01",
+      "status": "ACTIVE",
+      "version": "V4.1"
+    },
+    {
+      "documentId": "FIN-005",
+      "effectiveDate": "2026-03-01",
+      "status": "ACTIVE",
+      "version": "V2.6"
+    },
+    {
+      "documentId": "IT-001",
+      "effectiveDate": "2026-01-15",
+      "status": "ACTIVE",
+      "version": "V6.0"
+    },
+    {
+      "documentId": "IT-002",
+      "effectiveDate": "2026-01-15",
+      "status": "ACTIVE",
+      "version": "V3.5"
+    },
+    {
+      "documentId": "IT-003",
+      "effectiveDate": "2026-01-15",
+      "status": "ACTIVE",
+      "version": "V8.2"
+    },
+    {
+      "documentId": "IT-004",
+      "effectiveDate": "2026-01-15",
+      "status": "ACTIVE",
+      "version": "V4.0"
+    },
+    {
+      "documentId": "IT-005",
+      "effectiveDate": "2026-01-15",
+      "status": "ACTIVE",
+      "version": "V3.3"
+    },
+    {
+      "documentId": "SEC-001",
+      "effectiveDate": "2026-02-01",
+      "status": "ACTIVE",
+      "version": "V5.0"
+    },
+    {
+      "documentId": "SEC-002",
+      "effectiveDate": "2026-02-01",
+      "status": "ACTIVE",
+      "version": "V3.1"
+    },
+    {
+      "documentId": "SEC-003",
+      "effectiveDate": "2026-02-01",
+      "status": "ACTIVE",
+      "version": "V3.0"
+    },
+    {
+      "documentId": "SEC-004",
+      "effectiveDate": "2026-02-01",
+      "status": "ACTIVE",
+      "version": "V4.2"
+    },
+    {
+      "documentId": "SEC-005",
+      "effectiveDate": "2026-02-01",
+      "status": "ACTIVE",
+      "version": "V2.2"
+    },
+    {
+      "documentId": "PROC-001",
+      "effectiveDate": "2026-02-01",
+      "status": "ACTIVE",
+      "version": "V4.0"
+    },
+    {
+      "documentId": "PROC-002",
+      "effectiveDate": "2026-02-01",
+      "status": "ACTIVE",
+      "version": "V3.0"
+    },
+    {
+      "documentId": "PROC-003",
+      "effectiveDate": "2026-02-01",
+      "status": "ACTIVE",
+      "version": "V2.1"
+    },
+    {
+      "documentId": "LEG-001",
+      "effectiveDate": "2026-02-01",
+      "status": "ACTIVE",
+      "version": "V4.3"
+    },
+    {
+      "documentId": "LEG-002",
+      "effectiveDate": "2026-02-01",
+      "status": "ACTIVE",
+      "version": "V2.0"
+    },
+    {
+      "documentId": "ENG-001",
+      "effectiveDate": "2026-01-20",
+      "status": "ACTIVE",
+      "version": "V5.0"
+    },
+    {
+      "documentId": "OPS-001",
+      "effectiveDate": "2026-01-20",
+      "status": "ACTIVE",
+      "version": "V4.5"
+    },
+    {
+      "documentId": "OPS-002",
+      "effectiveDate": "2026-01-20",
+      "status": "ACTIVE",
+      "version": "V6.0"
+    },
+    {
+      "documentId": "OPS-003",
+      "effectiveDate": "2026-01-20",
+      "status": "ACTIVE",
+      "version": "V3.2"
+    },
+    {
+      "documentId": "OPS-004",
+      "effectiveDate": "2026-01-20",
+      "status": "ACTIVE",
+      "version": "V3.0"
+    }
+  ],
+  "specVersion": "1.1"
+}

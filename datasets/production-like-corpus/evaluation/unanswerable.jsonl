@@ -1,0 +1,20 @@
+{"confusingDocuments":["HR-001","HR-003"],"expectedBehavior":"INSUFFICIENT_EVIDENCE","id":"UNANS-001","query":"公司2027年的陪产假政策会改成多少天？","reasonUnanswerable":"未来政策尚未发布"}
+{"confusingDocuments":["HR-004"],"expectedBehavior":"INSUFFICIENT_EVIDENCE","id":"UNANS-002","query":"CEO在2026年度拿到的个人奖金是多少？","reasonUnanswerable":"知识库不包含个人薪酬"}
+{"confusingDocuments":["FIN-002","FIN-003"],"expectedBehavior":"INSUFFICIENT_EVIDENCE","id":"UNANS-003","query":"11月19日以后上海酒店还会继续按800元报销吗？","reasonUnanswerable":"临时通知只覆盖至11月18日"}
+{"confusingDocuments":["HR-003","HR-005"],"expectedBehavior":"INSUFFICIENT_EVIDENCE","id":"UNANS-004","query":"员工陈某昨天具体请了哪一种假？","reasonUnanswerable":"知识库不包含个人考勤记录"}
+{"confusingDocuments":["OPS-002","OPS-003"],"expectedBehavior":"INSUFFICIENT_EVIDENCE","id":"UNANS-005","query":"2027年P0首次响应会调整为几分钟？","reasonUnanswerable":"未来SLA尚未发布"}
+{"confusingDocuments":["IT-001","IT-002"],"expectedBehavior":"INSUFFICIENT_EVIDENCE","id":"UNANS-006","query":"下一版VPN客户端确切发布日期是哪天？","reasonUnanswerable":"未提供产品发布计划"}
+{"confusingDocuments":["SEC-002","SEC-003"],"expectedBehavior":"INSUFFICIENT_EVIDENCE","id":"UNANS-007","query":"某客户身份证表一共包含多少条记录？","reasonUnanswerable":"不包含真实客户数据或事件明细"}
+{"confusingDocuments":["PROC-002"],"expectedBehavior":"INSUFFICIENT_EVIDENCE","id":"UNANS-008","query":"今年被列入供应商黑名单的公司有哪些？","reasonUnanswerable":"不包含供应商实例名单"}
+{"confusingDocuments":["PROC-003"],"expectedBehavior":"INSUFFICIENT_EVIDENCE","id":"UNANS-009","query":"85万元采购最终由哪位CFO本人签字？","reasonUnanswerable":"制度仅规定角色，不含具体审批实例"}
+{"confusingDocuments":["OPS-002","OPS-003"],"expectedBehavior":"INSUFFICIENT_EVIDENCE","id":"UNANS-010","query":"支付系统下次P0事故会发生在什么时候？","reasonUnanswerable":"无法从制度预测未来事故"}
+{"confusingDocuments":["IT-004"],"expectedBehavior":"INSUFFICIENT_EVIDENCE","id":"UNANS-011","query":"某员工GitLab里具体加入了哪些项目？","reasonUnanswerable":"不包含个人权限实例"}
+{"confusingDocuments":["SEC-002","SEC-004"],"expectedBehavior":"INSUFFICIENT_EVIDENCE","id":"UNANS-012","query":"生产数据库当前口令是什么？","reasonUnanswerable":"制度不得包含生产密钥"}
+{"confusingDocuments":["FIN-004","FIN-005"],"expectedBehavior":"INSUFFICIENT_EVIDENCE","id":"UNANS-013","query":"上个月公司卡一共刷了多少钱？","reasonUnanswerable":"不包含交易流水"}
+{"confusingDocuments":["FIN-002"],"expectedBehavior":"INSUFFICIENT_EVIDENCE","id":"UNANS-014","query":"明年A类城市住宿标准会涨到多少？","reasonUnanswerable":"未来标准尚未发布"}
+{"confusingDocuments":["SEC-004"],"expectedBehavior":"INSUFFICIENT_EVIDENCE","id":"UNANS-015","query":"最近一次Break Glass是谁发起的？","reasonUnanswerable":"不包含访问审计实例"}
+{"confusingDocuments":["OPS-002"],"expectedBehavior":"INSUFFICIENT_EVIDENCE","id":"UNANS-016","query":"本周Network On-call的真人姓名和手机号是什么？","reasonUnanswerable":"手册仅使用角色名"}
+{"confusingDocuments":["ENG-001"],"expectedBehavior":"INSUFFICIENT_EVIDENCE","id":"UNANS-017","query":"某项目今天是否已经通过验收？","reasonUnanswerable":"不包含项目执行状态"}
+{"confusingDocuments":["LEG-001","LEG-002"],"expectedBehavior":"INSUFFICIENT_EVIDENCE","id":"UNANS-018","query":"公司正在谈判的合同金额是多少？","reasonUnanswerable":"不包含具体合同商业信息"}
+{"confusingDocuments":["HR-002","HR-004"],"expectedBehavior":"INSUFFICIENT_EVIDENCE","id":"UNANS-019","query":"下季度员工健康补贴是否提高？","reasonUnanswerable":"未来补贴调整尚未发布"}
+{"confusingDocuments":["FIN-004","FIN-005"],"expectedBehavior":"INSUFFICIENT_EVIDENCE","id":"UNANS-020","query":"某次发票重复报销是谁操作的？","reasonUnanswerable":"不包含个人报销案件"}

@@ -1,0 +1,923 @@
+{
+  "facts": [
+    {
+      "factId": "HR-001",
+      "primarySources": [
+        "HR-003"
+      ],
+      "retrievalIntent": "Semantic+Version",
+      "statement": "当前陪产假15个自然日",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "HR-002",
+      "primarySources": [
+        "HR-002"
+      ],
+      "retrievalIntent": "Stale",
+      "statement": "2024旧制度陪产假10天",
+      "status": "HISTORICAL"
+    },
+    {
+      "factId": "HR-003",
+      "primarySources": [
+        "HR-003"
+      ],
+      "retrievalIntent": "Rule",
+      "statement": "年假按累计工作年限分5/10/15天",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "HR-004",
+      "primarySources": [
+        "HR-003"
+      ],
+      "retrievalIntent": "Conditional",
+      "statement": "新员工满足制度条件后才可使用当年度年假",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "HR-005",
+      "primarySources": [
+        "HR-003"
+      ],
+      "retrievalIntent": "Hybrid",
+      "statement": "连续病假超过3天需要医疗证明",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "HR-006",
+      "primarySources": [
+        "HR-003"
+      ],
+      "retrievalIntent": "Exact condition",
+      "statement": "婚假须在登记后12个月内使用",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "HR-007",
+      "primarySources": [
+        "HR-003"
+      ],
+      "retrievalIntent": "Semantic",
+      "statement": "育儿假按子女年龄和适用地区规则执行",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "HR-008",
+      "primarySources": [
+        "HR-003"
+      ],
+      "retrievalIntent": "Rule",
+      "statement": "迟到30分钟以上进入异常考勤流程",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "HR-009",
+      "primarySources": [
+        "HR-003",
+        "HR-005"
+      ],
+      "retrievalIntent": "FAQ→Policy",
+      "statement": "忘打卡可在2个工作日内补卡",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "HR-010",
+      "primarySources": [
+        "HR-003"
+      ],
+      "retrievalIntent": "Exception",
+      "statement": "紧急请假允许事后补申请",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "HR-011",
+      "primarySources": [
+        "HR-003"
+      ],
+      "retrievalIntent": "Multi-condition",
+      "statement": "连续请假超过5个工作日需二级审批",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "HR-012",
+      "primarySources": [
+        "HR-004"
+      ],
+      "retrievalIntent": "Version",
+      "statement": "2026健康补贴1200元",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "HR-013",
+      "primarySources": [
+        "HR-002"
+      ],
+      "retrievalIntent": "Stale",
+      "statement": "2024健康补贴800元",
+      "status": "HISTORICAL"
+    },
+    {
+      "factId": "HR-014",
+      "primarySources": [
+        "HR-004"
+      ],
+      "retrievalIntent": "Hard Negative",
+      "statement": "异地派驻住宿补贴不等于普通差旅住宿报销",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "HR-015",
+      "primarySources": [
+        "HR-001",
+        "IT-004"
+      ],
+      "retrievalIntent": "Cross-domain",
+      "statement": "离职员工权限在最后工作日完成回收",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "FIN-001",
+      "primarySources": [
+        "FIN-001"
+      ],
+      "retrievalIntent": "Hybrid",
+      "statement": "P7及以下高铁原则二等座",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "FIN-002",
+      "primarySources": [
+        "FIN-001"
+      ],
+      "retrievalIntent": "Rule",
+      "statement": "P8/P9可乘高铁一等座",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "FIN-003",
+      "primarySources": [
+        "FIN-001"
+      ],
+      "retrievalIntent": "Exception",
+      "statement": "P7铁路行程超过6小时且VP事前批准可一等座",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "FIN-004",
+      "primarySources": [
+        "FIN-002"
+      ],
+      "retrievalIntent": "Table",
+      "statement": "上海属于A类城市",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "FIN-005",
+      "primarySources": [
+        "FIN-002"
+      ],
+      "retrievalIntent": "Table",
+      "statement": "P6/P7上海住宿标准600元/晚",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "FIN-006",
+      "primarySources": [
+        "FIN-003"
+      ],
+      "retrievalIntent": "Override",
+      "statement": "AI Summit期间上海住宿临时提高至800元/晚",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "FIN-007",
+      "primarySources": [
+        "FIN-003"
+      ],
+      "retrievalIntent": "Time",
+      "statement": "临时800元仅2026-11-10至11-18有效",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "FIN-008",
+      "primarySources": [
+        "FIN-003"
+      ],
+      "retrievalIntent": "Cross-doc",
+      "statement": "临时住宿通知不改变交通工具标准",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "FIN-009",
+      "primarySources": [
+        "FIN-001",
+        "FIN-004"
+      ],
+      "retrievalIntent": "Rule",
+      "statement": "超住宿标准原则上只报标准内部分",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "FIN-010",
+      "primarySources": [
+        "FIN-001",
+        "FIN-004"
+      ],
+      "retrievalIntent": "Exception",
+      "statement": "特殊超标准需要额外审批",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "FIN-011",
+      "primarySources": [
+        "FIN-001",
+        "FIN-002"
+      ],
+      "retrievalIntent": "Rule",
+      "statement": "国内差旅餐补按自然日计算",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "FIN-012",
+      "primarySources": [
+        "FIN-004"
+      ],
+      "retrievalIntent": "Rule",
+      "statement": "发票须在规定报销周期内提交",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "FIN-013",
+      "primarySources": [
+        "FIN-004"
+      ],
+      "retrievalIntent": "Keyword",
+      "statement": "电子发票必须避免重复报销",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "FIN-014",
+      "primarySources": [
+        "FIN-004"
+      ],
+      "retrievalIntent": "Semantic",
+      "statement": "发票遗失需要替代证明材料",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "FIN-015",
+      "primarySources": [
+        "FIN-004"
+      ],
+      "retrievalIntent": "Similarity",
+      "statement": "个人垫付和公司卡流程不同",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "FIN-016",
+      "primarySources": [
+        "HR-004",
+        "FIN-001"
+      ],
+      "retrievalIntent": "Hard Negative",
+      "statement": "长期派驻住宿补贴不适用普通出差标准",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "FIN-017",
+      "primarySources": [
+        "FIN-002"
+      ],
+      "retrievalIntent": "Table Routing",
+      "statement": "海外住宿按国家/地区标准表执行",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "FIN-018",
+      "primarySources": [
+        "FIN-001",
+        "FIN-002"
+      ],
+      "retrievalIntent": "Routing",
+      "statement": "差旅费用标准以FIN-002为基准，而非员工手册",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "IT-001",
+      "primarySources": [
+        "IT-003"
+      ],
+      "retrievalIntent": "BM25",
+      "statement": "VPN-ERR-1042=证书链校验失败",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "IT-002",
+      "primarySources": [
+        "IT-003"
+      ],
+      "retrievalIntent": "BM25",
+      "statement": "VPN-ERR-1043=设备证书过期",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "IT-003",
+      "primarySources": [
+        "IT-003"
+      ],
+      "retrievalIntent": "BM25",
+      "statement": "SSO-ERR-2107=MFA Token校验失败",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "IT-004",
+      "primarySources": [
+        "IT-003"
+      ],
+      "retrievalIntent": "BM25",
+      "statement": "MAIL-ERR-3021=邮箱容量达到限制",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "IT-005",
+      "primarySources": [
+        "IT-002"
+      ],
+      "retrievalIntent": "Semantic",
+      "statement": "证书链失败需重新签发设备证书",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "IT-006",
+      "primarySources": [
+        "IT-002"
+      ],
+      "retrievalIntent": "Similarity",
+      "statement": "VPN证书过期需走续签流程",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "IT-007",
+      "primarySources": [
+        "IT-002"
+      ],
+      "retrievalIntent": "Procedure",
+      "statement": "VPN故障先查本地网络，再认证，再证书",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "IT-008",
+      "primarySources": [
+        "IT-005"
+      ],
+      "retrievalIntent": "Rule",
+      "statement": "普通员工不得长期持有本地管理员权限",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "IT-009",
+      "primarySources": [
+        "IT-005"
+      ],
+      "retrievalIntent": "Keyword",
+      "statement": "软件安装须符合白名单",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "IT-010",
+      "primarySources": [
+        "IT-004"
+      ],
+      "retrievalIntent": "Similarity",
+      "statement": "GitLab权限由项目Owner审批",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "IT-011",
+      "primarySources": [
+        "IT-004"
+      ],
+      "retrievalIntent": "Similarity",
+      "statement": "OA普通权限由部门管理员处理",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "IT-012",
+      "primarySources": [
+        "IT-004",
+        "SEC-004"
+      ],
+      "retrievalIntent": "Cross-doc",
+      "statement": "生产数据库权限不遵循普通OA权限流程",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "IT-013",
+      "primarySources": [
+        "IT-004"
+      ],
+      "retrievalIntent": "Cross-domain",
+      "statement": "离职账号必须统一回收",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "IT-014",
+      "primarySources": [
+        "IT-005",
+        "SEC-005"
+      ],
+      "retrievalIntent": "Cross-doc",
+      "statement": "设备丢失需同时通知IT与Security",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "IT-015",
+      "primarySources": [
+        "IT-005",
+        "SEC-002"
+      ],
+      "retrievalIntent": "Cross-doc",
+      "statement": "USB使用受信息安全等级约束",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "SEC-001",
+      "primarySources": [
+        "SEC-002"
+      ],
+      "retrievalIntent": "Table",
+      "statement": "数据分L1/L2/L3/L4",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "SEC-002",
+      "primarySources": [
+        "SEC-002"
+      ],
+      "retrievalIntent": "Table",
+      "statement": "员工通讯录属于L2",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "SEC-003",
+      "primarySources": [
+        "SEC-002"
+      ],
+      "retrievalIntent": "Table",
+      "statement": "未公开财务数据属于L3",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "SEC-004",
+      "primarySources": [
+        "SEC-002"
+      ],
+      "retrievalIntent": "Table",
+      "statement": "客户身份证数据属于L3",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "SEC-005",
+      "primarySources": [
+        "SEC-002"
+      ],
+      "retrievalIntent": "Table",
+      "statement": "生产数据库密钥属于L4",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "SEC-006",
+      "primarySources": [
+        "SEC-002",
+        "SEC-001"
+      ],
+      "retrievalIntent": "Cross-table",
+      "statement": "L3/L4数据要求受控存储和加密",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "SEC-007",
+      "primarySources": [
+        "SEC-003"
+      ],
+      "retrievalIntent": "Semantic",
+      "statement": "疑似L3/L4泄露15分钟内报告SOC",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "SEC-008",
+      "primarySources": [
+        "SEC-003"
+      ],
+      "retrievalIntent": "Semantic",
+      "statement": "发错客户身份证表属于非授权披露",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "SEC-009",
+      "primarySources": [
+        "SEC-003"
+      ],
+      "retrievalIntent": "Procedure",
+      "statement": "安全事件先隔离风险并保留证据",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "SEC-010",
+      "primarySources": [
+        "SEC-004"
+      ],
+      "retrievalIntent": "Hybrid",
+      "statement": "临时生产库只读需System Owner+DBA审批",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "SEC-011",
+      "primarySources": [
+        "SEC-004"
+      ],
+      "retrievalIntent": "Similarity",
+      "statement": "生产写权限要求更高级审批",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "SEC-012",
+      "primarySources": [
+        "SEC-004"
+      ],
+      "retrievalIntent": "Exact concept",
+      "statement": "Break Glass仅用于紧急生产事件",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "SEC-013",
+      "primarySources": [
+        "SEC-004"
+      ],
+      "retrievalIntent": "Cross-section",
+      "statement": "Break Glass必须事后审计",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "SEC-014",
+      "primarySources": [
+        "SEC-004"
+      ],
+      "retrievalIntent": "Rule",
+      "statement": "临时生产权限自动失效",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "SEC-015",
+      "primarySources": [
+        "IT-004",
+        "SEC-004"
+      ],
+      "retrievalIntent": "Hard Negative",
+      "statement": "普通IT账号权限不能替代生产数据访问审批",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "PROC-001",
+      "primarySources": [
+        "PROC-003"
+      ],
+      "retrievalIntent": "Table",
+      "statement": "≤5万元采购仅部门负责人审批",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "PROC-002",
+      "primarySources": [
+        "PROC-003"
+      ],
+      "retrievalIntent": "Table",
+      "statement": "5~20万元增加VP审批",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "PROC-003",
+      "primarySources": [
+        "PROC-003"
+      ],
+      "retrievalIntent": "Table",
+      "statement": "20~100万元增加CFO审批",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "PROC-004",
+      "primarySources": [
+        "PROC-003"
+      ],
+      "retrievalIntent": "Table",
+      "statement": ">100万元增加CEO审批",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "PROC-005",
+      "primarySources": [
+        "PROC-003"
+      ],
+      "retrievalIntent": "Derived",
+      "statement": "85万元软件采购需负责人+VP+CFO",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "PROC-006",
+      "primarySources": [
+        "PROC-001"
+      ],
+      "retrievalIntent": "Rule",
+      "statement": "一般采购应经过询价/比价",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "PROC-007",
+      "primarySources": [
+        "PROC-001"
+      ],
+      "retrievalIntent": "Exception",
+      "statement": "特定条件可单一来源采购",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "PROC-008",
+      "primarySources": [
+        "PROC-002"
+      ],
+      "retrievalIntent": "Cross-doc",
+      "statement": "供应商准入需资质审核",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "PROC-009",
+      "primarySources": [
+        "PROC-002"
+      ],
+      "retrievalIntent": "Cross-doc",
+      "statement": "高风险供应商需安全审查",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "PROC-010",
+      "primarySources": [
+        "PROC-002"
+      ],
+      "retrievalIntent": "Rule",
+      "statement": "黑名单供应商不得正常准入",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "LEG-001",
+      "primarySources": [
+        "LEG-001"
+      ],
+      "retrievalIntent": "Hybrid",
+      "statement": "非标准合同条款需要法务审核",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "LEG-002",
+      "primarySources": [
+        "LEG-001",
+        "PROC-002"
+      ],
+      "retrievalIntent": "Cross-doc",
+      "statement": "合同签署前原则上需完成供应商准入",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "LEG-003",
+      "primarySources": [
+        "LEG-001",
+        "PROC-003"
+      ],
+      "retrievalIntent": "Hard Negative",
+      "statement": "合同金额权限与采购审批不是同一个流程",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "LEG-004",
+      "primarySources": [
+        "LEG-002",
+        "LEG-001"
+      ],
+      "retrievalIntent": "FAQ→Policy",
+      "statement": "已提供服务不代表可以绕过补签审批",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "OPS-001",
+      "primarySources": [
+        "OPS-003"
+      ],
+      "retrievalIntent": "Table",
+      "statement": "P0=核心业务整体不可用",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "OPS-002",
+      "primarySources": [
+        "OPS-003"
+      ],
+      "retrievalIntent": "Table",
+      "statement": "P0首次响应≤5分钟",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "OPS-003",
+      "primarySources": [
+        "OPS-003"
+      ],
+      "retrievalIntent": "Table",
+      "statement": "P0技术负责人≤10分钟介入",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "OPS-004",
+      "primarySources": [
+        "OPS-003"
+      ],
+      "retrievalIntent": "Table",
+      "statement": "P0每15分钟同步状态",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "OPS-005",
+      "primarySources": [
+        "OPS-003"
+      ],
+      "retrievalIntent": "Similarity",
+      "statement": "P1首次响应≤10分钟",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "OPS-006",
+      "primarySources": [
+        "OPS-001"
+      ],
+      "retrievalIntent": "Rule",
+      "statement": "普通生产变更必须事前审批",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "OPS-007",
+      "primarySources": [
+        "OPS-001",
+        "OPS-002"
+      ],
+      "retrievalIntent": "Exception",
+      "statement": "P0恢复允许紧急变更流程",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "OPS-008",
+      "primarySources": [
+        "OPS-001"
+      ],
+      "retrievalIntent": "Rule",
+      "statement": "紧急变更仍需事后补审",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "OPS-009",
+      "primarySources": [
+        "OPS-001"
+      ],
+      "retrievalIntent": "Hybrid",
+      "statement": "高风险变更必须有回滚方案",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "OPS-010",
+      "primarySources": [
+        "OPS-002"
+      ],
+      "retrievalIntent": "Structure",
+      "statement": "回滚失败需升级Incident Commander",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "OPS-011",
+      "primarySources": [
+        "OPS-002"
+      ],
+      "retrievalIntent": "Structure",
+      "statement": "数据库事故需DBA On-call介入",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "OPS-012",
+      "primarySources": [
+        "OPS-002"
+      ],
+      "retrievalIntent": "Structure",
+      "statement": "网络事故需Network On-call介入",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "OPS-013",
+      "primarySources": [
+        "OPS-002"
+      ],
+      "retrievalIntent": "Structure",
+      "statement": "安全事故需Security On-call介入",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "OPS-014",
+      "primarySources": [
+        "OPS-002"
+      ],
+      "retrievalIntent": "Cross-section",
+      "statement": "P0必须指定Incident Commander",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "OPS-015",
+      "primarySources": [
+        "OPS-002"
+      ],
+      "retrievalIntent": "Rule",
+      "statement": "事故恢复后需复盘",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "OPS-016",
+      "primarySources": [
+        "OPS-002"
+      ],
+      "retrievalIntent": "Rule",
+      "statement": "复盘需记录根因与改进项",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "OPS-017",
+      "primarySources": [
+        "ENG-001"
+      ],
+      "retrievalIntent": "Lifecycle",
+      "statement": "发布前必须完成测试与审批",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "OPS-018",
+      "primarySources": [
+        "ENG-001",
+        "OPS-001"
+      ],
+      "retrievalIntent": "Rule",
+      "statement": "高风险发布必须灰度",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "OPS-019",
+      "primarySources": [
+        "OPS-001"
+      ],
+      "retrievalIntent": "Similarity",
+      "statement": "普通变更窗口与紧急变更不同",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "OPS-020",
+      "primarySources": [
+        "OPS-002",
+        "OPS-003"
+      ],
+      "retrievalIntent": "Semantic",
+      "statement": "数据库慢但未导致核心业务不可用不当然属于P0",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "OPS-021",
+      "primarySources": [
+        "OPS-003"
+      ],
+      "retrievalIntent": "Semantic",
+      "statement": "核心支付整体不可用属于P0",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "ENG-001",
+      "primarySources": [
+        "ENG-001"
+      ],
+      "retrievalIntent": "Structure",
+      "statement": "项目需经历需求→设计→开发→测试→发布",
+      "status": "CURRENT"
+    },
+    {
+      "factId": "ENG-002",
+      "primarySources": [
+        "ENG-001"
+      ],
+      "retrievalIntent": "Rule",
+      "statement": "未完成验收不能直接归档为完成",
+      "status": "CURRENT"
+    }
+  ],
+  "specVersion": "1.1"
+}

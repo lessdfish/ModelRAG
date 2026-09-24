@@ -1,0 +1,21 @@
+{
+  "counts": {
+    "CROSS_DOCUMENT": 20,
+    "HYBRID": 30,
+    "KEYWORD_BM25": 25,
+    "SEMANTIC": 35,
+    "STRUCTURE_AGENTIC": 10,
+    "TABLE": 15,
+    "VERSION_CONFLICT": 15
+  },
+  "definitions": {
+    "CROSS_DOCUMENT": "需要多个文档或独立证据共同完成",
+    "HYBRID": "关键词条件与语义场景共同约束",
+    "KEYWORD_BM25": "错误码、制度编号与精确标识符",
+    "SEMANTIC": "自然语言意图与制度语义",
+    "STRUCTURE_AGENTIC": "在长文档多个章节间导航与组合",
+    "TABLE": "核心事实必须从XLSX结构化表格取得",
+    "VERSION_CONFLICT": "区分当前、历史与临时覆盖规则"
+  },
+  "total": 150
+}

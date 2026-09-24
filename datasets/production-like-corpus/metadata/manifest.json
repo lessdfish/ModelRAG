@@ -1,0 +1,1243 @@
+{
+  "company": "NovaTech 星云科技",
+  "documentCount": 30,
+  "documents": [
+    {
+      "approver": "HR负责人",
+      "author": "HR制度运营组",
+      "bytes": 44795,
+      "confidentiality": "INTERNAL",
+      "department": "HR",
+      "documentCode": "NT-HR-STD-2026-001",
+      "documentId": "HR-001",
+      "effectiveDate": "2026-02-01",
+      "evaluationTags": [
+        "ROUTING",
+        "CROSS_DOCUMENT",
+        "VERSION"
+      ],
+      "factIds": [
+        "HR-015"
+      ],
+      "faqCount": null,
+      "filename": "corpus/hr/HR-001_员工手册_2026.docx",
+      "format": "DOCX",
+      "ownerDepartment": "HR",
+      "pageTarget": 50,
+      "publishDate": "2026-01-15",
+      "references": [
+        "HR-003",
+        "HR-004"
+      ],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-01-15",
+          "summary": "按年度治理计划发布",
+          "version": "V5.0"
+        }
+      ],
+      "sha256": "89d5f94c031ccdb8895c1fc9374bc84ec4f35e40de1661f2fb56dd5ef8770256",
+      "status": "ACTIVE",
+      "supersedes": [
+        "HR-002"
+      ],
+      "title": "员工手册 2026",
+      "version": "V5.0"
+    },
+    {
+      "approver": "HR负责人",
+      "author": "HR制度运营组",
+      "bytes": 221789,
+      "confidentiality": "INTERNAL",
+      "department": "HR",
+      "documentCode": "NT-HR-POL-2024-002",
+      "documentId": "HR-002",
+      "effectiveDate": "2024-02-01",
+      "evaluationTags": [
+        "STALE",
+        "VERSION_CONFLICT"
+      ],
+      "factIds": [
+        "HR-002",
+        "HR-013"
+      ],
+      "faqCount": null,
+      "filename": "corpus/hr/HR-002_员工手册_2024.pdf",
+      "format": "PDF",
+      "ownerDepartment": "HR",
+      "pageTarget": 43,
+      "publishDate": "2024-01-08",
+      "references": [],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2024-01-08",
+          "summary": "按年度治理计划发布",
+          "version": "V3.1"
+        }
+      ],
+      "sha256": "43bc25cf02aacb47dd9df9ea6d2a40fbb386a5fef681a0aff19daebbc3a9579a",
+      "status": "SUPERSEDED",
+      "supersedes": [],
+      "title": "员工手册 2024",
+      "version": "V3.1"
+    },
+    {
+      "approver": "HR负责人",
+      "author": "HR制度运营组",
+      "bytes": 203482,
+      "confidentiality": "INTERNAL",
+      "department": "HR",
+      "documentCode": "NT-HR-POL-2026-003",
+      "documentId": "HR-003",
+      "effectiveDate": "2026-02-01",
+      "evaluationTags": [
+        "SEMANTIC",
+        "HYBRID",
+        "STRUCTURE"
+      ],
+      "factIds": [
+        "HR-001",
+        "HR-003",
+        "HR-004",
+        "HR-005",
+        "HR-006",
+        "HR-007",
+        "HR-008",
+        "HR-009",
+        "HR-010",
+        "HR-011"
+      ],
+      "faqCount": null,
+      "filename": "corpus/hr/HR-003_员工休假与考勤管理办法.pdf",
+      "format": "PDF",
+      "ownerDepartment": "HR",
+      "pageTarget": 33,
+      "publishDate": "2026-01-15",
+      "references": [],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-01-15",
+          "summary": "按年度治理计划发布",
+          "version": "V4.0"
+        }
+      ],
+      "sha256": "a2883a5a99fd6b42bda0179cb1afd034cd5c3a59a5eb107f5ba14ca8c96bf602",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "员工休假与考勤管理办法",
+      "version": "V4.0"
+    },
+    {
+      "approver": "HR负责人",
+      "author": "HR制度运营组",
+      "bytes": 43315,
+      "confidentiality": "INTERNAL",
+      "department": "HR",
+      "documentCode": "NT-HR-STD-2026-004",
+      "documentId": "HR-004",
+      "effectiveDate": "2026-02-01",
+      "evaluationTags": [
+        "HARD_NEGATIVE",
+        "VERSION"
+      ],
+      "factIds": [
+        "HR-012",
+        "HR-014",
+        "FIN-016"
+      ],
+      "faqCount": null,
+      "filename": "corpus/hr/HR-004_薪酬福利与补贴管理制度.docx",
+      "format": "DOCX",
+      "ownerDepartment": "HR",
+      "pageTarget": 28,
+      "publishDate": "2026-01-20",
+      "references": [],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-01-20",
+          "summary": "按年度治理计划发布",
+          "version": "V3.0"
+        }
+      ],
+      "sha256": "288c19e5d8d1dfb5db278db39d78faff70cefd6687662c0789b731687a417711",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "薪酬福利与补贴管理制度",
+      "version": "V3.0"
+    },
+    {
+      "approver": "HR负责人",
+      "author": "HR制度运营组",
+      "bytes": 161855,
+      "confidentiality": "INTERNAL",
+      "department": "HR",
+      "documentCode": "NT-HR-FAQ-2026-005",
+      "documentId": "HR-005",
+      "effectiveDate": "2026-02-01",
+      "evaluationTags": [
+        "FAQ",
+        "SEMANTIC",
+        "ROUTING"
+      ],
+      "factIds": [
+        "HR-009"
+      ],
+      "faqCount": 350,
+      "filename": "corpus/hr/HR-005_HR常见问题与员工自助指南.md",
+      "format": "MD",
+      "ownerDepartment": "HR",
+      "pageTarget": null,
+      "publishDate": "2026-02-01",
+      "references": [],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-02-01",
+          "summary": "按年度治理计划发布",
+          "version": "V2.4"
+        }
+      ],
+      "sha256": "3c9266d24073a78569bfe8ec79ce14ba7c7fe1eede2bc8bf57a901d1e0f16039",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "HR常见问题与员工自助指南",
+      "version": "V2.4"
+    },
+    {
+      "approver": "FINANCE负责人",
+      "author": "FINANCE制度运营组",
+      "bytes": 213311,
+      "confidentiality": "INTERNAL",
+      "department": "FINANCE",
+      "documentCode": "NT-FINA-POL-2026-001",
+      "documentId": "FIN-001",
+      "effectiveDate": "2026-03-01",
+      "evaluationTags": [
+        "HYBRID",
+        "EXCEPTION",
+        "CROSS_DOCUMENT"
+      ],
+      "factIds": [
+        "FIN-001",
+        "FIN-002",
+        "FIN-003",
+        "FIN-009",
+        "FIN-010",
+        "FIN-011",
+        "FIN-016",
+        "FIN-018"
+      ],
+      "faqCount": null,
+      "filename": "corpus/finance/FIN-001_差旅及业务出行管理办法_2026.pdf",
+      "format": "PDF",
+      "ownerDepartment": "FINANCE",
+      "pageTarget": 38,
+      "publishDate": "2026-02-10",
+      "references": [
+        "FIN-002",
+        "FIN-004"
+      ],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-02-10",
+          "summary": "按年度治理计划发布",
+          "version": "V3.2"
+        }
+      ],
+      "sha256": "29fca0825783c86a2d43b70dabde3d352c224eec9593954bacf1c25dd1a4b86c",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "差旅及业务出行管理办法 2026",
+      "version": "V3.2"
+    },
+    {
+      "approver": "FINANCE负责人",
+      "author": "FINANCE制度运营组",
+      "bytes": 13713,
+      "confidentiality": "INTERNAL",
+      "department": "FINANCE",
+      "documentCode": "NT-FINA-MAT-2026-002",
+      "documentId": "FIN-002",
+      "effectiveDate": "2026-03-01",
+      "evaluationTags": [
+        "TABLE",
+        "ROUTING"
+      ],
+      "factIds": [
+        "FIN-004",
+        "FIN-005",
+        "FIN-011",
+        "FIN-017",
+        "FIN-018"
+      ],
+      "faqCount": null,
+      "filename": "corpus/finance/FIN-002_2026差旅费用标准.xlsx",
+      "format": "XLSX",
+      "ownerDepartment": "FINANCE",
+      "pageTarget": null,
+      "publishDate": "2026-02-10",
+      "references": [],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-02-10",
+          "summary": "按年度治理计划发布",
+          "version": "V2.0"
+        }
+      ],
+      "sha256": "cc90648c3b42d77a71bec4d9865c3fa7eb10151e1c606d4cee9dc1276604c32f",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "2026差旅费用标准",
+      "version": "V2.0"
+    },
+    {
+      "approver": "FINANCE负责人",
+      "author": "FINANCE制度运营组",
+      "bytes": 40924,
+      "confidentiality": "INTERNAL",
+      "department": "FINANCE",
+      "documentCode": "NT-FINA-STD-2026-003",
+      "documentId": "FIN-003",
+      "effectiveDate": "2026-11-10",
+      "evaluationTags": [
+        "OVERRIDE",
+        "VERSION_CONFLICT",
+        "TIME"
+      ],
+      "factIds": [
+        "FIN-006",
+        "FIN-007",
+        "FIN-008"
+      ],
+      "faqCount": null,
+      "filename": "corpus/finance/FIN-003_2026_Nova_AI_Summit_差旅标准临时调整通知.docx",
+      "format": "DOCX",
+      "ownerDepartment": "FINANCE",
+      "pageTarget": 3,
+      "publishDate": "2026-10-20",
+      "references": [
+        "FIN-002"
+      ],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-10-20",
+          "summary": "按年度治理计划发布",
+          "version": "V1.0"
+        }
+      ],
+      "sha256": "edf4cf80a5df3b6d26337d4639cc1330c1a81a1c397e288e2e6738fe422b1a74",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "2026 Nova AI Summit 差旅标准临时调整通知",
+      "version": "V1.0"
+    },
+    {
+      "approver": "FINANCE负责人",
+      "author": "FINANCE制度运营组",
+      "bytes": 178623,
+      "confidentiality": "INTERNAL",
+      "department": "FINANCE",
+      "documentCode": "NT-FINA-POL-2026-004",
+      "documentId": "FIN-004",
+      "effectiveDate": "2026-03-01",
+      "evaluationTags": [
+        "SEMANTIC",
+        "HARD_NEGATIVE"
+      ],
+      "factIds": [
+        "FIN-009",
+        "FIN-010",
+        "FIN-012",
+        "FIN-013",
+        "FIN-014",
+        "FIN-015"
+      ],
+      "faqCount": null,
+      "filename": "corpus/finance/FIN-004_费用报销管理办法.pdf",
+      "format": "PDF",
+      "ownerDepartment": "FINANCE",
+      "pageTarget": 28,
+      "publishDate": "2026-02-12",
+      "references": [],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-02-12",
+          "summary": "按年度治理计划发布",
+          "version": "V4.1"
+        }
+      ],
+      "sha256": "d3963d3d261e7d4856331d9eb6b2e98a7d8b610bec9d6cd271f624c18e277c87",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "费用报销管理办法",
+      "version": "V4.1"
+    },
+    {
+      "approver": "FINANCE负责人",
+      "author": "FINANCE制度运营组",
+      "bytes": 90776,
+      "confidentiality": "INTERNAL",
+      "department": "FINANCE",
+      "documentCode": "NT-FINA-FAQ-2026-005",
+      "documentId": "FIN-005",
+      "effectiveDate": "2026-03-01",
+      "evaluationTags": [
+        "FAQ",
+        "SEMANTIC"
+      ],
+      "factIds": [],
+      "faqCount": 200,
+      "filename": "corpus/finance/FIN-005_财务报销_FAQ.md",
+      "format": "MD",
+      "ownerDepartment": "FINANCE",
+      "pageTarget": null,
+      "publishDate": "2026-03-01",
+      "references": [],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-03-01",
+          "summary": "按年度治理计划发布",
+          "version": "V2.6"
+        }
+      ],
+      "sha256": "00992868fd79139ce90f0ad2d71e1558e5d5c1fe20066db0677f45a72bfdc958",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "财务报销 FAQ",
+      "version": "V2.6"
+    },
+    {
+      "approver": "IT负责人",
+      "author": "IT制度运营组",
+      "bytes": 283876,
+      "confidentiality": "INTERNAL",
+      "department": "IT",
+      "documentCode": "NT-IT-POL-2026-001",
+      "documentId": "IT-001",
+      "effectiveDate": "2026-01-15",
+      "evaluationTags": [
+        "ROUTING",
+        "LARGE_DOCUMENT"
+      ],
+      "factIds": [],
+      "faqCount": null,
+      "filename": "corpus/it/IT-001_IT服务管理与员工使用手册.pdf",
+      "format": "PDF",
+      "ownerDepartment": "IT",
+      "pageTarget": 60,
+      "publishDate": "2026-01-05",
+      "references": [
+        "IT-002",
+        "IT-003",
+        "IT-004"
+      ],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-01-05",
+          "summary": "按年度治理计划发布",
+          "version": "V6.0"
+        }
+      ],
+      "sha256": "e202728e15fcbdaab341da7cbe69ca9aecee74b284dcce673b0db30135c3ab38",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "IT服务管理与员工使用手册",
+      "version": "V6.0"
+    },
+    {
+      "approver": "IT负责人",
+      "author": "IT制度运营组",
+      "bytes": 226951,
+      "confidentiality": "INTERNAL",
+      "department": "IT",
+      "documentCode": "NT-IT-POL-2026-002",
+      "documentId": "IT-002",
+      "effectiveDate": "2026-01-15",
+      "evaluationTags": [
+        "SEMANTIC",
+        "PROCEDURE"
+      ],
+      "factIds": [
+        "IT-005",
+        "IT-006",
+        "IT-007"
+      ],
+      "faqCount": null,
+      "filename": "corpus/it/IT-002_VPN使用与故障处理手册.pdf",
+      "format": "PDF",
+      "ownerDepartment": "IT",
+      "pageTarget": 40,
+      "publishDate": "2026-01-08",
+      "references": [],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-01-08",
+          "summary": "按年度治理计划发布",
+          "version": "V3.5"
+        }
+      ],
+      "sha256": "b3ad82dbb4e5521db944e3a7032fea96d5d5ac74218564a49ee74efff0931a57",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "VPN使用与故障处理手册",
+      "version": "V3.5"
+    },
+    {
+      "approver": "IT负责人",
+      "author": "IT制度运营组",
+      "bytes": 316949,
+      "confidentiality": "INTERNAL",
+      "department": "IT",
+      "documentCode": "NT-IT-POL-2026-003",
+      "documentId": "IT-003",
+      "effectiveDate": "2026-01-15",
+      "evaluationTags": [
+        "KEYWORD_BM25",
+        "EXACT_MATCH"
+      ],
+      "factIds": [
+        "IT-001",
+        "IT-002",
+        "IT-003",
+        "IT-004"
+      ],
+      "faqCount": null,
+      "filename": "corpus/it/IT-003_IT错误码与故障代码参考手册.pdf",
+      "format": "PDF",
+      "ownerDepartment": "IT",
+      "pageTarget": 70,
+      "publishDate": "2026-01-08",
+      "references": [],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-01-08",
+          "summary": "按年度治理计划发布",
+          "version": "V8.2"
+        }
+      ],
+      "sha256": "506b10b18f3228a7bb13a8bdc57756b3b200401fc2675d6e119b5aec03269b1b",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "IT错误码与故障代码参考手册",
+      "version": "V8.2"
+    },
+    {
+      "approver": "IT负责人",
+      "author": "IT制度运营组",
+      "bytes": 43570,
+      "confidentiality": "INTERNAL",
+      "department": "IT",
+      "documentCode": "NT-IT-STD-2026-004",
+      "documentId": "IT-004",
+      "effectiveDate": "2026-01-15",
+      "evaluationTags": [
+        "HARD_NEGATIVE",
+        "CROSS_DOCUMENT"
+      ],
+      "factIds": [
+        "HR-015",
+        "IT-010",
+        "IT-011",
+        "IT-012",
+        "IT-013",
+        "SEC-015"
+      ],
+      "faqCount": null,
+      "filename": "corpus/it/IT-004_账号角色与权限管理规范.docx",
+      "format": "DOCX",
+      "ownerDepartment": "IT",
+      "pageTarget": 28,
+      "publishDate": "2026-01-10",
+      "references": [],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-01-10",
+          "summary": "按年度治理计划发布",
+          "version": "V4.0"
+        }
+      ],
+      "sha256": "edbfde4182f436e547a1256e6e7ac0ed6ee0b819456f64c04a5d191646de81f2",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "账号角色与权限管理规范",
+      "version": "V4.0"
+    },
+    {
+      "approver": "IT负责人",
+      "author": "IT制度运营组",
+      "bytes": 177322,
+      "confidentiality": "INTERNAL",
+      "department": "IT",
+      "documentCode": "NT-IT-POL-2026-005",
+      "documentId": "IT-005",
+      "effectiveDate": "2026-01-15",
+      "evaluationTags": [
+        "KEYWORD_BM25",
+        "CROSS_DOCUMENT"
+      ],
+      "factIds": [
+        "IT-008",
+        "IT-009",
+        "IT-014",
+        "IT-015"
+      ],
+      "faqCount": null,
+      "filename": "corpus/it/IT-005_终端设备与软件安装规范.pdf",
+      "format": "PDF",
+      "ownerDepartment": "IT",
+      "pageTarget": 23,
+      "publishDate": "2026-01-10",
+      "references": [],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-01-10",
+          "summary": "按年度治理计划发布",
+          "version": "V3.3"
+        }
+      ],
+      "sha256": "ad808ddcfd5a2f24cfa7748c270a8d70d6ba8816a05b6fb46b9bbbe48d991c5d",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "终端设备与软件安装规范",
+      "version": "V3.3"
+    },
+    {
+      "approver": "SECURITY负责人",
+      "author": "SECURITY制度运营组",
+      "bytes": 258883,
+      "confidentiality": "INTERNAL",
+      "department": "SECURITY",
+      "documentCode": "NT-SECU-POL-2026-001",
+      "documentId": "SEC-001",
+      "effectiveDate": "2026-02-01",
+      "evaluationTags": [
+        "ROUTING",
+        "CROSS_DOCUMENT"
+      ],
+      "factIds": [
+        "SEC-006"
+      ],
+      "faqCount": null,
+      "filename": "corpus/security/SEC-001_信息安全管理制度.pdf",
+      "format": "PDF",
+      "ownerDepartment": "SECURITY",
+      "pageTarget": 55,
+      "publishDate": "2026-01-12",
+      "references": [
+        "SEC-002",
+        "SEC-003",
+        "SEC-004"
+      ],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-01-12",
+          "summary": "按年度治理计划发布",
+          "version": "V5.0"
+        }
+      ],
+      "sha256": "265365257eaac381673306e1a062a9ca1edeac946e58f3ba66d3379c219cf8bf",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "信息安全管理制度",
+      "version": "V5.0"
+    },
+    {
+      "approver": "SECURITY负责人",
+      "author": "SECURITY制度运营组",
+      "bytes": 12143,
+      "confidentiality": "INTERNAL",
+      "department": "SECURITY",
+      "documentCode": "NT-SECU-MAT-2026-002",
+      "documentId": "SEC-002",
+      "effectiveDate": "2026-02-01",
+      "evaluationTags": [
+        "TABLE",
+        "CROSS_DOCUMENT"
+      ],
+      "factIds": [
+        "IT-015",
+        "SEC-001",
+        "SEC-002",
+        "SEC-003",
+        "SEC-004",
+        "SEC-005",
+        "SEC-006"
+      ],
+      "faqCount": null,
+      "filename": "corpus/security/SEC-002_数据分类分级标准.xlsx",
+      "format": "XLSX",
+      "ownerDepartment": "SECURITY",
+      "pageTarget": null,
+      "publishDate": "2026-01-12",
+      "references": [],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-01-12",
+          "summary": "按年度治理计划发布",
+          "version": "V3.1"
+        }
+      ],
+      "sha256": "72b52e8b067d1e6a070665ac428869edd78fd385f668388447d46e4974c656a9",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "数据分类分级标准",
+      "version": "V3.1"
+    },
+    {
+      "approver": "SECURITY负责人",
+      "author": "SECURITY制度运营组",
+      "bytes": 43971,
+      "confidentiality": "INTERNAL",
+      "department": "SECURITY",
+      "documentCode": "NT-SECU-STD-2026-003",
+      "documentId": "SEC-003",
+      "effectiveDate": "2026-02-01",
+      "evaluationTags": [
+        "SEMANTIC",
+        "PROCEDURE"
+      ],
+      "factIds": [
+        "SEC-007",
+        "SEC-008",
+        "SEC-009"
+      ],
+      "faqCount": null,
+      "filename": "corpus/security/SEC-003_数据泄露与安全事件应急响应预案.docx",
+      "format": "DOCX",
+      "ownerDepartment": "SECURITY",
+      "pageTarget": 35,
+      "publishDate": "2026-01-12",
+      "references": [],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-01-12",
+          "summary": "按年度治理计划发布",
+          "version": "V3.0"
+        }
+      ],
+      "sha256": "47c8c9c44e15513803434384cc7baa151e424873010fe5cb34d85e5ac072c123",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "数据泄露与安全事件应急响应预案",
+      "version": "V3.0"
+    },
+    {
+      "approver": "SECURITY负责人",
+      "author": "SECURITY制度运营组",
+      "bytes": 193214,
+      "confidentiality": "INTERNAL",
+      "department": "SECURITY",
+      "documentCode": "NT-SECU-POL-2026-004",
+      "documentId": "SEC-004",
+      "effectiveDate": "2026-02-01",
+      "evaluationTags": [
+        "HYBRID",
+        "HARD_NEGATIVE"
+      ],
+      "factIds": [
+        "IT-012",
+        "SEC-010",
+        "SEC-011",
+        "SEC-012",
+        "SEC-013",
+        "SEC-014",
+        "SEC-015"
+      ],
+      "faqCount": null,
+      "filename": "corpus/security/SEC-004_生产环境与敏感数据访问控制规范.pdf",
+      "format": "PDF",
+      "ownerDepartment": "SECURITY",
+      "pageTarget": 33,
+      "publishDate": "2026-01-14",
+      "references": [],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-01-14",
+          "summary": "按年度治理计划发布",
+          "version": "V4.2"
+        }
+      ],
+      "sha256": "b32a94cd5217316ba25b3628ab6c8d1e23464ce2064657322761ec2611d928cb",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "生产环境与敏感数据访问控制规范",
+      "version": "V4.2"
+    },
+    {
+      "approver": "SECURITY负责人",
+      "author": "SECURITY制度运营组",
+      "bytes": 79648,
+      "confidentiality": "INTERNAL",
+      "department": "SECURITY",
+      "documentCode": "NT-SECU-FAQ-2026-005",
+      "documentId": "SEC-005",
+      "effectiveDate": "2026-02-01",
+      "evaluationTags": [
+        "FAQ",
+        "SEMANTIC"
+      ],
+      "factIds": [
+        "IT-014"
+      ],
+      "faqCount": 175,
+      "filename": "corpus/security/SEC-005_安全事件_FAQ.md",
+      "format": "MD",
+      "ownerDepartment": "SECURITY",
+      "pageTarget": null,
+      "publishDate": "2026-02-01",
+      "references": [],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-02-01",
+          "summary": "按年度治理计划发布",
+          "version": "V2.2"
+        }
+      ],
+      "sha256": "b9b3b8a400de5260174fd2b4838de959f160ed33462b8f915fec307dadbb44f7",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "安全事件 FAQ",
+      "version": "V2.2"
+    },
+    {
+      "approver": "PROCUREMENT负责人",
+      "author": "PROCUREMENT制度运营组",
+      "bytes": 203383,
+      "confidentiality": "INTERNAL",
+      "department": "PROCUREMENT",
+      "documentCode": "NT-PROC-POL-2026-001",
+      "documentId": "PROC-001",
+      "effectiveDate": "2026-02-01",
+      "evaluationTags": [
+        "RULE",
+        "EXCEPTION",
+        "CROSS_DOCUMENT"
+      ],
+      "factIds": [
+        "PROC-006",
+        "PROC-007"
+      ],
+      "faqCount": null,
+      "filename": "corpus/procurement/PROC-001_采购管理制度.pdf",
+      "format": "PDF",
+      "ownerDepartment": "PROCUREMENT",
+      "pageTarget": 38,
+      "publishDate": "2026-01-18",
+      "references": [
+        "LEG-001",
+        "PROC-002",
+        "PROC-003"
+      ],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-01-18",
+          "summary": "按年度治理计划发布",
+          "version": "V4.0"
+        }
+      ],
+      "sha256": "9d28f7a52c5ba08f62673233fa4f8ef2890650614452d7d8ab2797bf2e37cd7e",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "采购管理制度",
+      "version": "V4.0"
+    },
+    {
+      "approver": "PROCUREMENT负责人",
+      "author": "PROCUREMENT制度运营组",
+      "bytes": 43368,
+      "confidentiality": "INTERNAL",
+      "department": "PROCUREMENT",
+      "documentCode": "NT-PROC-STD-2026-002",
+      "documentId": "PROC-002",
+      "effectiveDate": "2026-02-01",
+      "evaluationTags": [
+        "CROSS_DOCUMENT",
+        "HARD_NEGATIVE"
+      ],
+      "factIds": [
+        "PROC-008",
+        "PROC-009",
+        "PROC-010",
+        "LEG-002"
+      ],
+      "faqCount": null,
+      "filename": "corpus/procurement/PROC-002_供应商准入与生命周期管理办法.docx",
+      "format": "DOCX",
+      "ownerDepartment": "PROCUREMENT",
+      "pageTarget": 28,
+      "publishDate": "2026-01-18",
+      "references": [],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-01-18",
+          "summary": "按年度治理计划发布",
+          "version": "V3.0"
+        }
+      ],
+      "sha256": "fc4c2b3480a87c751f530ed741e7350c4ffd85469c670d23c6f6411b8dd35e8d",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "供应商准入与生命周期管理办法",
+      "version": "V3.0"
+    },
+    {
+      "approver": "PROCUREMENT负责人",
+      "author": "PROCUREMENT制度运营组",
+      "bytes": 10300,
+      "confidentiality": "INTERNAL",
+      "department": "PROCUREMENT",
+      "documentCode": "NT-PROC-MAT-2026-003",
+      "documentId": "PROC-003",
+      "effectiveDate": "2026-02-01",
+      "evaluationTags": [
+        "TABLE",
+        "BOUNDARY"
+      ],
+      "factIds": [
+        "PROC-001",
+        "PROC-002",
+        "PROC-003",
+        "PROC-004",
+        "PROC-005",
+        "LEG-003"
+      ],
+      "faqCount": null,
+      "filename": "corpus/procurement/PROC-003_采购审批权限矩阵.xlsx",
+      "format": "XLSX",
+      "ownerDepartment": "PROCUREMENT",
+      "pageTarget": null,
+      "publishDate": "2026-01-18",
+      "references": [],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-01-18",
+          "summary": "按年度治理计划发布",
+          "version": "V2.1"
+        }
+      ],
+      "sha256": "1845064a7a6b4d5e51fe70166d0f5f5c51096e6a9a3ded42744c6f03dddb088c",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "采购审批权限矩阵",
+      "version": "V2.1"
+    },
+    {
+      "approver": "LEGAL负责人",
+      "author": "LEGAL制度运营组",
+      "bytes": 189792,
+      "confidentiality": "INTERNAL",
+      "department": "LEGAL",
+      "documentCode": "NT-LEGA-POL-2026-001",
+      "documentId": "LEG-001",
+      "effectiveDate": "2026-02-01",
+      "evaluationTags": [
+        "HYBRID",
+        "HARD_NEGATIVE"
+      ],
+      "factIds": [
+        "LEG-001",
+        "LEG-002",
+        "LEG-003",
+        "LEG-004"
+      ],
+      "faqCount": null,
+      "filename": "corpus/legal/LEG-001_合同管理制度.pdf",
+      "format": "PDF",
+      "ownerDepartment": "LEGAL",
+      "pageTarget": 33,
+      "publishDate": "2026-01-20",
+      "references": [],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-01-20",
+          "summary": "按年度治理计划发布",
+          "version": "V4.3"
+        }
+      ],
+      "sha256": "d4ff6275dedaf6cd44cf43b3978d20074c9753fe8578c595f8ff8ff2658795dc",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "合同管理制度",
+      "version": "V4.3"
+    },
+    {
+      "approver": "LEGAL负责人",
+      "author": "LEGAL制度运营组",
+      "bytes": 80773,
+      "confidentiality": "INTERNAL",
+      "department": "LEGAL",
+      "documentCode": "NT-LEGA-FAQ-2026-002",
+      "documentId": "LEG-002",
+      "effectiveDate": "2026-02-01",
+      "evaluationTags": [
+        "FAQ",
+        "CROSS_DOCUMENT"
+      ],
+      "factIds": [
+        "LEG-004"
+      ],
+      "faqCount": 175,
+      "filename": "corpus/legal/LEG-002_合同与采购常见问题.md",
+      "format": "MD",
+      "ownerDepartment": "LEGAL",
+      "pageTarget": null,
+      "publishDate": "2026-02-01",
+      "references": [],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-02-01",
+          "summary": "按年度治理计划发布",
+          "version": "V2.0"
+        }
+      ],
+      "sha256": "8527aa394563a141f41bb7defbfce0e6c7ffab46bbc11006f0e0bb35998411f4",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "合同与采购常见问题",
+      "version": "V2.0"
+    },
+    {
+      "approver": "ENGINEERING负责人",
+      "author": "ENGINEERING制度运营组",
+      "bytes": 234372,
+      "confidentiality": "INTERNAL",
+      "department": "ENGINEERING",
+      "documentCode": "NT-ENGI-POL-2026-001",
+      "documentId": "ENG-001",
+      "effectiveDate": "2026-01-20",
+      "evaluationTags": [
+        "STRUCTURE_AGENTIC",
+        "LIFECYCLE"
+      ],
+      "factIds": [
+        "OPS-017",
+        "OPS-018",
+        "ENG-001",
+        "ENG-002"
+      ],
+      "faqCount": null,
+      "filename": "corpus/engineering/ENG-001_研发项目生命周期管理规范.pdf",
+      "format": "PDF",
+      "ownerDepartment": "ENGINEERING",
+      "pageTarget": 48,
+      "publishDate": "2026-01-06",
+      "references": [],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-01-06",
+          "summary": "按年度治理计划发布",
+          "version": "V5.0"
+        }
+      ],
+      "sha256": "3bdb51e51f52fd42fdbef5ba039803eaa75f700cbc58ed71893bfd365deaf6f0",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "研发项目生命周期管理规范",
+      "version": "V5.0"
+    },
+    {
+      "approver": "OPERATIONS负责人",
+      "author": "OPERATIONS制度运营组",
+      "bytes": 44527,
+      "confidentiality": "INTERNAL",
+      "department": "OPERATIONS",
+      "documentCode": "NT-OPER-STD-2026-001",
+      "documentId": "OPS-001",
+      "effectiveDate": "2026-01-20",
+      "evaluationTags": [
+        "HYBRID",
+        "PROCEDURE",
+        "HARD_NEGATIVE"
+      ],
+      "factIds": [
+        "OPS-006",
+        "OPS-007",
+        "OPS-008",
+        "OPS-009",
+        "OPS-018",
+        "OPS-019"
+      ],
+      "faqCount": null,
+      "filename": "corpus/engineering/OPS-001_生产变更管理规范.docx",
+      "format": "DOCX",
+      "ownerDepartment": "OPERATIONS",
+      "pageTarget": 38,
+      "publishDate": "2026-01-06",
+      "references": [
+        "OPS-002"
+      ],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-01-06",
+          "summary": "按年度治理计划发布",
+          "version": "V4.5"
+        }
+      ],
+      "sha256": "3c3efd6b59d59aa3deb61041e9478ebc4a1e39ea24a844be7174f6a84d70f32d",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "生产变更管理规范",
+      "version": "V4.5"
+    },
+    {
+      "approver": "OPERATIONS负责人",
+      "author": "OPERATIONS制度运营组",
+      "bytes": 309621,
+      "confidentiality": "INTERNAL",
+      "department": "OPERATIONS",
+      "documentCode": "NT-OPER-POL-2026-002",
+      "documentId": "OPS-002",
+      "effectiveDate": "2026-01-20",
+      "evaluationTags": [
+        "STRUCTURE_AGENTIC",
+        "PROCEDURE",
+        "CROSS_DOCUMENT"
+      ],
+      "factIds": [
+        "OPS-007",
+        "OPS-010",
+        "OPS-011",
+        "OPS-012",
+        "OPS-013",
+        "OPS-014",
+        "OPS-015",
+        "OPS-016",
+        "OPS-020"
+      ],
+      "faqCount": null,
+      "filename": "corpus/engineering/OPS-002_生产事故应急响应手册.pdf",
+      "format": "PDF",
+      "ownerDepartment": "OPERATIONS",
+      "pageTarget": 65,
+      "publishDate": "2026-01-06",
+      "references": [
+        "OPS-003"
+      ],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-01-06",
+          "summary": "按年度治理计划发布",
+          "version": "V6.0"
+        }
+      ],
+      "sha256": "fd925752291feb8a8cbdcbce0d270cd16f71afb3ae842f15f4d625604c8c19a8",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "生产事故应急响应手册",
+      "version": "V6.0"
+    },
+    {
+      "approver": "OPERATIONS负责人",
+      "author": "OPERATIONS制度运营组",
+      "bytes": 12100,
+      "confidentiality": "INTERNAL",
+      "department": "OPERATIONS",
+      "documentCode": "NT-OPER-MAT-2026-003",
+      "documentId": "OPS-003",
+      "effectiveDate": "2026-01-20",
+      "evaluationTags": [
+        "TABLE",
+        "SLA"
+      ],
+      "factIds": [
+        "OPS-001",
+        "OPS-002",
+        "OPS-003",
+        "OPS-004",
+        "OPS-005",
+        "OPS-020",
+        "OPS-021"
+      ],
+      "faqCount": null,
+      "filename": "corpus/engineering/OPS-003_服务等级与生产事故等级标准.xlsx",
+      "format": "XLSX",
+      "ownerDepartment": "OPERATIONS",
+      "pageTarget": null,
+      "publishDate": "2026-01-06",
+      "references": [],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-01-06",
+          "summary": "按年度治理计划发布",
+          "version": "V3.2"
+        }
+      ],
+      "sha256": "2ae44869e50d34d1df7b38df8134fa38a16def5893d820fba8101d4d70dbc3f5",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "服务等级与生产事故等级标准",
+      "version": "V3.2"
+    },
+    {
+      "approver": "OPERATIONS负责人",
+      "author": "OPERATIONS制度运营组",
+      "bytes": 112295,
+      "confidentiality": "INTERNAL",
+      "department": "OPERATIONS",
+      "documentCode": "NT-OPER-FAQ-2026-004",
+      "documentId": "OPS-004",
+      "effectiveDate": "2026-01-20",
+      "evaluationTags": [
+        "FAQ",
+        "SEMANTIC",
+        "STRUCTURE_AGENTIC"
+      ],
+      "factIds": [],
+      "faqCount": 250,
+      "filename": "corpus/engineering/OPS-004_研发与运维_FAQ.md",
+      "format": "MD",
+      "ownerDepartment": "OPERATIONS",
+      "pageTarget": null,
+      "publishDate": "2026-01-20",
+      "references": [],
+      "reviewer": "内控与合规评审组",
+      "revisionHistory": [
+        {
+          "date": "2026-01-20",
+          "summary": "按年度治理计划发布",
+          "version": "V3.0"
+        }
+      ],
+      "sha256": "e57b2e4b53b3faad864b908492a9d0442b767b9f2046bdab506df572dbf14ee6",
+      "status": "ACTIVE",
+      "supersedes": [],
+      "title": "研发与运维 FAQ",
+      "version": "V3.0"
+    }
+  ],
+  "factCount": 100,
+  "generatedAt": "2026-09-17T00:00:00Z",
+  "questionCount": 150,
+  "schemaVersion": 1,
+  "seed": 20260917,
+  "specVersion": "1.1",
+  "unanswerableCount": 20
+}
