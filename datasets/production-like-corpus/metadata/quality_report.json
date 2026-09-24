@@ -13,21 +13,21 @@
   "failures": [],
   "files": {
     "ENG-001": {
-      "bytes": 234372,
-      "characters": 44823,
+      "bytes": 234180,
+      "characters": 48333,
       "pages": 48,
-      "sha256": "3bdb51e51f52fd42fdbef5ba039803eaa75f700cbc58ed71893bfd365deaf6f0"
+      "sha256": "022866ccf9e998e3df2b7bc7b23081da598f57e99fa255cc3bb6d7ae981217c0"
     },
     "FIN-001": {
-      "bytes": 213311,
-      "characters": 35712,
+      "bytes": 210488,
+      "characters": 38659,
       "pages": 38,
-      "sha256": "29fca0825783c86a2d43b70dabde3d352c224eec9593954bacf1c25dd1a4b86c"
+      "sha256": "14e93885579ffa89df17c1fdebbc33ef5f4c65ff0a125722dd5e539b25d7ddb5"
     },
     "FIN-002": {
-      "bytes": 13713,
-      "characters": 877,
-      "sha256": "cc90648c3b42d77a71bec4d9865c3fa7eb10151e1c606d4cee9dc1276604c32f",
+      "bytes": 13804,
+      "characters": 940,
+      "sha256": "802f1b572a3eebc4ed29ba74341a4cc852aa3481346de5dc34782bcc415e8f73",
       "sheets": [
         "城市等级",
         "国内住宿标准",
@@ -74,116 +74,116 @@
       ]
     },
     "FIN-003": {
-      "bytes": 40924,
-      "characters": 1807,
-      "paragraphs": 20,
-      "sha256": "edf4cf80a5df3b6d26337d4639cc1330c1a81a1c397e288e2e6738fe422b1a74",
+      "bytes": 40417,
+      "characters": 1565,
+      "paragraphs": 19,
+      "sha256": "7837dcb8f1c463b3fef38da1e9cc6af599865d31c66f1bf4817917cead23d686",
       "tables": 1
     },
     "FIN-004": {
-      "bytes": 178623,
-      "characters": 26140,
+      "bytes": 176900,
+      "characters": 28478,
       "pages": 28,
-      "sha256": "d3963d3d261e7d4856331d9eb6b2e98a7d8b610bec9d6cd271f624c18e277c87"
+      "sha256": "e51194cd0bb5acd972486c19bd71d984316c77c9ced68bf65ca47f423650591f"
     },
     "FIN-005": {
-      "bytes": 90776,
-      "characters": 33902,
+      "bytes": 94528,
+      "characters": 36360,
       "qaCount": 200,
-      "sha256": "00992868fd79139ce90f0ad2d71e1558e5d5c1fe20066db0677f45a72bfdc958"
+      "sha256": "649561c45ca2e8b32809c51e6c4bf3b2d5155d91308e80e87ea363dc0dd4205b"
     },
     "HR-001": {
-      "bytes": 44795,
-      "characters": 35868,
+      "bytes": 44992,
+      "characters": 39300,
       "paragraphs": 353,
-      "sha256": "89d5f94c031ccdb8895c1fc9374bc84ec4f35e40de1661f2fb56dd5ef8770256",
+      "sha256": "68c04f3b84047017d1764e71c0d4aefd91da761ac1fa002d7b2f01ec5f22a021",
       "tables": 7
     },
     "HR-002": {
-      "bytes": 221789,
-      "characters": 40230,
+      "bytes": 219510,
+      "characters": 43322,
       "pages": 43,
-      "sha256": "43bc25cf02aacb47dd9df9ea6d2a40fbb386a5fef681a0aff19daebbc3a9579a"
+      "sha256": "43af0ae2b2a30511b4e4718681418ef0cc9daa8497977057e957e55b1ee7a04f"
     },
     "HR-003": {
-      "bytes": 203482,
-      "characters": 31242,
+      "bytes": 197273,
+      "characters": 33794,
       "pages": 33,
-      "sha256": "a2883a5a99fd6b42bda0179cb1afd034cd5c3a59a5eb107f5ba14ca8c96bf602"
+      "sha256": "84fb718b11e1d96bd3f428222b8996fe2db352d25d2863f5fffb08e23ede9c0e"
     },
     "HR-004": {
-      "bytes": 43315,
-      "characters": 19842,
-      "paragraphs": 198,
-      "sha256": "288c19e5d8d1dfb5db278db39d78faff70cefd6687662c0789b731687a417711",
+      "bytes": 43588,
+      "characters": 21683,
+      "paragraphs": 199,
+      "sha256": "41d9b7ead18d597cf33d9b108a8c21c1bd3fcf9fd96ac0f5eeee4f250e7cf415",
       "tables": 4
     },
     "HR-005": {
-      "bytes": 161855,
-      "characters": 60059,
+      "bytes": 169636,
+      "characters": 65206,
       "qaCount": 350,
-      "sha256": "3c9266d24073a78569bfe8ec79ce14ba7c7fe1eede2bc8bf57a901d1e0f16039"
+      "sha256": "a6419abdc96d9643722060e189e00d309b61c686626343513db049921dd9355d"
     },
     "IT-001": {
-      "bytes": 283876,
-      "characters": 58097,
+      "bytes": 289367,
+      "characters": 61502,
       "pages": 60,
-      "sha256": "e202728e15fcbdaab341da7cbe69ca9aecee74b284dcce673b0db30135c3ab38"
+      "sha256": "08dcdfa89c75cf2ed50123085582c0596037dd3989c9a307ff0f2235852c61a0"
     },
     "IT-002": {
-      "bytes": 226951,
-      "characters": 38641,
+      "bytes": 227030,
+      "characters": 40772,
       "pages": 40,
-      "sha256": "b3ad82dbb4e5521db944e3a7032fea96d5d5ac74218564a49ee74efff0931a57"
+      "sha256": "303776227496abc615ba0d22afc108f5eb853b19b96709d102fe5b5354aed962"
     },
     "IT-003": {
-      "bytes": 316949,
-      "characters": 68592,
+      "bytes": 321113,
+      "characters": 73079,
       "pages": 70,
-      "sha256": "506b10b18f3228a7bb13a8bdc57756b3b200401fc2675d6e119b5aec03269b1b"
+      "sha256": "d47c6006e4ff9714ca137fe3726a623bf999b43baefc1d1eea196a8c52acb5bc"
     },
     "IT-004": {
-      "bytes": 43570,
-      "characters": 20755,
-      "paragraphs": 201,
-      "sha256": "edbfde4182f436e547a1256e6e7ac0ed6ee0b819456f64c04a5d191646de81f2",
+      "bytes": 43768,
+      "characters": 22390,
+      "paragraphs": 202,
+      "sha256": "dc88c456ff489ff992e00cfe659c5a17290f9996f9d123e63a255f3872e2d2e8",
       "tables": 4
     },
     "IT-005": {
-      "bytes": 177322,
-      "characters": 22028,
+      "bytes": 176948,
+      "characters": 23319,
       "pages": 23,
-      "sha256": "ad808ddcfd5a2f24cfa7748c270a8d70d6ba8816a05b6fb46b9bbbe48d991c5d"
+      "sha256": "3c084eb5a86fca65fce00edf0bcebd54f24ca6e04568d3ee62d86f1cfdd1e0e0"
     },
     "LEG-001": {
-      "bytes": 189792,
-      "characters": 30771,
+      "bytes": 188851,
+      "characters": 33311,
       "pages": 33,
-      "sha256": "d4ff6275dedaf6cd44cf43b3978d20074c9753fe8578c595f8ff8ff2658795dc"
+      "sha256": "e462515267ae5869a75e2ed597b0c5718ed25d81a8a6a460f8d83d575f49d74b"
     },
     "LEG-002": {
-      "bytes": 80773,
-      "characters": 30203,
+      "bytes": 82581,
+      "characters": 31677,
       "qaCount": 175,
-      "sha256": "8527aa394563a141f41bb7defbfce0e6c7ffab46bbc11006f0e0bb35998411f4"
+      "sha256": "90511fcdd7d4ffccbb977f6591b19fea18efe6194e60084f438f3b9e8a15005e"
     },
     "OPS-001": {
-      "bytes": 44527,
-      "characters": 29388,
+      "bytes": 44810,
+      "characters": 31478,
       "paragraphs": 272,
-      "sha256": "3c3efd6b59d59aa3deb61041e9478ebc4a1e39ea24a844be7174f6a84d70f32d",
+      "sha256": "a77c47aa01f46a7ded6c115e2b94b152d14de43538fb3fd8814e041b4e1bef1f",
       "tables": 5
     },
     "OPS-002": {
-      "bytes": 309621,
-      "characters": 66651,
+      "bytes": 313739,
+      "characters": 70907,
       "pages": 65,
-      "sha256": "fd925752291feb8a8cbdcbce0d270cd16f71afb3ae842f15f4d625604c8c19a8"
+      "sha256": "ccc2ef271ffee773279ffadfeaf4a4a320c7d3cebda00add4db063e9eb5c67b1"
     },
     "OPS-003": {
-      "bytes": 12100,
-      "characters": 762,
-      "sha256": "2ae44869e50d34d1df7b38df8134fa38a16def5893d820fba8101d4d70dbc3f5",
+      "bytes": 12140,
+      "characters": 814,
+      "sha256": "8dccf4244483238cfdae2fdda7d63d69bf7bc8098a8282410349ec6bbe37cc26",
       "sheets": [
         "事故等级",
         "响应时限",
@@ -222,28 +222,28 @@
       ]
     },
     "OPS-004": {
-      "bytes": 112295,
-      "characters": 41977,
+      "bytes": 120283,
+      "characters": 47227,
       "qaCount": 250,
-      "sha256": "e57b2e4b53b3faad864b908492a9d0442b767b9f2046bdab506df572dbf14ee6"
+      "sha256": "2175f7f378bbbb6c3942346028ab67fcfdd26edf20509aa149e9ab0e7a40d230"
     },
     "PROC-001": {
-      "bytes": 203383,
-      "characters": 35286,
+      "bytes": 204550,
+      "characters": 38228,
       "pages": 38,
-      "sha256": "9d28f7a52c5ba08f62673233fa4f8ef2890650614452d7d8ab2797bf2e37cd7e"
+      "sha256": "13bcbc414882185cafc4e1c58682a449a2a672806fc178df301ad95006250a53"
     },
     "PROC-002": {
-      "bytes": 43368,
-      "characters": 19722,
+      "bytes": 43349,
+      "characters": 21639,
       "paragraphs": 199,
-      "sha256": "fc4c2b3480a87c751f530ed741e7350c4ffd85469c670d23c6f6411b8dd35e8d",
+      "sha256": "0ed37391526cc30222d6cf279d7a24b35d722de6abd4398935872390e76647a4",
       "tables": 4
     },
     "PROC-003": {
-      "bytes": 10300,
-      "characters": 783,
-      "sha256": "1845064a7a6b4d5e51fe70166d0f5f5c51096e6a9a3ded42744c6f03dddb088c",
+      "bytes": 10333,
+      "characters": 793,
+      "sha256": "013c11e13c096054f7d6dfd0e23838de2ba3c6eae73feac70900bb72f469a551",
       "sheets": [
         "审批矩阵",
         "边界示例",
@@ -274,15 +274,15 @@
       ]
     },
     "SEC-001": {
-      "bytes": 258883,
-      "characters": 52937,
+      "bytes": 259894,
+      "characters": 57439,
       "pages": 55,
-      "sha256": "265365257eaac381673306e1a062a9ca1edeac946e58f3ba66d3379c219cf8bf"
+      "sha256": "2fb91e89d6cd728b5361ff63e8b8bcbd5d24f58156b7a63b7e95fbec8802f363"
     },
     "SEC-002": {
-      "bytes": 12143,
-      "characters": 823,
-      "sha256": "72b52e8b067d1e6a070665ac428869edd78fd385f668388447d46e4974c656a9",
+      "bytes": 12180,
+      "characters": 834,
+      "sha256": "4fc790bf9e07b89b47c76db9175ed6bbe8157e01590df374ed4592f20f5eda3f",
       "sheets": [
         "分类等级",
         "数据示例",
@@ -321,23 +321,23 @@
       ]
     },
     "SEC-003": {
-      "bytes": 43971,
-      "characters": 25626,
+      "bytes": 43901,
+      "characters": 27688,
       "paragraphs": 248,
-      "sha256": "47c8c9c44e15513803434384cc7baa151e424873010fe5cb34d85e5ac072c123",
+      "sha256": "93fdc24b07fafdd62e2f87b417539c340fe63395888f4c7af93aa4468783a90b",
       "tables": 5
     },
     "SEC-004": {
-      "bytes": 193214,
-      "characters": 31986,
+      "bytes": 191965,
+      "characters": 35023,
       "pages": 33,
-      "sha256": "b32a94cd5217316ba25b3628ab6c8d1e23464ce2064657322761ec2611d928cb"
+      "sha256": "cd121fe7872641776c238698843c0b466ab04fb04ec580b073fea1786f00fb2c"
     },
     "SEC-005": {
-      "bytes": 79648,
-      "characters": 30160,
+      "bytes": 85310,
+      "characters": 33552,
       "qaCount": 175,
-      "sha256": "b9b3b8a400de5260174fd2b4838de959f160ed33462b8f915fec307dadbb44f7"
+      "sha256": "2a6f94bc921fcdbc6250d60c5ddf148f10b6e667d12fb4d2c2749ceaec145812"
     }
   },
   "formatCounts": {
@@ -472,107 +472,107 @@
     "16_pdf_docx_substantive": {
       "detail": {
         "ENG-001": {
-          "characters": 44823,
+          "characters": 48333,
           "minimum": 21600,
           "passed": true
         },
         "FIN-001": {
-          "characters": 35712,
+          "characters": 38659,
           "minimum": 17100,
           "passed": true
         },
         "FIN-003": {
-          "characters": 1807,
+          "characters": 1565,
           "minimum": 1500,
           "passed": true
         },
         "FIN-004": {
-          "characters": 26140,
+          "characters": 28478,
           "minimum": 12600,
           "passed": true
         },
         "HR-001": {
-          "characters": 35868,
+          "characters": 39300,
           "minimum": 22500,
           "passed": true
         },
         "HR-002": {
-          "characters": 40230,
+          "characters": 43322,
           "minimum": 19350,
           "passed": true
         },
         "HR-003": {
-          "characters": 31242,
+          "characters": 33794,
           "minimum": 14850,
           "passed": true
         },
         "HR-004": {
-          "characters": 19842,
+          "characters": 21683,
           "minimum": 12600,
           "passed": true
         },
         "IT-001": {
-          "characters": 58097,
+          "characters": 61502,
           "minimum": 27000,
           "passed": true
         },
         "IT-002": {
-          "characters": 38641,
+          "characters": 40772,
           "minimum": 18000,
           "passed": true
         },
         "IT-003": {
-          "characters": 68592,
+          "characters": 73079,
           "minimum": 31500,
           "passed": true
         },
         "IT-004": {
-          "characters": 20755,
+          "characters": 22390,
           "minimum": 12600,
           "passed": true
         },
         "IT-005": {
-          "characters": 22028,
+          "characters": 23319,
           "minimum": 10350,
           "passed": true
         },
         "LEG-001": {
-          "characters": 30771,
+          "characters": 33311,
           "minimum": 14850,
           "passed": true
         },
         "OPS-001": {
-          "characters": 29388,
+          "characters": 31478,
           "minimum": 17100,
           "passed": true
         },
         "OPS-002": {
-          "characters": 66651,
+          "characters": 70907,
           "minimum": 29250,
           "passed": true
         },
         "PROC-001": {
-          "characters": 35286,
+          "characters": 38228,
           "minimum": 17100,
           "passed": true
         },
         "PROC-002": {
-          "characters": 19722,
+          "characters": 21639,
           "minimum": 12600,
           "passed": true
         },
         "SEC-001": {
-          "characters": 52937,
+          "characters": 57439,
           "minimum": 24750,
           "passed": true
         },
         "SEC-003": {
-          "characters": 25626,
+          "characters": 27688,
           "minimum": 15750,
           "passed": true
         },
         "SEC-004": {
-          "characters": 31986,
+          "characters": 35023,
           "minimum": 14850,
           "passed": true
         }
@@ -596,7 +596,23 @@
       "passed": true
     },
     "content_scale": {
-      "detail": 935690,
+      "detail": 1009312,
+      "passed": true
+    },
+    "duplicateTemplateRatio": {
+      "detail": {
+        "faqRatio": 0.0,
+        "faqUnits": 2300,
+        "proseRatio": 0.07701421800947868,
+        "proseUnits": 844
+      },
+      "passed": true
+    },
+    "evidenceSatisfiable": {
+      "detail": {
+        "failures": [],
+        "questions": 150
+      },
       "passed": true
     },
     "evidence_row_alignment": {
@@ -606,8 +622,55 @@
       },
       "passed": true
     },
+    "expectedSectionContainsRequiredFact": {
+      "detail": {
+        "failures": [],
+        "questions": 150
+      },
+      "passed": true
+    },
+    "factSectionAlignment": {
+      "detail": {
+        "alignedFacts": 100,
+        "failures": []
+      },
+      "passed": true
+    },
     "fact_statements_present_in_sources": {
       "detail": "all present",
+      "passed": true
+    },
+    "faqQuestionAnswerTopicalConsistency": {
+      "detail": {
+        "documents": {
+          "FIN-005": {
+            "duplicateRatio": 0.0,
+            "entries": 200,
+            "mismatches": 0
+          },
+          "HR-005": {
+            "duplicateRatio": 0.0,
+            "entries": 350,
+            "mismatches": 0
+          },
+          "LEG-002": {
+            "duplicateRatio": 0.0,
+            "entries": 175,
+            "mismatches": 0
+          },
+          "OPS-004": {
+            "duplicateRatio": 0.0,
+            "entries": 250,
+            "mismatches": 0
+          },
+          "SEC-005": {
+            "duplicateRatio": 0.0,
+            "entries": 175,
+            "mismatches": 0
+          }
+        },
+        "failures": []
+      },
       "passed": true
     },
     "faq_scale": {
@@ -659,43 +722,47 @@
       "detail": {
         "incident": {
           "P0": 62,
-          "P1": 36,
-          "安全事件": 45,
-          "数据库性能下降": 31,
-          "普通故障": 31,
-          "核心业务不可用": 32
+          "P1": 6,
+          "安全事件": 170,
+          "数据库性能下降": 1,
+          "普通故障": 1,
+          "核心业务不可用": 3
         },
         "leave": {
-          "事假": 4,
-          "产假": 10,
-          "婚假": 5,
-          "病假": 5,
-          "育儿假": 5,
-          "陪产假": 6
+          "事假": 19,
+          "产假": 41,
+          "婚假": 20,
+          "病假": 21,
+          "育儿假": 21,
+          "陪产假": 22
         },
         "lodging": {
-          "会议临时住宿标准": 31,
-          "普通差旅住宿": 48,
-          "海外住宿": 48,
-          "长期派驻住宿补贴": 49,
-          "驻场补助": 47
+          "会议临时住宿标准": 2,
+          "普通差旅住宿": 4,
+          "海外住宿": 3,
+          "长期派驻住宿补贴": 5,
+          "驻场补助": 3
         },
         "permissions": {
-          "GitLab权限": 80,
-          "OA权限": 81,
-          "普通数据库权限": 77,
-          "生产数据库写权限": 70,
-          "生产数据库只读权限": 70,
-          "采购审批权限": 73
+          "GitLab权限": 25,
+          "OA权限": 25,
+          "普通数据库权限": 22,
+          "生产数据库写权限": 1,
+          "生产数据库只读权限": 1,
+          "采购审批权限": 5
         },
         "procurement_contract": {
-          "付款审批": 22,
-          "供应商准入": 115,
-          "单一来源例外": 22,
-          "合同签署权限": 22,
-          "采购审批": 97
+          "付款审批": 1,
+          "供应商准入": 126,
+          "单一来源例外": 1,
+          "合同签署权限": 30,
+          "采购审批": 39
         }
       },
+      "passed": true
+    },
+    "noInternalFactIdLeakage": {
+      "detail": "none",
       "passed": true
     },
     "pdf_page_targets": {
@@ -778,11 +845,18 @@
         "rows": 20
       },
       "passed": true
+    },
+    "versionAuthorityConsistency": {
+      "detail": {
+        "failures": [],
+        "questions": 15
+      },
+      "passed": true
     }
   },
   "questionCount": 150,
-  "specVersion": "1.1",
+  "specVersion": "1.2",
   "status": "PASSED",
-  "totalCharacters": 935690,
+  "totalCharacters": 1009312,
   "unanswerableCount": 20
 }

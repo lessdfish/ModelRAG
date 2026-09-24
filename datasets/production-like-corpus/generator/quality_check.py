@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Automated Spec v1.1 quality gates for the generated corpus."""
+"""Automated v1.2 structural and semantic quality gates for the corpus."""
 
 from __future__ import annotations
 
@@ -68,6 +68,61 @@ def extract_text(path: Path, fmt: str) -> tuple[str, dict]:
     raise ValueError(fmt)
 
 
+def extract_section_texts(path: Path, fmt: str, document_id: str, sections: list[str]) -> dict[str, str]:
+    result = {f"{document_id}/{section}": "" for section in sections}
+    if fmt == "PDF":
+        for page in PdfReader(str(path)).pages:
+            text = page.extract_text() or ""
+            section = next((item for item in sections if re.search(rf"(?m)^{re.escape(item)}\s*$", text)), None)
+            if section:
+                result[f"{document_id}/{section}"] += "\n" + text
+    elif fmt == "DOCX":
+        current = None
+        for paragraph in Document(path).paragraphs:
+            if paragraph.style.name.startswith("Heading 1") and paragraph.text in sections:
+                current = paragraph.text
+            elif current:
+                result[f"{document_id}/{current}"] += "\n" + paragraph.text
+    elif fmt == "XLSX":
+        workbook = load_workbook(path, data_only=False, read_only=False)
+        for worksheet in workbook.worksheets:
+            if worksheet.title not in sections:
+                continue
+            values = [str(cell.value) for row in worksheet.iter_rows() for cell in row if cell.value is not None]
+            result[f"{document_id}/{worksheet.title}"] = "\n".join(values)
+    elif fmt == "MD":
+        current = None
+        for line in path.read_text(encoding="utf-8").splitlines():
+            match = re.match(r"^## (?!#)(.+)$", line)
+            if match and match.group(1) in sections:
+                current = match.group(1)
+            elif current:
+                result[f"{document_id}/{current}"] += "\n" + line
+    return result
+
+
+def faq_entries(text: str) -> list[dict]:
+    entries = []
+    topic = None
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        topic_match = re.match(r"^## (?!#)(.+)$", line)
+        if topic_match:
+            topic = topic_match.group(1)
+            continue
+        question_match = re.match(r"^### Q\d{3} (.+)$", line)
+        if not question_match or topic is None:
+            continue
+        answer = next((candidate.strip() for candidate in lines[index + 1:] if candidate.strip()), "")
+        entries.append({"topic": topic, "question": question_match.group(1), "answer": answer})
+    return entries
+
+
+def duplicate_ratio(values: list[str]) -> float:
+    normalized = [re.sub(r"\s+", "", value) for value in values if value.strip()]
+    return 0.0 if not normalized else (len(normalized) - len(set(normalized))) / len(normalized)
+
+
 def sha256(path: Path) -> str:
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     return digest
@@ -111,10 +166,10 @@ def run(root: Path) -> dict:
                                     if doc_id not in document_ids})
     gate("07_question_document_references", not invalid_document_refs, invalid_document_refs or "all valid")
     version_questions = [q for q in questions if q["category"] == "VERSION_CONFLICT"]
-    superseded = {doc["documentId"] for doc in documents if doc["status"] == "SUPERSEDED"}
-    version_valid = all(q.get("forbiddenEvidence") or superseded.intersection(
-        source for fact_id in q["factIds"] for source in next(
-            fact["primarySources"] for fact in fact_values if fact["factId"] == fact_id)) for q in version_questions)
+    version_valid = all(q.get("versionEvidence", {}).get("currentAuthority") and
+                        "historicalEvidence" in q.get("versionEvidence", {}) and
+                        "forbiddenAsAuthority" in q.get("versionEvidence", {})
+                        for q in version_questions)
     gate("08_version_conflict_evidence", version_valid, {"questions": len(version_questions)})
     cross = [q for q in questions if q["category"] == "CROSS_DOCUMENT"]
     cross_valid = all(len(q["expectedDocuments"]) >= 2 or len(q["requiredEvidence"]) >= 2 for q in cross)
@@ -149,6 +204,7 @@ def run(root: Path) -> dict:
          reasons or "consistent")
 
     extracted: dict[str, str] = {}
+    section_texts: dict[str, str] = {}
     file_details: dict[str, dict] = {}
     open_errors = []
     actual_files = []
@@ -158,6 +214,8 @@ def run(root: Path) -> dict:
         try:
             text, detail = extract_text(path, doc["format"])
             extracted[doc["documentId"]] = text
+            spec = next(item for item in DOCUMENTS if item.document_id == doc["documentId"])
+            section_texts.update(extract_section_texts(path, doc["format"], doc["documentId"], list(spec.sections)))
             detail.update({"bytes": path.stat().st_size, "sha256": sha256(path), "characters": len(text)})
             file_details[doc["documentId"]] = detail
             if detail["sha256"] != doc["sha256"]:
@@ -215,9 +273,119 @@ def run(root: Path) -> dict:
 
     fact_presence_missing = []
     for fact in fact_values:
-        if not any(fact["statement"] in extracted.get(source, "") for source in fact["primarySources"]):
+        if not any(fact.get("sourceText", fact["statement"]) in extracted.get(source, "")
+                   for source in fact["primarySources"]):
             fact_presence_missing.append(fact["factId"])
     gate("fact_statements_present_in_sources", not fact_presence_missing, fact_presence_missing or "all present")
+
+    facts_by_id = {fact["factId"]: fact for fact in fact_values}
+    location_failures = []
+    for fact in fact_values:
+        locations = fact.get("sourceLocations", [])
+        if {item.get("documentId") for item in locations} != set(fact["primarySources"]):
+            location_failures.append({"factId": fact["factId"], "reason": "source document mismatch"})
+        for location in locations:
+            path = location.get("sectionPath", "")
+            source_text = location.get("sourceText", fact.get("sourceText", fact["statement"]))
+            if path not in section_texts:
+                location_failures.append({"factId": fact["factId"], "sectionPath": path,
+                                          "reason": "section missing"})
+            elif source_text not in section_texts[path]:
+                location_failures.append({"factId": fact["factId"], "sectionPath": path,
+                                          "reason": "fact not present in section"})
+    gate("factSectionAlignment", not location_failures,
+         {"alignedFacts": len(fact_values) if not location_failures else len(fact_values) - len({x['factId'] for x in location_failures}),
+          "failures": location_failures})
+
+    section_evidence_failures = []
+    for question in questions:
+        expected_rows = [
+            {"factId": fact_id, "statement": facts_by_id[fact_id]["statement"], **location}
+            for fact_id in question["factIds"]
+            for location in facts_by_id[fact_id]["sourceLocations"]
+        ]
+        expected_paths = list(dict.fromkeys(row["sectionPath"] for row in expected_rows))
+        if question.get("expectedSections") != expected_paths or question.get("requiredFactLocations") != expected_rows:
+            section_evidence_failures.append({"questionId": question["id"], "reason": "derived locations differ"})
+            continue
+        for row in expected_rows:
+            if row["sourceText"] not in section_texts.get(row["sectionPath"], ""):
+                section_evidence_failures.append({"questionId": question["id"], "factId": row["factId"],
+                                                  "sectionPath": row["sectionPath"]})
+    gate("expectedSectionContainsRequiredFact", not section_evidence_failures,
+         {"questions": len(questions), "failures": section_evidence_failures})
+
+    satisfiability_failures = []
+    for row in evidence:
+        required = set(row.get("requiredDocumentIds", []))
+        forbidden = set(row.get("forbiddenDocumentIds", []))
+        if required & forbidden:
+            satisfiability_failures.append({"questionId": row["questionId"], "reason": "required document forbidden"})
+        expected_paths = list(dict.fromkeys(item["sectionPath"] for item in row.get("requiredFactLocations", [])))
+        if row.get("requiredSectionPaths") != expected_paths:
+            satisfiability_failures.append({"questionId": row["questionId"], "reason": "required paths differ"})
+        if any(item["documentId"] not in required for item in row.get("requiredFactLocations", [])):
+            satisfiability_failures.append({"questionId": row["questionId"], "reason": "fact location document not required"})
+        if row.get("versionEvidence") and row["retrievalGroundTruth"].get("rejectStaleDocuments"):
+            satisfiability_failures.append({"questionId": row["questionId"], "reason": "version evidence rejects history"})
+    gate("evidenceSatisfiable", not satisfiability_failures,
+         {"questions": len(evidence), "failures": satisfiability_failures})
+
+    authority_failures = []
+    for question in version_questions:
+        roles = question.get("versionEvidence", {})
+        current_ids = {item["factId"] for item in roles.get("currentAuthority", [])}
+        historical_ids = {item["factId"] for item in roles.get("historicalEvidence", [])}
+        forbidden_ids = {item["factId"] for item in roles.get("forbiddenAsAuthority", [])}
+        if not current_ids or current_ids & historical_ids or forbidden_ids != historical_ids:
+            authority_failures.append({"questionId": question["id"], "current": sorted(current_ids),
+                                       "historical": sorted(historical_ids), "forbidden": sorted(forbidden_ids)})
+        if any(facts_by_id[fact_id]["status"] != "CURRENT" for fact_id in current_ids):
+            authority_failures.append({"questionId": question["id"], "reason": "non-current fact is authority"})
+        evidence_roles = evidence_by_id[question["id"]].get("versionEvidence")
+        if evidence_roles != roles or evidence_by_id[question["id"]].get("forbiddenDocumentIds"):
+            authority_failures.append({"questionId": question["id"], "reason": "question/evidence role mismatch"})
+    gate("versionAuthorityConsistency", not authority_failures,
+         {"questions": len(version_questions), "failures": authority_failures})
+
+    faq_details = {}
+    faq_mismatches = []
+    faq_questions_and_answers = []
+    for doc in documents:
+        if doc["format"] != "MD":
+            continue
+        entries = faq_entries(extracted[doc["documentId"]])
+        mismatches = [entry for entry in entries
+                      if entry["topic"] not in entry["question"] or entry["topic"] not in entry["answer"]]
+        banned = [entry for entry in entries
+                  if "金额、数据等级、生产权限或紧急处置" in entry["answer"]]
+        faq_mismatches.extend({"documentId": doc["documentId"], **entry} for entry in mismatches + banned)
+        values = [item for entry in entries for item in (entry["question"], entry["answer"])]
+        faq_questions_and_answers.extend(values)
+        faq_details[doc["documentId"]] = {"entries": len(entries), "duplicateRatio": duplicate_ratio(values),
+                                           "mismatches": len(mismatches) + len(banned)}
+    gate("faqQuestionAnswerTopicalConsistency", not faq_mismatches,
+         {"documents": faq_details, "failures": faq_mismatches})
+
+    prose_units = []
+    for doc_id, text in extracted.items():
+        if next(doc for doc in documents if doc["documentId"] == doc_id)["format"] == "MD":
+            continue
+        prose_units.extend(line.strip() for line in text.splitlines()
+                           if len(line.strip()) >= 60
+                           and not line.strip().startswith(("文档编号：", "规则条款：")))
+    prose_duplicate_ratio = duplicate_ratio(prose_units)
+    faq_duplicate_ratio = duplicate_ratio(faq_questions_and_answers)
+    gate("duplicateTemplateRatio", prose_duplicate_ratio <= 0.08 and faq_duplicate_ratio <= 0.01,
+         {"proseRatio": prose_duplicate_ratio, "faqRatio": faq_duplicate_ratio,
+          "proseUnits": len(prose_units), "faqUnits": len(faq_questions_and_answers)})
+
+    leakage = []
+    for doc_id, text in extracted.items():
+        for fact_id in fact_ids:
+            if re.search(rf"(?<![A-Z0-9-]){re.escape(fact_id)}(?![A-Z0-9-])", text):
+                leakage.append({"documentId": doc_id, "factId": fact_id})
+    gate("noInternalFactIdLeakage", not leakage, leakage or "none")
 
     total_characters = sum(detail.get("characters", 0) for detail in file_details.values())
     gate("content_scale", 800_000 <= total_characters <= 1_500_000, total_characters)

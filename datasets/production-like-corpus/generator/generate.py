@@ -12,6 +12,7 @@ import re
 import shutil
 import sys
 import zipfile
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -38,9 +39,10 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 from reportlab.platypus import Paragraph
 
-from corpus_data import (CATEGORY_COUNTS, COMPANY, DOCUMENTS, HARD_NEGATIVES, RELATIONS,
-                         SEED, SPEC_VERSION, UNANSWERABLE, DocumentSpec)
-from evaluation_data import QUESTION_SETS, VERSION_FORBIDDEN
+from corpus_data import (CATEGORY_COUNTS, COMPANY, DOCUMENTS, FACT_SOURCE_SECTIONS,
+                         FACT_SOURCE_TEXT_OVERRIDES, HARD_NEGATIVES, RELATIONS, SEED,
+                         SPEC_VERSION, UNANSWERABLE, DocumentSpec)
+from evaluation_data import QUESTION_SETS
 
 
 GENERATOR_DIR = Path(__file__).resolve().parent
@@ -50,6 +52,26 @@ DEFAULT_SPEC = REPO_ROOT / "docs" / "evaluation" / "ModelRAG-Production-Like-Cor
 FIXED_TIME = datetime(2026, 9, 17, 0, 0, 0, tzinfo=timezone.utc)
 ZIP_TIME = (2026, 9, 17, 0, 0, 0)
 FORMATS = {"PDF": ".pdf", "DOCX": ".docx", "XLSX": ".xlsx", "MD": ".md"}
+
+
+SECTION_BOUNDARY_NOTES = {
+    ("IT-004", "生产权限边界"): (
+        "权限边界示例：OA权限、GitLab权限、普通数据库权限、生产数据库只读权限、生产数据库写权限和采购审批权限"
+        "分别属于不同责任链。名称相近或同一申请人发起，都不能相互替代审批。"
+    ),
+    ("HR-004", "异地派驻补助"): (
+        "异地安排需区分长期派驻住宿补贴、驻场补助和普通差旅住宿；三者适用期间、凭证和责任部门不同。"
+    ),
+    ("FIN-001", "住宿"): (
+        "住宿判断应区分普通差旅住宿、海外住宿、长期派驻住宿补贴、驻场补助和会议临时住宿标准，先核对出行性质与日期再选规则。"
+    ),
+    ("FIN-003", "临时住宿标准"): (
+        "本通知规定的是会议临时住宿标准，不改变普通差旅住宿、海外住宿、长期派驻住宿补贴或驻场补助的适用边界。"
+    ),
+    ("OPS-002", "数据库故障"): (
+        "事故判定应区分数据库性能下降、核心业务不可用和仍有替代路径的普通故障；技术告警本身不直接决定P0或P1。"
+    ),
+}
 
 
 DOMAIN_PROFILES = {
@@ -103,18 +125,6 @@ DOMAIN_PROFILES = {
     },
 }
 
-BOUNDARY_PARAGRAPHS = {
-    "HR": "办理住宿或补贴时，应明确区分普通差旅住宿、长期派驻住宿补贴、驻场补助、海外住宿和会议临时住宿标准；名称相近不代表预算来源、适用期间和审批链相同。",
-    "FINANCE": "费用审核应区分普通差旅住宿、长期派驻住宿补贴、驻场补助、海外住宿和会议临时住宿标准，分别核对出行性质、适用期限、费用来源和例外批准。",
-    "IT": "权限工单必须区分OA权限、GitLab权限、普通数据库权限、生产数据库只读权限、生产数据库写权限和采购审批权限；一个流程的批准不得替代另一个控制域。",
-    "SECURITY": "访问审查必须区分OA权限、GitLab权限、普通数据库权限、生产数据库只读权限、生产数据库写权限和采购审批权限，尤其不得用普通系统授权替代敏感生产访问审批。",
-    "PROCUREMENT": "经办人应分别识别采购审批、合同签署权限、供应商准入、付款审批和单一来源例外，前一环节完成不代表后续环节自动通过。",
-    "LEGAL": "合同流程与采购审批、合同签署权限、供应商准入、付款审批和单一来源例外相互关联但彼此独立，审核记录应说明各控制点的完成状态。",
-    "ENGINEERING": "发布影响分析应区分P0、P1、数据库性能下降、核心业务不可用、安全事件和普通故障，依据真实业务影响选择响应路径。",
-    "OPERATIONS": "值班人员应区分P0、P1、数据库性能下降、核心业务不可用、安全事件和普通故障，不得只凭告警名称提升或降低事故等级。",
-}
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-root", type=Path, default=CORPUS_ROOT)
@@ -154,15 +164,41 @@ def parse_fact_registry(spec_path: Path) -> list[dict]:
             continue
         seen.add(fact_id)
         sources = normalize_sources(source)
+        locations = FACT_SOURCE_SECTIONS.get(fact_id)
+        if not locations:
+            raise ValueError(f"Missing source location mapping for {fact_id}")
+        if set(locations) != set(sources):
+            raise ValueError(
+                f"Source location documents for {fact_id} differ from Spec sources: "
+                f"{sorted(locations)} != {sorted(sources)}"
+            )
+        source_text = FACT_SOURCE_TEXT_OVERRIDES.get(fact_id, fact.strip())
         facts.append({
             "factId": fact_id,
             "statement": fact.strip(),
+            "sourceText": source_text,
             "primarySources": sources,
+            "sourceLocations": [
+                {"documentId": document_id,
+                 "sectionPath": f"{document_id}/{section}",
+                 "sourceText": source_text}
+                for document_id, section in locations.items()
+            ],
             "retrievalIntent": retrieval.strip(),
             "status": "HISTORICAL" if retrieval.strip() == "Stale" else "CURRENT",
         })
     if len(facts) != 100:
-        raise ValueError(f"Spec v1.1 fact table count is {len(facts)}, expected 100")
+        raise ValueError(f"Spec fact table count is {len(facts)}, expected 100")
+    documents = {doc.document_id: doc for doc in DOCUMENTS}
+    invalid_locations = [
+        location
+        for fact in facts
+        for location in fact["sourceLocations"]
+        if location["documentId"] not in documents
+        or location["sectionPath"].split("/", 1)[1] not in documents[location["documentId"]].sections
+    ]
+    if invalid_locations:
+        raise ValueError(f"Invalid source locations: {invalid_locations}")
     return facts
 
 
@@ -177,12 +213,26 @@ def document_code(doc: DocumentSpec) -> str:
     return f"NT-{doc.department[:4]}-{kind}-{year}-{doc.document_id.split('-')[1]}"
 
 
+def document_label(document_id: str) -> str:
+    doc = next(item for item in DOCUMENTS if item.document_id == document_id)
+    return f"《{doc.title}》({document_code(doc)})"
+
+
 def facts_by_document(facts: list[dict]) -> dict[str, list[dict]]:
     result = {doc.document_id: [] for doc in DOCUMENTS}
     for fact in facts:
         for source in fact["primarySources"]:
             if source in result:
                 result[source].append(fact)
+    return result
+
+
+def facts_by_section(document_id: str, facts: list[dict]) -> dict[str, list[dict]]:
+    result: dict[str, list[dict]] = defaultdict(list)
+    for fact in facts:
+        for location in fact["sourceLocations"]:
+            if location["documentId"] == document_id:
+                result[location["sectionPath"].split("/", 1)[1]].append(fact)
     return result
 
 
@@ -201,13 +251,15 @@ def paragraph_for(doc: DocumentSpec, section: str, page: int, slot: int) -> str:
     profile = DOMAIN_PROFILES[doc.department]
     role = rng.choice(profile["roles"])
     reviewer = rng.choice([value for value in profile["roles"] if value != role])
-    obj = rng.choice(profile["objects"])
+    # The section name is the content boundary. Generic department objects made
+    # earlier versions drift (for example, salary material inside a leave
+    # chapter), so all prose now anchors its object, risk and record to the
+    # actual chapter being rendered.
+    obj = f"{section}事项"
     system = rng.choice(profile["systems"])
-    risk = rng.choice(profile["risks"])
-    record = rng.choice(["审批记录", "操作日志", "交接清单", "复核意见", "时间线", "留痕附件"])
+    risk = f"{section}的适用条件、责任边界或版本口径被混淆"
+    record = f"{section}办理记录"
     mode = (page + slot) % 5
-    if mode == 4 and page % 5 == 2:
-        return BOUNDARY_PARAGRAPHS[doc.department]
     if doc.department in {"IT", "OPERATIONS"}:
         symptoms = ["登录失败且重试无效", "监控指标持续偏离基线", "权限校验结果与预期不一致", "任务执行后状态未收敛", "日志出现连续告警"]
         causes = ["配置未同步", "依赖服务异常", "证书或凭据失效", "变更影响未完全隔离", "网络路径发生漂移"]
@@ -286,21 +338,20 @@ def paragraph_for(doc: DocumentSpec, section: str, page: int, slot: int) -> str:
 
 
 def fact_paragraph(fact: dict) -> str:
-    return f"规则条款：{fact['statement']}。该条款的适用对象、条件和证据应结合本章上下文判断，不得脱离有效版本单独引用。"
+    return f"规则条款：{fact['sourceText']}。该条款的适用对象、条件和证据应结合本章上下文判断，不得脱离有效版本单独引用。"
 
 
 def identity_lines(doc: DocumentSpec) -> list[tuple[str, str]]:
     return [
         ("文档编号", document_code(doc)),
-        ("文档ID", doc.document_id),
         ("版本", doc.version),
         ("状态", "生效" if doc.status == "ACTIVE" else "已废止"),
         ("密级", "内部"),
         ("归口部门", doc.department),
         ("发布日", doc.publish_date),
         ("生效日", doc.effective_date),
-        ("替代文件", "、".join(supersedes_for(doc.document_id)) or "无"),
-        ("引用文件", "、".join(references_for(doc.document_id)) or "无"),
+        ("替代文件", "、".join(document_label(item) for item in supersedes_for(doc.document_id)) or "无"),
+        ("引用文件", "、".join(document_label(item) for item in references_for(doc.document_id)) or "无"),
     ]
 
 
@@ -334,7 +385,8 @@ def write_pdf(doc: DocumentSpec, output: Path, facts: list[dict]) -> None:
     c.setAuthor(COMPANY)
     width, height = A4
     pages = doc.page_target or 1
-    fact_index = 0
+    section_facts = facts_by_section(doc.document_id, facts)
+    emitted_sections: set[str] = set()
     for page in range(1, pages + 1):
         c.setFillColor(HexColor("#000000"))
         if page == 1:
@@ -361,10 +413,15 @@ def write_pdf(doc: DocumentSpec, output: Path, facts: list[dict]) -> None:
             c.drawRightString(width - 24 * mm, height - 30 * mm, f"{page}.{(page - 2) % len(doc.sections) + 1}")
             c.setFillColor(HexColor("#222222"))
             y = height - 42 * mm
-            if fact_index < len(facts):
-                y = draw_pdf_paragraph(c, fact_paragraph(facts[fact_index]), 24 * mm, y,
-                                       width - 48 * mm, body_font, 10.4, 17)
-                fact_index += 1
+            if section not in emitted_sections:
+                for fact in section_facts.get(section, []):
+                    y = draw_pdf_paragraph(c, fact_paragraph(fact), 24 * mm, y,
+                                           width - 48 * mm, body_font, 10.4, 17)
+                boundary_note = SECTION_BOUNDARY_NOTES.get((doc.document_id, section))
+                if boundary_note:
+                    y = draw_pdf_paragraph(c, boundary_note, 24 * mm, y,
+                                           width - 48 * mm, body_font, 10.2, 16.5)
+                emitted_sections.add(section)
             for slot in range(5):
                 y = draw_pdf_paragraph(c, paragraph_for(doc, section, page, slot), 24 * mm, y,
                                        width - 48 * mm, body_font)
@@ -380,6 +437,9 @@ def write_pdf(doc: DocumentSpec, output: Path, facts: list[dict]) -> None:
         c.drawRightString(width - 24 * mm, 11 * mm, f"第 {page} 页 / 共 {pages} 页")
         c.showPage()
     c.save()
+    missing_sections = sorted(set(section_facts) - emitted_sections)
+    if missing_sections:
+        raise RuntimeError(f"Facts were not emitted for {doc.document_id}: {missing_sections}")
     actual = len(PdfReader(str(output)).pages)
     if actual != pages:
         raise RuntimeError(f"PDF page mismatch for {doc.document_id}: {actual} != {pages}")
@@ -482,25 +542,29 @@ def write_docx(doc: DocumentSpec, output: Path, facts: list[dict]) -> None:
     )
 
     pages = doc.page_target or 1
-    fact_index = 0
+    section_facts = facts_by_section(doc.document_id, facts)
+    emitted_sections: set[str] = set()
     for page in range(2, pages + 1):
         document.add_page_break()
-        section_name = doc.sections[(page - 2) % len(doc.sections)]
-        document.add_heading(section_name, level=1)
-        lead = document.add_paragraph(f"第 {page - 1} 节控制说明")
-        lead.runs[0].bold = True
-        fact_slots = max(1, (len(facts) + max(1, pages - 2)) // max(1, pages - 1))
-        for _ in range(fact_slots):
-            if fact_index >= len(facts):
-                break
-            p = document.add_paragraph(fact_paragraph(facts[fact_index]))
-            p.runs[0].bold = True
-            fact_index += 1
-        # Four distinct semantic paragraphs fit on one planned Word page and,
-        # with the rotating mode, cover scope, duties, process, exceptions and
-        # evidence/attachments across adjacent sections.
-        for slot in range(4):
-            document.add_paragraph(paragraph_for(doc, section_name, page, slot))
+        page_sections = ([doc.sections[:3], doc.sections[3:]][page - 2]
+                         if doc.document_id == "FIN-003"
+                         else [doc.sections[(page - 2) % len(doc.sections)]])
+        for section_index, section_name in enumerate(page_sections):
+            document.add_heading(section_name, level=1)
+            if doc.document_id != "FIN-003":
+                lead = document.add_paragraph(f"第 {page - 1} 节控制说明")
+                lead.runs[0].bold = True
+            if section_name not in emitted_sections:
+                for fact in section_facts.get(section_name, []):
+                    p = document.add_paragraph(fact_paragraph(fact))
+                    p.runs[0].bold = True
+                boundary_note = SECTION_BOUNDARY_NOTES.get((doc.document_id, section_name))
+                if boundary_note:
+                    document.add_paragraph(boundary_note)
+                emitted_sections.add(section_name)
+            paragraph_count = 1 if doc.document_id == "FIN-003" else 4
+            for slot in range(paragraph_count):
+                document.add_paragraph(paragraph_for(doc, section_name, page, slot + section_index))
         if page % 8 == 0:
             document.add_heading("本节记录清单", level=2)
             mini = document.add_table(rows=1, cols=3)
@@ -524,6 +588,9 @@ def write_docx(doc: DocumentSpec, output: Path, facts: list[dict]) -> None:
                         for run in p.runs:
                             run.font.name = "Microsoft YaHei"
                             run.font.size = Pt(8.5)
+    missing_sections = sorted(set(section_facts) - emitted_sections)
+    if missing_sections:
+        raise RuntimeError(f"Facts were not emitted for {doc.document_id}: {missing_sections}")
     document.save(output)
     normalize_ooxml(output)
 
@@ -566,7 +633,7 @@ def add_structured_sheet(wb: Workbook, doc: DocumentSpec, title: str, headers: l
     ws = wb.create_sheet(title)
     ws.sheet_view.showGridLines = False
     ws["A1"] = doc.title
-    ws["A2"] = f"文档ID：{doc.document_id}    版本：{doc.version}    归口部门：{doc.department}    生效日：{doc.effective_date}"
+    ws["A2"] = f"文档编号：{document_code(doc)}    版本：{doc.version}    归口部门：{doc.department}    生效日：{doc.effective_date}"
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
     ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=len(headers))
     ws["A1"].font = Font(name="Microsoft YaHei", size=15, bold=True, color="000000")
@@ -610,21 +677,21 @@ def write_xlsx(doc: DocumentSpec, output: Path, facts: list[dict]) -> None:
     wb = workbook_common(doc)
     if doc.document_id == "FIN-002":
         add_structured_sheet(wb, doc, "城市等级", ["城市", "等级", "适用说明"], [
-            ["上海", "A", "核心商务城市；FIN-004：上海属于A类城市"], ["北京", "A", "核心商务城市"],
+            ["上海", "A", "核心商务城市；上海属于A类城市"], ["北京", "A", "核心商务城市"],
             ["深圳", "A", "核心商务城市"], ["广州", "B", "重点城市"], ["成都", "B", "重点城市"],
             ["西安", "B", "重点城市"], ["其他国内城市", "C", "未单列城市"],
         ])
         add_structured_sheet(wb, doc, "国内住宿标准", ["职级", "A类 元/晚", "B类 元/晚", "C类 元/晚", "说明"], [
             ["P1-P5", 500, 420, 350, "按实际发生额与上限孰低"],
-            ["P6-P7", 600, 500, 420, "FIN-005：P6/P7上海住宿标准600元/晚"],
+            ["P6-P7", 600, 500, 420, "P6/P7上海住宿标准600元/晚；差旅费用标准以《2026差旅费用标准》为基准，而非员工手册"],
             ["P8-P9", 750, 650, 550, "按差旅申请核定"], ["VP及以上", 900, 800, 700, "按批准行程执行"],
         ])
         add_structured_sheet(wb, doc, "餐费标准", ["范围", "标准 元/自然日", "计算口径", "说明"], [
-            ["国内一般地区", 120, "自然日", "FIN-011：国内差旅餐补按自然日计算"],
+            ["国内一般地区", 120, "自然日", "国内差旅餐补按自然日计算"],
             ["国内特殊区域", 160, "自然日", "以特殊区域表为准"],
         ])
         add_structured_sheet(wb, doc, "海外地区", ["国家或地区组", "住宿币种", "住宿上限", "餐费上限", "说明"], [
-            ["亚洲I组", "USD", 180, 65, "FIN-017：海外住宿按国家/地区标准表执行"],
+            ["亚洲I组", "USD", 180, 65, "海外住宿按国家/地区标准表执行"],
             ["欧洲I组", "EUR", 210, 75, "具体城市按出差申请"], ["北美I组", "USD", 230, 80, "具体城市按出差申请"],
         ])
         add_structured_sheet(wb, doc, "特殊区域", ["区域", "附加上限 元/晚", "适用条件", "审批"], [
@@ -632,15 +699,16 @@ def write_xlsx(doc: DocumentSpec, output: Path, facts: list[dict]) -> None:
         ])
     elif doc.document_id == "SEC-002":
         add_structured_sheet(wb, doc, "分类等级", ["等级", "定义", "影响", "示例"], [
-            ["L1", "公开数据", "泄露影响较低", "官网公开信息；SEC-001：数据分L1/L2/L3/L4"], ["L2", "内部数据", "影响内部运营", "员工通讯录"],
+            ["L1", "公开数据", "泄露影响较低", "官网公开信息；数据分L1/L2/L3/L4"],
+            ["L2", "内部数据", "影响内部运营", "员工通讯录；USB使用受信息安全等级约束"],
             ["L3", "敏感数据", "可能造成客户或公司损失", "未公开财务、客户身份证"],
             ["L4", "核心敏感数据", "可能造成重大业务或安全影响", "生产数据库密钥"],
         ])
         add_structured_sheet(wb, doc, "数据示例", ["数据项", "等级", "所有者", "依据说明"], [
-            ["员工通讯录", "L2", "HR", "SEC-002：员工通讯录属于L2"],
-            ["未公开财务数据", "L3", "Finance", "SEC-003：未公开财务数据属于L3"],
-            ["客户身份证", "L3", "Business Owner", "SEC-004：客户身份证数据属于L3"],
-            ["生产数据库密钥", "L4", "System Owner", "SEC-005：生产数据库密钥属于L4"],
+            ["员工通讯录", "L2", "HR", "员工通讯录属于L2"],
+            ["未公开财务数据", "L3", "Finance", "未公开财务数据属于L3"],
+            ["客户身份证", "L3", "Business Owner", "客户身份证数据属于L3"],
+            ["生产数据库密钥", "L4", "System Owner", "生产数据库密钥属于L4"],
         ])
         add_structured_sheet(wb, doc, "存储与传输", ["等级", "允许存储", "传输规则", "外发"], [
             ["L1", "公共内容平台", "可公开传输", "允许"], ["L2", "公司受控协作空间", "公司账号传输", "审批后"],
@@ -648,26 +716,26 @@ def write_xlsx(doc: DocumentSpec, output: Path, facts: list[dict]) -> None:
         ])
         add_structured_sheet(wb, doc, "加密要求", ["等级", "静态加密", "传输加密", "访问控制", "说明"], [
             ["L1", "可选", "可选", "公开", ""], ["L2", "平台默认", "公司通道", "员工身份", ""],
-            ["L3", "必须", "必须", "最小权限", "SEC-006：L3/L4数据要求受控存储和加密"],
-            ["L4", "必须且密钥分离", "必须", "双人审批", "SEC-006：L3/L4数据要求受控存储和加密"],
+            ["L3", "必须", "必须", "最小权限", "L3/L4数据要求受控存储和加密"],
+            ["L4", "必须且密钥分离", "必须", "双人审批", "L3/L4数据要求受控存储和加密"],
         ])
     elif doc.document_id == "PROC-003":
         add_structured_sheet(wb, doc, "审批矩阵", ["金额下限 元", "金额上限 元", "边界", "审批角色", "说明"], [
-            [0, 50000, "≤5万元", "部门负责人", "PROC-001：≤5万元采购仅部门负责人审批"],
-            [50000.01, 200000, "5~20万元", "部门负责人+VP", "PROC-002：5~20万元增加VP审批"],
-            [200000.01, 1000000, "20~100万元", "部门负责人+VP+CFO", "PROC-003：20~100万元增加CFO审批"],
-            [1000000.01, None, ">100万元", "部门负责人+VP+CFO+CEO", "PROC-004：>100万元增加CEO审批"],
+            [0, 50000, "≤5万元", "部门负责人", "≤5万元采购仅部门负责人审批"],
+            [50000.01, 200000, "5~20万元", "部门负责人+VP", "5~20万元增加VP审批"],
+            [200000.01, 1000000, "20~100万元", "部门负责人+VP+CFO", "20~100万元增加CFO审批"],
+            [1000000.01, None, ">100万元", "部门负责人+VP+CFO+CEO", ">100万元增加CEO审批"],
         ])
         add_structured_sheet(wb, doc, "边界示例", ["采购金额 元", "审批链", "判定说明"], [
             [50000, "部门负责人", "五万元整归入≤5万元"], [200000, "部门负责人+VP", "二十万元整归入5~20万元"],
-            [850000, "部门负责人+VP+CFO", "PROC-005：85万元软件采购需负责人+VP+CFO"],
+            [850000, "部门负责人+VP+CFO", "85万元软件采购需负责人+VP+CFO"],
             [1000000, "部门负责人+VP+CFO", "一百万元整归入20~100万元"],
             [1000001, "部门负责人+VP+CFO+CEO", "超过一百万元增加CEO"],
         ])
         add_structured_sheet(wb, doc, "适用说明", ["主题", "规则", "不替代事项"], [
             ["采购审批", "按采购总金额适用矩阵", "不替代预算、供应商准入和合同审核"],
             ["禁止拆分", "同一目的采购不得拆分规避审批", "不改变合理分批交付"],
-            ["流程边界", "采购审批、合同签署权限、供应商准入、付款审批和单一来源例外分别留痕", "任一完成均不代表其他环节自动通过"],
+            ["流程边界", "合同金额权限与采购审批不是同一个流程；采购审批、合同签署权限、供应商准入、付款审批和单一来源例外分别留痕", "任一完成均不代表其他环节自动通过"],
         ])
     elif doc.document_id == "OPS-003":
         add_structured_sheet(wb, doc, "事故等级", ["等级", "定义", "业务示例", "排除示例"], [
@@ -677,15 +745,15 @@ def write_xlsx(doc: DocumentSpec, output: Path, facts: list[dict]) -> None:
         ])
         add_structured_sheet(wb, doc, "响应时限", ["等级", "首次响应 分钟", "技术负责人介入 分钟", "说明"], [
             ["P0", 5, 10, "P0首次响应≤5分钟；P0技术负责人≤10分钟介入"],
-            ["P1", 10, 20, "OPS-005：P1首次响应≤10分钟"], ["P2", 30, 60, "按值班队列处理"],
+            ["P1", 10, 20, "P1首次响应≤10分钟"], ["P2", 30, 60, "按值班队列处理"],
         ])
         add_structured_sheet(wb, doc, "升级与沟通", ["等级", "状态同步频率 分钟", "指挥角色", "必要参与"], [
             ["P0", 15, "Incident Commander", "技术负责人、Business Owner；P0每15分钟同步状态"],
             ["P1", 30, "事件负责人", "相关服务Owner"], ["P2", 60, "处理人", "值班负责人"],
         ])
         add_structured_sheet(wb, doc, "判定示例", ["场景", "建议等级", "理由"], [
-            ["核心支付整体不可用", "P0", "OPS-021：属于P0"],
-            ["数据库响应变慢但核心交易可完成", "视影响评估，不当然为P0", "OPS-020：不当然属于P0"],
+            ["核心支付整体不可用", "P0", "核心支付整体不可用属于P0"],
+            ["数据库响应变慢但核心交易可完成", "视影响评估，不当然为P0", "数据库慢但未导致核心业务不可用不当然属于P0"],
             ["单个员工无法登录", "P2或普通工单", "未构成核心业务整体不可用"],
         ])
     else:
@@ -707,33 +775,84 @@ def faq_topics(doc: DocumentSpec) -> tuple[list[str], list[str], list[str]]:
     return base, ["变更平台", "值班系统", "Incident Commander"], ["ENG-001", "OPS-001", "OPS-002", "OPS-003"]
 
 
+FAQ_TOPIC_GUIDANCE = {
+    "HR-005": {
+        "入职与资料": ("对照入职清单补齐身份、合同和账户资料，再查看待办状态", "材料仅用于对应的人事流程，不通过聊天工具散发个人信息", "HR-001", "入职"),
+        "考勤与补卡": ("先核对考勤日期和原始打卡记录，再在时限内提交补卡原因", "出差、请假和忘打卡使用不同凭证，不能相互替代", "HR-003", "考勤"),
+        "各类假期": ("先确认假种、适用条件和自然日或工作日口径，再发起申请", "不同假种的证明、期限与审批链不能套用", "HR-003", "申请与审批"),
+        "薪酬与补贴": ("核对适用年度、员工状态和补贴项目，再向薪酬福利团队查询", "工资、福利补贴和差旅报销属于不同制度", "HR-004", "薪酬结构"),
+        "绩效": ("先确认评估周期、目标版本和反馈记录，再联系直属负责人", "绩效反馈不在公开频道讨论，也不等同于薪酬决定", "HR-001", "绩效"),
+        "离职与证明": ("按离职清单完成资产、账号和工作交接，再申请所需证明", "证明开具不能替代权限回收和保密义务确认", "HR-001", "离职"),
+    },
+    "FIN-005": {
+        "差旅报销": ("关联已批准的出差申请、行程和费用明细后提交报销", "年度标准、临时通知和实际发生额要按适用日期分别判断", "FIN-001", "报销"),
+        "发票": ("核验抬头、税号、金额和业务内容，并在电子票夹检查重复", "缺票、错票和电子票重复各有不同处理路径", "FIN-004", "发票要求"),
+        "公司卡": ("先匹配公司卡流水与业务凭证，再说明差异或退款状态", "公司卡消费不得再次作为个人垫付报销", "FIN-004", "公司卡"),
+        "个人垫付": ("说明无法使用公司支付方式的原因并提交付款凭证", "个人垫付仍受预算、事前审批和费用标准约束", "FIN-004", "个人垫付"),
+        "超标准与例外": ("标注超标金额、原因和事前或补充审批材料", "例外审批不自动提高同类事项的长期标准", "FIN-004", "超标准处理"),
+        "付款状态": ("用报销单号查询审核、支付和退回节点", "系统显示已支付不代表银行已经完成入账", "FIN-004", "审批与支付"),
+    },
+    "SEC-005": {
+        "设备遗失": ("立即报告服务台和 Security，并提供设备、时间和最后位置", "先远程锁定和吊销凭据，不自行远程清除证据", "SEC-003", "报告"),
+        "U盘与移动介质": ("停止继续使用并确认介质来源、数据等级和加密状态", "未知介质不得接入公司终端，敏感数据不得转存到个人设备", "SEC-001", "终端设备"),
+        "误发数据": ("立即停止扩散、撤回可撤回内容并报告接收范围", "不要在群内重复发送样本证明问题，证据应在受控渠道提交", "SEC-003", "隔离"),
+        "账号异常": ("先修改凭据、撤销会话并报告异常时间和登录来源", "不要删除安全告警或用同一设备反复试错", "SEC-001", "账号安全"),
+        "恶意邮件": ("停止点击和回复，保留邮件头并通过安全入口上报", "不要转发可疑附件给同事协助判断", "SEC-001", "安全事件"),
+        "事件报告": ("说明发现时间、数据或系统范围、已采取动作和联系人", "紧急报告可先于完整材料，但不得延迟隔离和证据保全", "SEC-003", "报告"),
+    },
+    "LEG-002": {
+        "采购与合同边界": ("分别确认采购审批、供应商准入和合同审核状态", "完成一个流程不代表其他流程自动通过", "LEG-001", "总则"),
+        "供应商准入": ("先完成资质、风险和必要的安全审查，再进入签约", "紧急业务需求不能自动豁免黑名单和准入控制", "PROC-002", "准入决定"),
+        "合同审核": ("使用批准模板并标出非标准条款供法务审核", "商务确认不能替代法务对责任、数据和争议条款的判断", "LEG-001", "法务审核"),
+        "签署与用印": ("确认签署角色、授权范围和最终定稿版本后申请用印", "采购金额审批与合同签署权限是两条独立控制链", "LEG-001", "签署权限"),
+        "补签": ("如实说明服务发生时间、未及时签署原因和风险处置", "已经履行服务不构成绕过补签审批的理由", "LEG-001", "签署权限"),
+        "续签与终止": ("在到期前复核履约、价格、数据处理和通知期限", "自动续期、续签和终止适用不同通知要求", "LEG-001", "续签"),
+    },
+    "OPS-004": {
+        "发布与变更": ("关联发布单与变更单，确认测试、审批、窗口和回滚条件", "代码合并或测试通过都不等于已获生产变更批准", "OPS-001", "审批"),
+        "灰度": ("定义灰度范围、观察指标、扩量条件和停止阈值", "灰度期间未出现告警不代表可以跳过业务验证", "OPS-001", "灰度"),
+        "回滚": ("核对回滚版本、数据兼容性和执行负责人，再按触发条件操作", "回滚失败后停止重复执行并转入事故升级", "OPS-002", "回滚失败"),
+        "事故分级": ("以业务影响、范围和替代路径判断等级并持续复核", "单一技术指标不能替代核心业务可用性判断", "OPS-003", "事故等级"),
+        "值班与升级": ("按事故类型通知对应 On-call，并明确指挥角色和下一更新时间", "升级不等于原处理人退出，交接前仍需保持信息连续", "OPS-002", "升级矩阵"),
+        "复盘": ("还原时间线、根因、处置效果和改进项并明确负责人", "复盘用于改进系统和流程，不以归责替代事实分析", "OPS-002", "复盘"),
+    },
+}
+
+
 def write_markdown(doc: DocumentSpec, output: Path, facts: list[dict]) -> None:
-    topics, channels, refs = faq_topics(doc)
-    lines = [f"# {doc.title}", "", f"- 文档ID：{doc.document_id}", f"- 版本：{doc.version}",
+    topics, channels, _ = faq_topics(doc)
+    lines = [f"# {doc.title}", "", f"- 文档编号：{document_code(doc)}", f"- 版本：{doc.version}",
              f"- 归口部门：{doc.department}", f"- 发布日期：{doc.publish_date}", f"- 生效日期：{doc.effective_date}", "",
-             "本指南用于快速定位办理入口和正式制度。遇到金额、时限、权限或版本冲突时，应回到所引用的正式文件确认完整条件。", ""]
+             "本指南用于快速定位办理入口和正式制度。每项答复只处理标题所列主题；遇到条件或版本差异时，应回到引用章节确认。", ""]
     variants = [
-        "我现在遇到{topic}，第一步应该做什么？", "{topic}卡住了，需要先找谁确认？", "临时发生{topic}，能不能先处理后补材料？",
-        "{topic}的记录在哪里提交？", "同事给了另一种{topic}说法，应该以什么为准？", "{topic}已经完成，还需要保留哪些记录？",
-        "办理{topic}时系统提示信息不全，接下来怎么办？", "{topic}涉及其他部门时，怎样避免重复申请？", "关于{topic}，员工最容易混淆的边界是什么？",
+        "{scenario}时，{topic}第一步怎么处理？", "{scenario}，{topic}需要先找谁确认？", "{scenario}遇到{topic}，材料暂时不全怎么办？",
+        "{scenario}办理{topic}，记录应提交到哪里？", "{scenario}发现{topic}说法不一致，以什么为准？", "{scenario}完成{topic}后，还要保留什么？",
+        "{scenario}处理{topic}被系统退回，下一步是什么？", "{scenario}的{topic}涉及其他团队，如何交接？", "{scenario}咨询{topic}，最容易混淆的边界是什么？",
+        "{scenario}准备处理{topic}，怎样确认已经具备前置条件？",
     ]
-    fact_cursor = 0
-    for index in range(1, doc.faq_count + 1):
-        topic = topics[(index - 1) % len(topics)]
-        if index == 1 or topic != topics[(index - 2) % len(topics)]:
-            lines.extend([f"## {topic}", ""])
-        question = variants[(index - 1) % len(variants)].format(topic=topic)
-        channel = channels[(index * 3) % len(channels)]
-        reference = refs[(index * 5) % len(refs)]
-        if fact_cursor < len(facts):
-            answer = (f"{facts[fact_cursor]['statement']}。请在{channel}提交与场景对应的材料，并以 {reference} 的完整条款为准；"
-                      "FAQ只说明办理方向，不替代正式审批和有效版本判断。")
-            fact_cursor += 1
-        else:
-            answer = (f"先在{channel}确认适用对象、发生时间和当前状态，再按 {reference} 定位正式规则。"
-                      f"如果{topic}同时涉及金额、数据等级、生产权限或紧急处置，应分别取得责任部门结论，不要用口头答复替代系统记录。"
-                      "材料暂时不全时可以先咨询，但提交与批准的先后顺序仍按正式制度执行。")
-        lines.extend([f"### Q{index:03d} {question}", "", answer, ""])
+    scenarios = ["第一次办理", "临近截止时间", "负责人暂时不在线", "系统状态没有更新", "材料刚被退回",
+                 "需要跨团队协作", "历史记录与当前口径不同", "已经完成一部分操作", "补充材料到齐", "准备交接给同事"]
+    answer_focus = ["先核对办理入口", "先明确确认角色", "先登记缺失材料", "先保留提交记录", "先核对版本与日期",
+                    "先完成归档检查", "先查看退回原因", "先明确交接责任", "先区分相邻规则", "先确认前置条件"]
+    section_facts = facts_by_section(doc.document_id, facts)
+    counts = [doc.faq_count // len(topics) + (1 if index < doc.faq_count % len(topics) else 0)
+              for index in range(len(topics))]
+    global_index = 0
+    for topic_index, topic in enumerate(topics):
+        lines.extend([f"## {topic}", ""])
+        action, boundary, reference_id, reference_section = FAQ_TOPIC_GUIDANCE[doc.document_id][topic]
+        topic_facts = section_facts.get(topic, [])
+        for local_index in range(counts[topic_index]):
+            global_index += 1
+            variant = variants[local_index % len(variants)]
+            scenario = scenarios[(local_index // len(variants)) % len(scenarios)]
+            question = variant.format(topic=topic, scenario=scenario)
+            channel = channels[(local_index + topic_index) % len(channels)]
+            fact_text = f"{topic_facts[local_index]['sourceText']}。" if local_index < len(topic_facts) else ""
+            answer = (f"针对“{scenario}”的情况，{answer_focus[local_index % len(answer_focus)]}。关于{topic}，{fact_text}{action}。"
+                      f"{boundary}。请在{channel}保留本次场景的时间、对象和处理结果，"
+                      f"正式依据见{document_label(reference_id)}“{reference_section}”章节。")
+            lines.extend([f"### Q{global_index:03d} {question}", "", answer, ""])
     output.write_text("\n".join(lines), encoding="utf-8", newline="\n")
 
 
@@ -743,16 +862,45 @@ def expected_documents_for(fact_ids: list[str], facts_by_id: dict[str, dict], ca
         for source in facts_by_id[fact_id]["primarySources"]:
             if source not in result:
                 result.append(source)
-    if category == "VERSION_CONFLICT":
-        forbidden = {item for fact_id in fact_ids for item in VERSION_FORBIDDEN.get(fact_id, [])}
-        current = [doc for doc in result if doc not in forbidden]
-        return current or result
     return result
+
+
+def fact_location_rows(fact_ids: list[str], facts_by_id: dict[str, dict]) -> list[dict]:
+    return [
+        {"factId": fact_id, "statement": facts_by_id[fact_id]["statement"], **location}
+        for fact_id in fact_ids
+        for location in facts_by_id[fact_id]["sourceLocations"]
+    ]
+
+
+def version_evidence_roles(query: str, fact_ids: list[str], facts_by_id: dict[str, dict]) -> dict:
+    if fact_ids[0].startswith("HR-"):
+        current_ids = [fact_id for fact_id in fact_ids if facts_by_id[fact_id]["status"] == "CURRENT"]
+        historical_ids = [fact_id for fact_id in fact_ids if facts_by_id[fact_id]["status"] == "HISTORICAL"]
+    else:
+        during_override = "11月15" in query or "11月12" in query
+        current_ids = [fact_id for fact_id in fact_ids if fact_id in (
+            {"FIN-006", "FIN-007"} if during_override else {"FIN-005", "FIN-007"})]
+        historical_ids = [fact_id for fact_id in fact_ids if fact_id not in current_ids]
+    current = fact_location_rows(current_ids, facts_by_id)
+    historical = fact_location_rows(historical_ids, facts_by_id)
+    return {
+        "currentAuthority": current,
+        "historicalEvidence": historical,
+        # These rows remain retrievable and may explain a difference; they are
+        # forbidden only as the authority for the current/time-scoped answer.
+        "forbiddenAsAuthority": historical,
+    }
+
+
+def version_expected_answer(roles: dict) -> str:
+    current = "；".join(dict.fromkeys(item["statement"] for item in roles["currentAuthority"]))
+    historical = "；".join(dict.fromkeys(item["statement"] for item in roles["historicalEvidence"]))
+    return f"当前适用依据：{current}。历史或非适用时段证据：{historical}，可用于解释差异，但不能作为当前规则依据。"
 
 
 def build_questions(facts: list[dict]) -> tuple[list[dict], list[dict]]:
     facts_by_id = {fact["factId"]: fact for fact in facts}
-    docs_by_id = {doc.document_id: doc for doc in DOCUMENTS}
     questions = []
     evidence = []
     codes = {"SEMANTIC": "SEM", "KEYWORD_BM25": "BM25", "HYBRID": "HYB",
@@ -766,30 +914,20 @@ def build_questions(facts: list[dict]) -> tuple[list[dict], list[dict]]:
             if missing:
                 raise ValueError(f"Question facts missing: {missing}")
             expected_docs = expected_documents_for(fact_ids, facts_by_id, category)
-            section_count = 3 if category == "STRUCTURE_AGENTIC" else 2
-            expected_sections = []
-            for doc_id in expected_docs:
-                for section in docs_by_id[doc_id].sections[:section_count]:
-                    label = f"{doc_id}/{section}"
-                    if label not in expected_sections:
-                        expected_sections.append(label)
+            location_rows = fact_location_rows(fact_ids, facts_by_id)
+            expected_sections = list(dict.fromkeys(row["sectionPath"] for row in location_rows))
             required = [facts_by_id[fact_id]["statement"] for fact_id in fact_ids]
             prefix = fact_ids[0].split("-", 1)[0]
             hard_negatives = [doc for doc in HARD_NEGATIVES[prefix] if doc not in expected_docs][:3]
-            forbidden_evidence = []
             forbidden_docs = []
+            version_roles = None
             if category == "VERSION_CONFLICT":
-                forbidden_docs = sorted({doc for fact_id in fact_ids for doc in VERSION_FORBIDDEN.get(fact_id, [])})
-                forbidden_evidence = [{"documentId": doc_id, "fact": "不得以已废止或不适用时段的规则覆盖当前有效口径"}
-                                      for doc_id in forbidden_docs]
-                if not forbidden_evidence:
-                    forbidden_evidence = [{"documentId": "FIN-003", "fact": "不得在通知有效期外套用临时800元标准"}]
-                    forbidden_docs = ["FIN-003"]
+                version_roles = version_evidence_roles(query, fact_ids, facts_by_id)
             question_id = f"EVAL-{codes[category]}-{number:03d}"
             difficulty = "HARD" if category in {"CROSS_DOCUMENT", "VERSION_CONFLICT", "STRUCTURE_AGENTIC"} else (
                 "MEDIUM" if category in {"HYBRID", "TABLE"} else "EASY")
-            expected_answer = "；".join(required)
-            questions.append({
+            expected_answer = version_expected_answer(version_roles) if version_roles else "；".join(required)
+            question = {
                 "id": question_id,
                 "query": query,
                 "category": category,
@@ -799,24 +937,33 @@ def build_questions(facts: list[dict]) -> tuple[list[dict], list[dict]]:
                 "expectedDocuments": expected_docs,
                 "expectedSections": expected_sections,
                 "requiredEvidence": required,
-                "forbiddenEvidence": forbidden_evidence,
+                "requiredFactLocations": location_rows,
+                "forbiddenEvidence": [],
                 "hardNegatives": hard_negatives,
                 "notes": "需按有效版本、适用条件与证据完整性判断。",
-            })
-            evidence.append({
+            }
+            if version_roles:
+                question["versionEvidence"] = version_roles
+            questions.append(question)
+            evidence_row = {
                 "questionId": question_id,
                 "factIds": fact_ids,
                 "requiredDocumentIds": expected_docs,
                 "requiredSectionPaths": expected_sections,
                 "requiredStatements": required,
+                "requiredFactLocations": location_rows,
                 "forbiddenDocumentIds": forbidden_docs,
                 "minimumEvidenceCount": max(2 if category == "CROSS_DOCUMENT" else 1, len(required)),
                 "requiresAllEvidence": category == "CROSS_DOCUMENT" or len(required) > 1,
                 "retrievalGroundTruth": {"documentRecallRequired": True, "sectionRecallRequired": True,
-                                         "retrievalUnitRecallRequired": True, "rejectStaleDocuments": True},
+                                         "retrievalUnitRecallRequired": True,
+                                         "rejectStaleDocuments": category != "VERSION_CONFLICT"},
                 "answerGroundTruth": {"factualCorrectness": True, "faithfulness": True,
                                       "unsupportedClaimsAllowed": False},
-            })
+            }
+            if version_roles:
+                evidence_row["versionEvidence"] = version_roles
+            evidence.append(evidence_row)
     return questions, evidence
 
 
@@ -890,6 +1037,7 @@ def generate(root: Path, spec_path: Path, clean: bool) -> dict:
             "revisionHistory": [{"version": doc.version, "date": doc.publish_date, "summary": "按年度治理计划发布"}],
             "factIds": [fact["factId"] for fact in by_document[doc.document_id]],
             "evaluationTags": list(doc.evaluation_tags),
+            "sections": list(doc.sections),
             "pageTarget": doc.page_target,
             "faqCount": doc.faq_count or None,
             "sha256": sha256(output),
@@ -937,7 +1085,7 @@ def generate(root: Path, spec_path: Path, clean: bool) -> dict:
 def main() -> int:
     options = parse_args()
     if options.seed != SEED:
-        raise SystemExit(f"Spec v1.1 generator seed is fixed at {SEED}; received {options.seed}")
+        raise SystemExit(f"Corpus v1.2 generator seed is fixed at {SEED}; received {options.seed}")
     manifest = generate(options.output_root.resolve(), options.spec.resolve(), options.clean_generated)
     print(json.dumps({"outputRoot": str(options.output_root.resolve()), "documents": manifest["documentCount"],
                       "facts": manifest["factCount"], "questions": manifest["questionCount"],

@@ -5,7 +5,7 @@
     {
       "approver": "HR负责人",
       "author": "HR制度运营组",
-      "bytes": 44795,
+      "bytes": 44992,
       "confidentiality": "INTERNAL",
       "department": "HR",
       "documentCode": "NT-HR-STD-2026-001",
@@ -37,7 +37,19 @@
           "version": "V5.0"
         }
       ],
-      "sha256": "89d5f94c031ccdb8895c1fc9374bc84ec4f35e40de1661f2fb56dd5ef8770256",
+      "sections": [
+        "适用范围与使用说明",
+        "入职",
+        "考勤",
+        "薪酬",
+        "假期",
+        "绩效",
+        "行为规范",
+        "资产与信息保护",
+        "离职",
+        "引用文件与修订记录"
+      ],
+      "sha256": "68c04f3b84047017d1764e71c0d4aefd91da761ac1fa002d7b2f01ec5f22a021",
       "status": "ACTIVE",
       "supersedes": [
         "HR-002"
@@ -48,7 +60,7 @@
     {
       "approver": "HR负责人",
       "author": "HR制度运营组",
-      "bytes": 221789,
+      "bytes": 219510,
       "confidentiality": "INTERNAL",
       "department": "HR",
       "documentCode": "NT-HR-POL-2024-002",
@@ -77,7 +89,19 @@
           "version": "V3.1"
         }
       ],
-      "sha256": "43bc25cf02aacb47dd9df9ea6d2a40fbb386a5fef681a0aff19daebbc3a9579a",
+      "sections": [
+        "适用范围",
+        "入职",
+        "考勤",
+        "薪酬",
+        "假期",
+        "绩效",
+        "行为规范",
+        "资产保护",
+        "离职",
+        "历史修订"
+      ],
+      "sha256": "43af0ae2b2a30511b4e4718681418ef0cc9daa8497977057e957e55b1ee7a04f",
       "status": "SUPERSEDED",
       "supersedes": [],
       "title": "员工手册 2024",
@@ -86,7 +110,7 @@
     {
       "approver": "HR负责人",
       "author": "HR制度运营组",
-      "bytes": 203482,
+      "bytes": 197273,
       "confidentiality": "INTERNAL",
       "department": "HR",
       "documentCode": "NT-HR-POL-2026-003",
@@ -124,7 +148,24 @@
           "version": "V4.0"
         }
       ],
-      "sha256": "a2883a5a99fd6b42bda0179cb1afd034cd5c3a59a5eb107f5ba14ca8c96bf602",
+      "sections": [
+        "目的与适用范围",
+        "工作时间",
+        "考勤",
+        "迟到早退",
+        "年假",
+        "病假",
+        "婚假",
+        "产假",
+        "陪产假",
+        "育儿假",
+        "丧假",
+        "事假",
+        "申请与审批",
+        "特殊情况",
+        "附录与修订记录"
+      ],
+      "sha256": "84fb718b11e1d96bd3f428222b8996fe2db352d25d2863f5fffb08e23ede9c0e",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "员工休假与考勤管理办法",
@@ -133,7 +174,7 @@
     {
       "approver": "HR负责人",
       "author": "HR制度运营组",
-      "bytes": 43315,
+      "bytes": 43588,
       "confidentiality": "INTERNAL",
       "department": "HR",
       "documentCode": "NT-HR-STD-2026-004",
@@ -163,7 +204,20 @@
           "version": "V3.0"
         }
       ],
-      "sha256": "288c19e5d8d1dfb5db278db39d78faff70cefd6687662c0789b731687a417711",
+      "sections": [
+        "总则",
+        "薪酬结构",
+        "固定薪酬",
+        "奖金",
+        "餐补",
+        "交通补贴",
+        "健康补贴",
+        "异地派驻补助",
+        "税务处理",
+        "例外与申诉",
+        "附录"
+      ],
+      "sha256": "41d9b7ead18d597cf33d9b108a8c21c1bd3fcf9fd96ac0f5eeee4f250e7cf415",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "薪酬福利与补贴管理制度",
@@ -172,7 +226,7 @@
     {
       "approver": "HR负责人",
       "author": "HR制度运营组",
-      "bytes": 161855,
+      "bytes": 169636,
       "confidentiality": "INTERNAL",
       "department": "HR",
       "documentCode": "NT-HR-FAQ-2026-005",
@@ -201,7 +255,15 @@
           "version": "V2.4"
         }
       ],
-      "sha256": "3c9266d24073a78569bfe8ec79ce14ba7c7fe1eede2bc8bf57a901d1e0f16039",
+      "sections": [
+        "入职与资料",
+        "考勤与补卡",
+        "各类假期",
+        "薪酬与补贴",
+        "绩效",
+        "离职与证明"
+      ],
+      "sha256": "a6419abdc96d9643722060e189e00d309b61c686626343513db049921dd9355d",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "HR常见问题与员工自助指南",
@@ -210,7 +272,7 @@
     {
       "approver": "FINANCE负责人",
       "author": "FINANCE制度运营组",
-      "bytes": 213311,
+      "bytes": 210488,
       "confidentiality": "INTERNAL",
       "department": "FINANCE",
       "documentCode": "NT-FINA-POL-2026-001",
@@ -249,7 +311,20 @@
           "version": "V3.2"
         }
       ],
-      "sha256": "29fca0825783c86a2d43b70dabde3d352c224eec9593954bacf1c25dd1a4b86c",
+      "sections": [
+        "总则",
+        "出差申请",
+        "审批",
+        "交通",
+        "住宿",
+        "餐费",
+        "市内交通",
+        "海外差旅",
+        "报销",
+        "特殊情况",
+        "监督与附则"
+      ],
+      "sha256": "14e93885579ffa89df17c1fdebbc33ef5f4c65ff0a125722dd5e539b25d7ddb5",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "差旅及业务出行管理办法 2026",
@@ -258,7 +333,7 @@
     {
       "approver": "FINANCE负责人",
       "author": "FINANCE制度运营组",
-      "bytes": 13713,
+      "bytes": 13804,
       "confidentiality": "INTERNAL",
       "department": "FINANCE",
       "documentCode": "NT-FINA-MAT-2026-002",
@@ -290,7 +365,14 @@
           "version": "V2.0"
         }
       ],
-      "sha256": "cc90648c3b42d77a71bec4d9865c3fa7eb10151e1c606d4cee9dc1276604c32f",
+      "sections": [
+        "城市等级",
+        "国内住宿标准",
+        "餐费标准",
+        "海外地区",
+        "特殊区域"
+      ],
+      "sha256": "802f1b572a3eebc4ed29ba74341a4cc852aa3481346de5dc34782bcc415e8f73",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "2026差旅费用标准",
@@ -299,7 +381,7 @@
     {
       "approver": "FINANCE负责人",
       "author": "FINANCE制度运营组",
-      "bytes": 40924,
+      "bytes": 40417,
       "confidentiality": "INTERNAL",
       "department": "FINANCE",
       "documentCode": "NT-FINA-STD-2026-003",
@@ -332,7 +414,14 @@
           "version": "V1.0"
         }
       ],
-      "sha256": "edf4cf80a5df3b6d26337d4639cc1330c1a81a1c397e288e2e6738fe422b1a74",
+      "sections": [
+        "通知范围",
+        "临时住宿标准",
+        "有效期",
+        "不受影响的规则",
+        "执行与咨询"
+      ],
+      "sha256": "7837dcb8f1c463b3fef38da1e9cc6af599865d31c66f1bf4817917cead23d686",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "2026 Nova AI Summit 差旅标准临时调整通知",
@@ -341,7 +430,7 @@
     {
       "approver": "FINANCE负责人",
       "author": "FINANCE制度运营组",
-      "bytes": 178623,
+      "bytes": 176900,
       "confidentiality": "INTERNAL",
       "department": "FINANCE",
       "documentCode": "NT-FINA-POL-2026-004",
@@ -374,7 +463,19 @@
           "version": "V4.1"
         }
       ],
-      "sha256": "d3963d3d261e7d4856331d9eb6b2e98a7d8b610bec9d6cd271f624c18e277c87",
+      "sections": [
+        "总则",
+        "报销时限",
+        "发票要求",
+        "电子发票",
+        "丢失发票",
+        "公司卡",
+        "个人垫付",
+        "超标准处理",
+        "审批与支付",
+        "档案与稽核"
+      ],
+      "sha256": "e51194cd0bb5acd972486c19bd71d984316c77c9ced68bf65ca47f423650591f",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "费用报销管理办法",
@@ -383,7 +484,7 @@
     {
       "approver": "FINANCE负责人",
       "author": "FINANCE制度运营组",
-      "bytes": 90776,
+      "bytes": 94528,
       "confidentiality": "INTERNAL",
       "department": "FINANCE",
       "documentCode": "NT-FINA-FAQ-2026-005",
@@ -409,7 +510,15 @@
           "version": "V2.6"
         }
       ],
-      "sha256": "00992868fd79139ce90f0ad2d71e1558e5d5c1fe20066db0677f45a72bfdc958",
+      "sections": [
+        "差旅报销",
+        "发票",
+        "公司卡",
+        "个人垫付",
+        "超标准与例外",
+        "付款状态"
+      ],
+      "sha256": "649561c45ca2e8b32809c51e6c4bf3b2d5155d91308e80e87ea363dc0dd4205b",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "财务报销 FAQ",
@@ -418,7 +527,7 @@
     {
       "approver": "IT负责人",
       "author": "IT制度运营组",
-      "bytes": 283876,
+      "bytes": 289367,
       "confidentiality": "INTERNAL",
       "department": "IT",
       "documentCode": "NT-IT-POL-2026-001",
@@ -448,7 +557,21 @@
           "version": "V6.0"
         }
       ],
-      "sha256": "e202728e15fcbdaab341da7cbe69ca9aecee74b284dcce673b0db30135c3ab38",
+      "sections": [
+        "服务台与支持范围",
+        "账号",
+        "邮箱",
+        "SSO",
+        "VPN",
+        "网络",
+        "打印",
+        "软件安装",
+        "GitLab",
+        "Jira",
+        "资产申请",
+        "服务升级与附录"
+      ],
+      "sha256": "08dcdfa89c75cf2ed50123085582c0596037dd3989c9a307ff0f2235852c61a0",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "IT服务管理与员工使用手册",
@@ -457,7 +580,7 @@
     {
       "approver": "IT负责人",
       "author": "IT制度运营组",
-      "bytes": 226951,
+      "bytes": 227030,
       "confidentiality": "INTERNAL",
       "department": "IT",
       "documentCode": "NT-IT-POL-2026-002",
@@ -487,7 +610,19 @@
           "version": "V3.5"
         }
       ],
-      "sha256": "b3ad82dbb4e5521db944e3a7032fea96d5d5ac74218564a49ee74efff0931a57",
+      "sections": [
+        "适用环境",
+        "安装",
+        "MFA",
+        "设备证书",
+        "连接流程",
+        "常见故障",
+        "日志采集",
+        "证书续签",
+        "回滚",
+        "升级与支持"
+      ],
+      "sha256": "303776227496abc615ba0d22afc108f5eb853b19b96709d102fe5b5354aed962",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "VPN使用与故障处理手册",
@@ -496,7 +631,7 @@
     {
       "approver": "IT负责人",
       "author": "IT制度运营组",
-      "bytes": 316949,
+      "bytes": 321113,
       "confidentiality": "INTERNAL",
       "department": "IT",
       "documentCode": "NT-IT-POL-2026-003",
@@ -527,7 +662,18 @@
           "version": "V8.2"
         }
       ],
-      "sha256": "506b10b18f3228a7bb13a8bdc57756b3b200401fc2675d6e119b5aec03269b1b",
+      "sections": [
+        "使用说明",
+        "VPN错误码",
+        "SSO错误码",
+        "邮箱错误码",
+        "网络错误码",
+        "终端错误码",
+        "GitLab错误码",
+        "日志字段",
+        "升级索引"
+      ],
+      "sha256": "d47c6006e4ff9714ca137fe3726a623bf999b43baefc1d1eea196a8c52acb5bc",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "IT错误码与故障代码参考手册",
@@ -536,7 +682,7 @@
     {
       "approver": "IT负责人",
       "author": "IT制度运营组",
-      "bytes": 43570,
+      "bytes": 43768,
       "confidentiality": "INTERNAL",
       "department": "IT",
       "documentCode": "NT-IT-STD-2026-004",
@@ -569,7 +715,18 @@
           "version": "V4.0"
         }
       ],
-      "sha256": "edbfde4182f436e547a1256e6e7ac0ed6ee0b819456f64c04a5d191646de81f2",
+      "sections": [
+        "总则",
+        "账号生命周期",
+        "OA权限",
+        "GitLab权限",
+        "普通数据库权限",
+        "角色复核",
+        "离职回收",
+        "生产权限边界",
+        "审计与附录"
+      ],
+      "sha256": "dc88c456ff489ff992e00cfe659c5a17290f9996f9d123e63a255f3872e2d2e8",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "账号角色与权限管理规范",
@@ -578,7 +735,7 @@
     {
       "approver": "IT负责人",
       "author": "IT制度运营组",
-      "bytes": 177322,
+      "bytes": 176948,
       "confidentiality": "INTERNAL",
       "department": "IT",
       "documentCode": "NT-IT-POL-2026-005",
@@ -609,7 +766,18 @@
           "version": "V3.3"
         }
       ],
-      "sha256": "ad808ddcfd5a2f24cfa7748c270a8d70d6ba8816a05b6fb46b9bbbe48d991c5d",
+      "sections": [
+        "设备领用",
+        "管理员权限",
+        "软件白名单",
+        "USB",
+        "磁盘加密",
+        "设备遗失",
+        "维修",
+        "更换与报废",
+        "审计"
+      ],
+      "sha256": "3c084eb5a86fca65fce00edf0bcebd54f24ca6e04568d3ee62d86f1cfdd1e0e0",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "终端设备与软件安装规范",
@@ -618,7 +786,7 @@
     {
       "approver": "SECURITY负责人",
       "author": "SECURITY制度运营组",
-      "bytes": 258883,
+      "bytes": 259894,
       "confidentiality": "INTERNAL",
       "department": "SECURITY",
       "documentCode": "NT-SECU-POL-2026-001",
@@ -650,7 +818,20 @@
           "version": "V5.0"
         }
       ],
-      "sha256": "265365257eaac381673306e1a062a9ca1edeac946e58f3ba66d3379c219cf8bf",
+      "sections": [
+        "治理与范围",
+        "账号安全",
+        "终端设备",
+        "数据保护",
+        "远程办公",
+        "第三方",
+        "安全事件",
+        "访问控制",
+        "日志与审计",
+        "培训与检查",
+        "附录"
+      ],
+      "sha256": "2fb91e89d6cd728b5361ff63e8b8bcbd5d24f58156b7a63b7e95fbec8802f363",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "信息安全管理制度",
@@ -659,7 +840,7 @@
     {
       "approver": "SECURITY负责人",
       "author": "SECURITY制度运营组",
-      "bytes": 12143,
+      "bytes": 12180,
       "confidentiality": "INTERNAL",
       "department": "SECURITY",
       "documentCode": "NT-SECU-MAT-2026-002",
@@ -693,7 +874,13 @@
           "version": "V3.1"
         }
       ],
-      "sha256": "72b52e8b067d1e6a070665ac428869edd78fd385f668388447d46e4974c656a9",
+      "sections": [
+        "分类等级",
+        "数据示例",
+        "存储与传输",
+        "加密要求"
+      ],
+      "sha256": "4fc790bf9e07b89b47c76db9175ed6bbe8157e01590df374ed4592f20f5eda3f",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "数据分类分级标准",
@@ -702,7 +889,7 @@
     {
       "approver": "SECURITY负责人",
       "author": "SECURITY制度运营组",
-      "bytes": 43971,
+      "bytes": 43901,
       "confidentiality": "INTERNAL",
       "department": "SECURITY",
       "documentCode": "NT-SECU-STD-2026-003",
@@ -732,7 +919,19 @@
           "version": "V3.0"
         }
       ],
-      "sha256": "47c8c9c44e15513803434384cc7baa151e424873010fe5cb34d85e5ac072c123",
+      "sections": [
+        "目的与范围",
+        "发现",
+        "报告",
+        "隔离",
+        "证据保全",
+        "升级",
+        "调查",
+        "恢复",
+        "复盘",
+        "演练与附录"
+      ],
+      "sha256": "93fdc24b07fafdd62e2f87b417539c340fe63395888f4c7af93aa4468783a90b",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "数据泄露与安全事件应急响应预案",
@@ -741,7 +940,7 @@
     {
       "approver": "SECURITY负责人",
       "author": "SECURITY制度运营组",
-      "bytes": 193214,
+      "bytes": 191965,
       "confidentiality": "INTERNAL",
       "department": "SECURITY",
       "documentCode": "NT-SECU-POL-2026-004",
@@ -775,7 +974,19 @@
           "version": "V4.2"
         }
       ],
-      "sha256": "b32a94cd5217316ba25b3628ab6c8d1e23464ce2064657322761ec2611d928cb",
+      "sections": [
+        "总则",
+        "访问分类",
+        "只读权限",
+        "写权限",
+        "临时权限",
+        "Break Glass",
+        "DBA职责",
+        "System Owner职责",
+        "自动失效",
+        "审计与复核"
+      ],
+      "sha256": "cd121fe7872641776c238698843c0b466ab04fb04ec580b073fea1786f00fb2c",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "生产环境与敏感数据访问控制规范",
@@ -784,7 +995,7 @@
     {
       "approver": "SECURITY负责人",
       "author": "SECURITY制度运营组",
-      "bytes": 79648,
+      "bytes": 85310,
       "confidentiality": "INTERNAL",
       "department": "SECURITY",
       "documentCode": "NT-SECU-FAQ-2026-005",
@@ -812,7 +1023,15 @@
           "version": "V2.2"
         }
       ],
-      "sha256": "b9b3b8a400de5260174fd2b4838de959f160ed33462b8f915fec307dadbb44f7",
+      "sections": [
+        "设备遗失",
+        "U盘与移动介质",
+        "误发数据",
+        "账号异常",
+        "恶意邮件",
+        "事件报告"
+      ],
+      "sha256": "2a6f94bc921fcdbc6250d60c5ddf148f10b6e667d12fb4d2c2749ceaec145812",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "安全事件 FAQ",
@@ -821,7 +1040,7 @@
     {
       "approver": "PROCUREMENT负责人",
       "author": "PROCUREMENT制度运营组",
-      "bytes": 203383,
+      "bytes": 204550,
       "confidentiality": "INTERNAL",
       "department": "PROCUREMENT",
       "documentCode": "NT-PROC-POL-2026-001",
@@ -855,7 +1074,20 @@
           "version": "V4.0"
         }
       ],
-      "sha256": "9d28f7a52c5ba08f62673233fa4f8ef2890650614452d7d8ab2797bf2e37cd7e",
+      "sections": [
+        "总则",
+        "采购申请",
+        "预算",
+        "询价",
+        "比价",
+        "招标",
+        "单一来源",
+        "审批",
+        "验收",
+        "付款",
+        "监督与附录"
+      ],
+      "sha256": "13bcbc414882185cafc4e1c58682a449a2a672806fc178df301ad95006250a53",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "采购管理制度",
@@ -864,7 +1096,7 @@
     {
       "approver": "PROCUREMENT负责人",
       "author": "PROCUREMENT制度运营组",
-      "bytes": 43368,
+      "bytes": 43349,
       "confidentiality": "INTERNAL",
       "department": "PROCUREMENT",
       "documentCode": "NT-PROC-STD-2026-002",
@@ -895,7 +1127,19 @@
           "version": "V3.0"
         }
       ],
-      "sha256": "fc4c2b3480a87c751f530ed741e7350c4ffd85469c670d23c6f6411b8dd35e8d",
+      "sections": [
+        "总则",
+        "初审",
+        "资质审核",
+        "安全审查",
+        "财务审查",
+        "准入决定",
+        "黑名单",
+        "年度复核",
+        "整改",
+        "退出与档案"
+      ],
+      "sha256": "0ed37391526cc30222d6cf279d7a24b35d722de6abd4398935872390e76647a4",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "供应商准入与生命周期管理办法",
@@ -904,7 +1148,7 @@
     {
       "approver": "PROCUREMENT负责人",
       "author": "PROCUREMENT制度运营组",
-      "bytes": 10300,
+      "bytes": 10333,
       "confidentiality": "INTERNAL",
       "department": "PROCUREMENT",
       "documentCode": "NT-PROC-MAT-2026-003",
@@ -937,7 +1181,12 @@
           "version": "V2.1"
         }
       ],
-      "sha256": "1845064a7a6b4d5e51fe70166d0f5f5c51096e6a9a3ded42744c6f03dddb088c",
+      "sections": [
+        "审批矩阵",
+        "边界示例",
+        "适用说明"
+      ],
+      "sha256": "013c11e13c096054f7d6dfd0e23838de2ba3c6eae73feac70900bb72f469a551",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "采购审批权限矩阵",
@@ -946,7 +1195,7 @@
     {
       "approver": "LEGAL负责人",
       "author": "LEGAL制度运营组",
-      "bytes": 189792,
+      "bytes": 188851,
       "confidentiality": "INTERNAL",
       "department": "LEGAL",
       "documentCode": "NT-LEGA-POL-2026-001",
@@ -977,7 +1226,19 @@
           "version": "V4.3"
         }
       ],
-      "sha256": "d4ff6275dedaf6cd44cf43b3978d20074c9753fe8578c595f8ff8ff2658795dc",
+      "sections": [
+        "总则",
+        "合同模板",
+        "法务审核",
+        "非标条款",
+        "签署权限",
+        "印章",
+        "归档",
+        "续签",
+        "终止",
+        "争议与附录"
+      ],
+      "sha256": "e462515267ae5869a75e2ed597b0c5718ed25d81a8a6a460f8d83d575f49d74b",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "合同管理制度",
@@ -986,7 +1247,7 @@
     {
       "approver": "LEGAL负责人",
       "author": "LEGAL制度运营组",
-      "bytes": 80773,
+      "bytes": 82581,
       "confidentiality": "INTERNAL",
       "department": "LEGAL",
       "documentCode": "NT-LEGA-FAQ-2026-002",
@@ -1014,7 +1275,15 @@
           "version": "V2.0"
         }
       ],
-      "sha256": "8527aa394563a141f41bb7defbfce0e6c7ffab46bbc11006f0e0bb35998411f4",
+      "sections": [
+        "采购与合同边界",
+        "供应商准入",
+        "合同审核",
+        "签署与用印",
+        "补签",
+        "续签与终止"
+      ],
+      "sha256": "90511fcdd7d4ffccbb977f6591b19fea18efe6194e60084f438f3b9e8a15005e",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "合同与采购常见问题",
@@ -1023,7 +1292,7 @@
     {
       "approver": "ENGINEERING负责人",
       "author": "ENGINEERING制度运营组",
-      "bytes": 234372,
+      "bytes": 234180,
       "confidentiality": "INTERNAL",
       "department": "ENGINEERING",
       "documentCode": "NT-ENGI-POL-2026-001",
@@ -1054,7 +1323,20 @@
           "version": "V5.0"
         }
       ],
-      "sha256": "3bdb51e51f52fd42fdbef5ba039803eaa75f700cbc58ed71893bfd365deaf6f0",
+      "sections": [
+        "总则",
+        "需求",
+        "立项",
+        "设计",
+        "开发",
+        "代码审查",
+        "测试",
+        "发布",
+        "验收",
+        "归档",
+        "度量与附录"
+      ],
+      "sha256": "022866ccf9e998e3df2b7bc7b23081da598f57e99fa255cc3bb6d7ae981217c0",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "研发项目生命周期管理规范",
@@ -1063,7 +1345,7 @@
     {
       "approver": "OPERATIONS负责人",
       "author": "OPERATIONS制度运营组",
-      "bytes": 44527,
+      "bytes": 44810,
       "confidentiality": "INTERNAL",
       "department": "OPERATIONS",
       "documentCode": "NT-OPER-STD-2026-001",
@@ -1099,7 +1381,21 @@
           "version": "V4.5"
         }
       ],
-      "sha256": "3c3efd6b59d59aa3deb61041e9478ebc4a1e39ea24a844be7174f6a84d70f32d",
+      "sections": [
+        "总则",
+        "变更分类",
+        "普通变更",
+        "标准变更",
+        "紧急变更",
+        "风险评估",
+        "审批",
+        "灰度",
+        "回滚",
+        "变更窗口",
+        "失败处理",
+        "复核与附录"
+      ],
+      "sha256": "a77c47aa01f46a7ded6c115e2b94b152d14de43538fb3fd8814e041b4e1bef1f",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "生产变更管理规范",
@@ -1108,7 +1404,7 @@
     {
       "approver": "OPERATIONS负责人",
       "author": "OPERATIONS制度运营组",
-      "bytes": 309621,
+      "bytes": 313739,
       "confidentiality": "INTERNAL",
       "department": "OPERATIONS",
       "documentCode": "NT-OPER-POL-2026-002",
@@ -1147,7 +1443,22 @@
           "version": "V6.0"
         }
       ],
-      "sha256": "fd925752291feb8a8cbdcbce0d270cd16f71afb3ae842f15f4d625604c8c19a8",
+      "sections": [
+        "总则",
+        "事故等级",
+        "P0响应",
+        "数据库故障",
+        "网络故障",
+        "服务故障",
+        "回滚失败",
+        "指挥体系",
+        "沟通",
+        "恢复",
+        "复盘",
+        "升级矩阵",
+        "附录A 值班角色与升级通讯矩阵"
+      ],
+      "sha256": "ccc2ef271ffee773279ffadfeaf4a4a320c7d3cebda00add4db063e9eb5c67b1",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "生产事故应急响应手册",
@@ -1156,7 +1467,7 @@
     {
       "approver": "OPERATIONS负责人",
       "author": "OPERATIONS制度运营组",
-      "bytes": 12100,
+      "bytes": 12140,
       "confidentiality": "INTERNAL",
       "department": "OPERATIONS",
       "documentCode": "NT-OPER-MAT-2026-003",
@@ -1190,7 +1501,13 @@
           "version": "V3.2"
         }
       ],
-      "sha256": "2ae44869e50d34d1df7b38df8134fa38a16def5893d820fba8101d4d70dbc3f5",
+      "sections": [
+        "事故等级",
+        "响应时限",
+        "升级与沟通",
+        "判定示例"
+      ],
+      "sha256": "8dccf4244483238cfdae2fdda7d63d69bf7bc8098a8282410349ec6bbe37cc26",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "服务等级与生产事故等级标准",
@@ -1199,7 +1516,7 @@
     {
       "approver": "OPERATIONS负责人",
       "author": "OPERATIONS制度运营组",
-      "bytes": 112295,
+      "bytes": 120283,
       "confidentiality": "INTERNAL",
       "department": "OPERATIONS",
       "documentCode": "NT-OPER-FAQ-2026-004",
@@ -1226,7 +1543,15 @@
           "version": "V3.0"
         }
       ],
-      "sha256": "e57b2e4b53b3faad864b908492a9d0442b767b9f2046bdab506df572dbf14ee6",
+      "sections": [
+        "发布与变更",
+        "灰度",
+        "回滚",
+        "事故分级",
+        "值班与升级",
+        "复盘"
+      ],
+      "sha256": "2175f7f378bbbb6c3942346028ab67fcfdd26edf20509aa149e9ab0e7a40d230",
       "status": "ACTIVE",
       "supersedes": [],
       "title": "研发与运维 FAQ",
@@ -1238,6 +1563,6 @@
   "questionCount": 150,
   "schemaVersion": 1,
   "seed": 20260917,
-  "specVersion": "1.1",
+  "specVersion": "1.2",
   "unanswerableCount": 20
 }

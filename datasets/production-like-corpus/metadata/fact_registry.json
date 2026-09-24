@@ -6,6 +6,14 @@
         "HR-003"
       ],
       "retrievalIntent": "Semantic+Version",
+      "sourceLocations": [
+        {
+          "documentId": "HR-003",
+          "sectionPath": "HR-003/陪产假",
+          "sourceText": "当前陪产假15个自然日"
+        }
+      ],
+      "sourceText": "当前陪产假15个自然日",
       "statement": "当前陪产假15个自然日",
       "status": "CURRENT"
     },
@@ -15,6 +23,14 @@
         "HR-002"
       ],
       "retrievalIntent": "Stale",
+      "sourceLocations": [
+        {
+          "documentId": "HR-002",
+          "sectionPath": "HR-002/假期",
+          "sourceText": "2024旧制度陪产假10天"
+        }
+      ],
+      "sourceText": "2024旧制度陪产假10天",
       "statement": "2024旧制度陪产假10天",
       "status": "HISTORICAL"
     },
@@ -24,6 +40,14 @@
         "HR-003"
       ],
       "retrievalIntent": "Rule",
+      "sourceLocations": [
+        {
+          "documentId": "HR-003",
+          "sectionPath": "HR-003/年假",
+          "sourceText": "年假按累计工作年限分5/10/15天"
+        }
+      ],
+      "sourceText": "年假按累计工作年限分5/10/15天",
       "statement": "年假按累计工作年限分5/10/15天",
       "status": "CURRENT"
     },
@@ -33,6 +57,14 @@
         "HR-003"
       ],
       "retrievalIntent": "Conditional",
+      "sourceLocations": [
+        {
+          "documentId": "HR-003",
+          "sectionPath": "HR-003/年假",
+          "sourceText": "新员工满足制度条件后才可使用当年度年假"
+        }
+      ],
+      "sourceText": "新员工满足制度条件后才可使用当年度年假",
       "statement": "新员工满足制度条件后才可使用当年度年假",
       "status": "CURRENT"
     },
@@ -42,6 +74,14 @@
         "HR-003"
       ],
       "retrievalIntent": "Hybrid",
+      "sourceLocations": [
+        {
+          "documentId": "HR-003",
+          "sectionPath": "HR-003/病假",
+          "sourceText": "连续病假超过3天需要医疗证明"
+        }
+      ],
+      "sourceText": "连续病假超过3天需要医疗证明",
       "statement": "连续病假超过3天需要医疗证明",
       "status": "CURRENT"
     },
@@ -51,6 +91,14 @@
         "HR-003"
       ],
       "retrievalIntent": "Exact condition",
+      "sourceLocations": [
+        {
+          "documentId": "HR-003",
+          "sectionPath": "HR-003/婚假",
+          "sourceText": "婚假须在登记后12个月内使用"
+        }
+      ],
+      "sourceText": "婚假须在登记后12个月内使用",
       "statement": "婚假须在登记后12个月内使用",
       "status": "CURRENT"
     },
@@ -60,6 +108,14 @@
         "HR-003"
       ],
       "retrievalIntent": "Semantic",
+      "sourceLocations": [
+        {
+          "documentId": "HR-003",
+          "sectionPath": "HR-003/育儿假",
+          "sourceText": "育儿假按子女年龄和适用地区规则执行"
+        }
+      ],
+      "sourceText": "育儿假按子女年龄和适用地区规则执行",
       "statement": "育儿假按子女年龄和适用地区规则执行",
       "status": "CURRENT"
     },
@@ -69,6 +125,14 @@
         "HR-003"
       ],
       "retrievalIntent": "Rule",
+      "sourceLocations": [
+        {
+          "documentId": "HR-003",
+          "sectionPath": "HR-003/迟到早退",
+          "sourceText": "迟到30分钟以上进入异常考勤流程"
+        }
+      ],
+      "sourceText": "迟到30分钟以上进入异常考勤流程",
       "statement": "迟到30分钟以上进入异常考勤流程",
       "status": "CURRENT"
     },
@@ -79,6 +143,19 @@
         "HR-005"
       ],
       "retrievalIntent": "FAQ→Policy",
+      "sourceLocations": [
+        {
+          "documentId": "HR-003",
+          "sectionPath": "HR-003/考勤",
+          "sourceText": "忘打卡可在2个工作日内补卡"
+        },
+        {
+          "documentId": "HR-005",
+          "sectionPath": "HR-005/考勤与补卡",
+          "sourceText": "忘打卡可在2个工作日内补卡"
+        }
+      ],
+      "sourceText": "忘打卡可在2个工作日内补卡",
       "statement": "忘打卡可在2个工作日内补卡",
       "status": "CURRENT"
     },
@@ -88,6 +165,14 @@
         "HR-003"
       ],
       "retrievalIntent": "Exception",
+      "sourceLocations": [
+        {
+          "documentId": "HR-003",
+          "sectionPath": "HR-003/特殊情况",
+          "sourceText": "紧急请假允许事后补申请"
+        }
+      ],
+      "sourceText": "紧急请假允许事后补申请",
       "statement": "紧急请假允许事后补申请",
       "status": "CURRENT"
     },
@@ -97,6 +182,14 @@
         "HR-003"
       ],
       "retrievalIntent": "Multi-condition",
+      "sourceLocations": [
+        {
+          "documentId": "HR-003",
+          "sectionPath": "HR-003/申请与审批",
+          "sourceText": "连续请假超过5个工作日需二级审批"
+        }
+      ],
+      "sourceText": "连续请假超过5个工作日需二级审批",
       "statement": "连续请假超过5个工作日需二级审批",
       "status": "CURRENT"
     },
@@ -106,6 +199,14 @@
         "HR-004"
       ],
       "retrievalIntent": "Version",
+      "sourceLocations": [
+        {
+          "documentId": "HR-004",
+          "sectionPath": "HR-004/健康补贴",
+          "sourceText": "2026健康补贴1200元"
+        }
+      ],
+      "sourceText": "2026健康补贴1200元",
       "statement": "2026健康补贴1200元",
       "status": "CURRENT"
     },
@@ -115,6 +216,14 @@
         "HR-002"
       ],
       "retrievalIntent": "Stale",
+      "sourceLocations": [
+        {
+          "documentId": "HR-002",
+          "sectionPath": "HR-002/薪酬",
+          "sourceText": "2024健康补贴800元"
+        }
+      ],
+      "sourceText": "2024健康补贴800元",
       "statement": "2024健康补贴800元",
       "status": "HISTORICAL"
     },
@@ -124,6 +233,14 @@
         "HR-004"
       ],
       "retrievalIntent": "Hard Negative",
+      "sourceLocations": [
+        {
+          "documentId": "HR-004",
+          "sectionPath": "HR-004/异地派驻补助",
+          "sourceText": "异地派驻住宿补贴不等于普通差旅住宿报销"
+        }
+      ],
+      "sourceText": "异地派驻住宿补贴不等于普通差旅住宿报销",
       "statement": "异地派驻住宿补贴不等于普通差旅住宿报销",
       "status": "CURRENT"
     },
@@ -134,6 +251,19 @@
         "IT-004"
       ],
       "retrievalIntent": "Cross-domain",
+      "sourceLocations": [
+        {
+          "documentId": "HR-001",
+          "sectionPath": "HR-001/离职",
+          "sourceText": "离职员工权限在最后工作日完成回收"
+        },
+        {
+          "documentId": "IT-004",
+          "sectionPath": "IT-004/离职回收",
+          "sourceText": "离职员工权限在最后工作日完成回收"
+        }
+      ],
+      "sourceText": "离职员工权限在最后工作日完成回收",
       "statement": "离职员工权限在最后工作日完成回收",
       "status": "CURRENT"
     },
@@ -143,6 +273,14 @@
         "FIN-001"
       ],
       "retrievalIntent": "Hybrid",
+      "sourceLocations": [
+        {
+          "documentId": "FIN-001",
+          "sectionPath": "FIN-001/交通",
+          "sourceText": "P7及以下高铁原则二等座"
+        }
+      ],
+      "sourceText": "P7及以下高铁原则二等座",
       "statement": "P7及以下高铁原则二等座",
       "status": "CURRENT"
     },
@@ -152,6 +290,14 @@
         "FIN-001"
       ],
       "retrievalIntent": "Rule",
+      "sourceLocations": [
+        {
+          "documentId": "FIN-001",
+          "sectionPath": "FIN-001/交通",
+          "sourceText": "P8/P9可乘高铁一等座"
+        }
+      ],
+      "sourceText": "P8/P9可乘高铁一等座",
       "statement": "P8/P9可乘高铁一等座",
       "status": "CURRENT"
     },
@@ -161,6 +307,14 @@
         "FIN-001"
       ],
       "retrievalIntent": "Exception",
+      "sourceLocations": [
+        {
+          "documentId": "FIN-001",
+          "sectionPath": "FIN-001/交通",
+          "sourceText": "P7铁路行程超过6小时且VP事前批准可一等座"
+        }
+      ],
+      "sourceText": "P7铁路行程超过6小时且VP事前批准可一等座",
       "statement": "P7铁路行程超过6小时且VP事前批准可一等座",
       "status": "CURRENT"
     },
@@ -170,6 +324,14 @@
         "FIN-002"
       ],
       "retrievalIntent": "Table",
+      "sourceLocations": [
+        {
+          "documentId": "FIN-002",
+          "sectionPath": "FIN-002/城市等级",
+          "sourceText": "上海属于A类城市"
+        }
+      ],
+      "sourceText": "上海属于A类城市",
       "statement": "上海属于A类城市",
       "status": "CURRENT"
     },
@@ -179,6 +341,14 @@
         "FIN-002"
       ],
       "retrievalIntent": "Table",
+      "sourceLocations": [
+        {
+          "documentId": "FIN-002",
+          "sectionPath": "FIN-002/国内住宿标准",
+          "sourceText": "P6/P7上海住宿标准600元/晚"
+        }
+      ],
+      "sourceText": "P6/P7上海住宿标准600元/晚",
       "statement": "P6/P7上海住宿标准600元/晚",
       "status": "CURRENT"
     },
@@ -188,6 +358,14 @@
         "FIN-003"
       ],
       "retrievalIntent": "Override",
+      "sourceLocations": [
+        {
+          "documentId": "FIN-003",
+          "sectionPath": "FIN-003/临时住宿标准",
+          "sourceText": "AI Summit期间上海住宿临时提高至800元/晚"
+        }
+      ],
+      "sourceText": "AI Summit期间上海住宿临时提高至800元/晚",
       "statement": "AI Summit期间上海住宿临时提高至800元/晚",
       "status": "CURRENT"
     },
@@ -197,6 +375,14 @@
         "FIN-003"
       ],
       "retrievalIntent": "Time",
+      "sourceLocations": [
+        {
+          "documentId": "FIN-003",
+          "sectionPath": "FIN-003/有效期",
+          "sourceText": "临时800元仅2026-11-10至11-18有效"
+        }
+      ],
+      "sourceText": "临时800元仅2026-11-10至11-18有效",
       "statement": "临时800元仅2026-11-10至11-18有效",
       "status": "CURRENT"
     },
@@ -206,6 +392,14 @@
         "FIN-003"
       ],
       "retrievalIntent": "Cross-doc",
+      "sourceLocations": [
+        {
+          "documentId": "FIN-003",
+          "sectionPath": "FIN-003/不受影响的规则",
+          "sourceText": "临时住宿通知不改变交通工具标准"
+        }
+      ],
+      "sourceText": "临时住宿通知不改变交通工具标准",
       "statement": "临时住宿通知不改变交通工具标准",
       "status": "CURRENT"
     },
@@ -216,6 +410,19 @@
         "FIN-004"
       ],
       "retrievalIntent": "Rule",
+      "sourceLocations": [
+        {
+          "documentId": "FIN-001",
+          "sectionPath": "FIN-001/住宿",
+          "sourceText": "超住宿标准原则上只报标准内部分"
+        },
+        {
+          "documentId": "FIN-004",
+          "sectionPath": "FIN-004/超标准处理",
+          "sourceText": "超住宿标准原则上只报标准内部分"
+        }
+      ],
+      "sourceText": "超住宿标准原则上只报标准内部分",
       "statement": "超住宿标准原则上只报标准内部分",
       "status": "CURRENT"
     },
@@ -226,6 +433,19 @@
         "FIN-004"
       ],
       "retrievalIntent": "Exception",
+      "sourceLocations": [
+        {
+          "documentId": "FIN-001",
+          "sectionPath": "FIN-001/特殊情况",
+          "sourceText": "特殊超标准需要额外审批"
+        },
+        {
+          "documentId": "FIN-004",
+          "sectionPath": "FIN-004/超标准处理",
+          "sourceText": "特殊超标准需要额外审批"
+        }
+      ],
+      "sourceText": "特殊超标准需要额外审批",
       "statement": "特殊超标准需要额外审批",
       "status": "CURRENT"
     },
@@ -236,6 +456,19 @@
         "FIN-002"
       ],
       "retrievalIntent": "Rule",
+      "sourceLocations": [
+        {
+          "documentId": "FIN-001",
+          "sectionPath": "FIN-001/餐费",
+          "sourceText": "国内差旅餐补按自然日计算"
+        },
+        {
+          "documentId": "FIN-002",
+          "sectionPath": "FIN-002/餐费标准",
+          "sourceText": "国内差旅餐补按自然日计算"
+        }
+      ],
+      "sourceText": "国内差旅餐补按自然日计算",
       "statement": "国内差旅餐补按自然日计算",
       "status": "CURRENT"
     },
@@ -245,6 +478,14 @@
         "FIN-004"
       ],
       "retrievalIntent": "Rule",
+      "sourceLocations": [
+        {
+          "documentId": "FIN-004",
+          "sectionPath": "FIN-004/报销时限",
+          "sourceText": "发票须在规定报销周期内提交"
+        }
+      ],
+      "sourceText": "发票须在规定报销周期内提交",
       "statement": "发票须在规定报销周期内提交",
       "status": "CURRENT"
     },
@@ -254,6 +495,14 @@
         "FIN-004"
       ],
       "retrievalIntent": "Keyword",
+      "sourceLocations": [
+        {
+          "documentId": "FIN-004",
+          "sectionPath": "FIN-004/电子发票",
+          "sourceText": "电子发票必须避免重复报销"
+        }
+      ],
+      "sourceText": "电子发票必须避免重复报销",
       "statement": "电子发票必须避免重复报销",
       "status": "CURRENT"
     },
@@ -263,6 +512,14 @@
         "FIN-004"
       ],
       "retrievalIntent": "Semantic",
+      "sourceLocations": [
+        {
+          "documentId": "FIN-004",
+          "sectionPath": "FIN-004/丢失发票",
+          "sourceText": "发票遗失需要替代证明材料"
+        }
+      ],
+      "sourceText": "发票遗失需要替代证明材料",
       "statement": "发票遗失需要替代证明材料",
       "status": "CURRENT"
     },
@@ -272,6 +529,14 @@
         "FIN-004"
       ],
       "retrievalIntent": "Similarity",
+      "sourceLocations": [
+        {
+          "documentId": "FIN-004",
+          "sectionPath": "FIN-004/公司卡",
+          "sourceText": "个人垫付和公司卡流程不同"
+        }
+      ],
+      "sourceText": "个人垫付和公司卡流程不同",
       "statement": "个人垫付和公司卡流程不同",
       "status": "CURRENT"
     },
@@ -282,6 +547,19 @@
         "FIN-001"
       ],
       "retrievalIntent": "Hard Negative",
+      "sourceLocations": [
+        {
+          "documentId": "HR-004",
+          "sectionPath": "HR-004/异地派驻补助",
+          "sourceText": "长期派驻住宿补贴不适用普通出差标准"
+        },
+        {
+          "documentId": "FIN-001",
+          "sectionPath": "FIN-001/住宿",
+          "sourceText": "长期派驻住宿补贴不适用普通出差标准"
+        }
+      ],
+      "sourceText": "长期派驻住宿补贴不适用普通出差标准",
       "statement": "长期派驻住宿补贴不适用普通出差标准",
       "status": "CURRENT"
     },
@@ -291,6 +569,14 @@
         "FIN-002"
       ],
       "retrievalIntent": "Table Routing",
+      "sourceLocations": [
+        {
+          "documentId": "FIN-002",
+          "sectionPath": "FIN-002/海外地区",
+          "sourceText": "海外住宿按国家/地区标准表执行"
+        }
+      ],
+      "sourceText": "海外住宿按国家/地区标准表执行",
       "statement": "海外住宿按国家/地区标准表执行",
       "status": "CURRENT"
     },
@@ -301,6 +587,19 @@
         "FIN-002"
       ],
       "retrievalIntent": "Routing",
+      "sourceLocations": [
+        {
+          "documentId": "FIN-001",
+          "sectionPath": "FIN-001/监督与附则",
+          "sourceText": "差旅费用标准以《2026差旅费用标准》为基准，而非员工手册"
+        },
+        {
+          "documentId": "FIN-002",
+          "sectionPath": "FIN-002/国内住宿标准",
+          "sourceText": "差旅费用标准以《2026差旅费用标准》为基准，而非员工手册"
+        }
+      ],
+      "sourceText": "差旅费用标准以《2026差旅费用标准》为基准，而非员工手册",
       "statement": "差旅费用标准以FIN-002为基准，而非员工手册",
       "status": "CURRENT"
     },
@@ -310,6 +609,14 @@
         "IT-003"
       ],
       "retrievalIntent": "BM25",
+      "sourceLocations": [
+        {
+          "documentId": "IT-003",
+          "sectionPath": "IT-003/VPN错误码",
+          "sourceText": "VPN-ERR-1042=证书链校验失败"
+        }
+      ],
+      "sourceText": "VPN-ERR-1042=证书链校验失败",
       "statement": "VPN-ERR-1042=证书链校验失败",
       "status": "CURRENT"
     },
@@ -319,6 +626,14 @@
         "IT-003"
       ],
       "retrievalIntent": "BM25",
+      "sourceLocations": [
+        {
+          "documentId": "IT-003",
+          "sectionPath": "IT-003/VPN错误码",
+          "sourceText": "VPN-ERR-1043=设备证书过期"
+        }
+      ],
+      "sourceText": "VPN-ERR-1043=设备证书过期",
       "statement": "VPN-ERR-1043=设备证书过期",
       "status": "CURRENT"
     },
@@ -328,6 +643,14 @@
         "IT-003"
       ],
       "retrievalIntent": "BM25",
+      "sourceLocations": [
+        {
+          "documentId": "IT-003",
+          "sectionPath": "IT-003/SSO错误码",
+          "sourceText": "SSO-ERR-2107=MFA Token校验失败"
+        }
+      ],
+      "sourceText": "SSO-ERR-2107=MFA Token校验失败",
       "statement": "SSO-ERR-2107=MFA Token校验失败",
       "status": "CURRENT"
     },
@@ -337,6 +660,14 @@
         "IT-003"
       ],
       "retrievalIntent": "BM25",
+      "sourceLocations": [
+        {
+          "documentId": "IT-003",
+          "sectionPath": "IT-003/邮箱错误码",
+          "sourceText": "MAIL-ERR-3021=邮箱容量达到限制"
+        }
+      ],
+      "sourceText": "MAIL-ERR-3021=邮箱容量达到限制",
       "statement": "MAIL-ERR-3021=邮箱容量达到限制",
       "status": "CURRENT"
     },
@@ -346,6 +677,14 @@
         "IT-002"
       ],
       "retrievalIntent": "Semantic",
+      "sourceLocations": [
+        {
+          "documentId": "IT-002",
+          "sectionPath": "IT-002/设备证书",
+          "sourceText": "证书链失败需重新签发设备证书"
+        }
+      ],
+      "sourceText": "证书链失败需重新签发设备证书",
       "statement": "证书链失败需重新签发设备证书",
       "status": "CURRENT"
     },
@@ -355,6 +694,14 @@
         "IT-002"
       ],
       "retrievalIntent": "Similarity",
+      "sourceLocations": [
+        {
+          "documentId": "IT-002",
+          "sectionPath": "IT-002/证书续签",
+          "sourceText": "VPN证书过期需走续签流程"
+        }
+      ],
+      "sourceText": "VPN证书过期需走续签流程",
       "statement": "VPN证书过期需走续签流程",
       "status": "CURRENT"
     },
@@ -364,6 +711,14 @@
         "IT-002"
       ],
       "retrievalIntent": "Procedure",
+      "sourceLocations": [
+        {
+          "documentId": "IT-002",
+          "sectionPath": "IT-002/连接流程",
+          "sourceText": "VPN故障先查本地网络，再认证，再证书"
+        }
+      ],
+      "sourceText": "VPN故障先查本地网络，再认证，再证书",
       "statement": "VPN故障先查本地网络，再认证，再证书",
       "status": "CURRENT"
     },
@@ -373,6 +728,14 @@
         "IT-005"
       ],
       "retrievalIntent": "Rule",
+      "sourceLocations": [
+        {
+          "documentId": "IT-005",
+          "sectionPath": "IT-005/管理员权限",
+          "sourceText": "普通员工不得长期持有本地管理员权限"
+        }
+      ],
+      "sourceText": "普通员工不得长期持有本地管理员权限",
       "statement": "普通员工不得长期持有本地管理员权限",
       "status": "CURRENT"
     },
@@ -382,6 +745,14 @@
         "IT-005"
       ],
       "retrievalIntent": "Keyword",
+      "sourceLocations": [
+        {
+          "documentId": "IT-005",
+          "sectionPath": "IT-005/软件白名单",
+          "sourceText": "软件安装须符合白名单"
+        }
+      ],
+      "sourceText": "软件安装须符合白名单",
       "statement": "软件安装须符合白名单",
       "status": "CURRENT"
     },
@@ -391,6 +762,14 @@
         "IT-004"
       ],
       "retrievalIntent": "Similarity",
+      "sourceLocations": [
+        {
+          "documentId": "IT-004",
+          "sectionPath": "IT-004/GitLab权限",
+          "sourceText": "GitLab权限由项目Owner审批"
+        }
+      ],
+      "sourceText": "GitLab权限由项目Owner审批",
       "statement": "GitLab权限由项目Owner审批",
       "status": "CURRENT"
     },
@@ -400,6 +779,14 @@
         "IT-004"
       ],
       "retrievalIntent": "Similarity",
+      "sourceLocations": [
+        {
+          "documentId": "IT-004",
+          "sectionPath": "IT-004/OA权限",
+          "sourceText": "OA普通权限由部门管理员处理"
+        }
+      ],
+      "sourceText": "OA普通权限由部门管理员处理",
       "statement": "OA普通权限由部门管理员处理",
       "status": "CURRENT"
     },
@@ -410,6 +797,19 @@
         "SEC-004"
       ],
       "retrievalIntent": "Cross-doc",
+      "sourceLocations": [
+        {
+          "documentId": "IT-004",
+          "sectionPath": "IT-004/生产权限边界",
+          "sourceText": "生产数据库权限不遵循普通OA权限流程"
+        },
+        {
+          "documentId": "SEC-004",
+          "sectionPath": "SEC-004/总则",
+          "sourceText": "生产数据库权限不遵循普通OA权限流程"
+        }
+      ],
+      "sourceText": "生产数据库权限不遵循普通OA权限流程",
       "statement": "生产数据库权限不遵循普通OA权限流程",
       "status": "CURRENT"
     },
@@ -419,6 +819,14 @@
         "IT-004"
       ],
       "retrievalIntent": "Cross-domain",
+      "sourceLocations": [
+        {
+          "documentId": "IT-004",
+          "sectionPath": "IT-004/离职回收",
+          "sourceText": "离职账号必须统一回收"
+        }
+      ],
+      "sourceText": "离职账号必须统一回收",
       "statement": "离职账号必须统一回收",
       "status": "CURRENT"
     },
@@ -429,6 +837,19 @@
         "SEC-005"
       ],
       "retrievalIntent": "Cross-doc",
+      "sourceLocations": [
+        {
+          "documentId": "IT-005",
+          "sectionPath": "IT-005/设备遗失",
+          "sourceText": "设备丢失需同时通知IT与Security"
+        },
+        {
+          "documentId": "SEC-005",
+          "sectionPath": "SEC-005/设备遗失",
+          "sourceText": "设备丢失需同时通知IT与Security"
+        }
+      ],
+      "sourceText": "设备丢失需同时通知IT与Security",
       "statement": "设备丢失需同时通知IT与Security",
       "status": "CURRENT"
     },
@@ -439,6 +860,19 @@
         "SEC-002"
       ],
       "retrievalIntent": "Cross-doc",
+      "sourceLocations": [
+        {
+          "documentId": "IT-005",
+          "sectionPath": "IT-005/USB",
+          "sourceText": "USB使用受信息安全等级约束"
+        },
+        {
+          "documentId": "SEC-002",
+          "sectionPath": "SEC-002/分类等级",
+          "sourceText": "USB使用受信息安全等级约束"
+        }
+      ],
+      "sourceText": "USB使用受信息安全等级约束",
       "statement": "USB使用受信息安全等级约束",
       "status": "CURRENT"
     },
@@ -448,6 +882,14 @@
         "SEC-002"
       ],
       "retrievalIntent": "Table",
+      "sourceLocations": [
+        {
+          "documentId": "SEC-002",
+          "sectionPath": "SEC-002/分类等级",
+          "sourceText": "数据分L1/L2/L3/L4"
+        }
+      ],
+      "sourceText": "数据分L1/L2/L3/L4",
       "statement": "数据分L1/L2/L3/L4",
       "status": "CURRENT"
     },
@@ -457,6 +899,14 @@
         "SEC-002"
       ],
       "retrievalIntent": "Table",
+      "sourceLocations": [
+        {
+          "documentId": "SEC-002",
+          "sectionPath": "SEC-002/数据示例",
+          "sourceText": "员工通讯录属于L2"
+        }
+      ],
+      "sourceText": "员工通讯录属于L2",
       "statement": "员工通讯录属于L2",
       "status": "CURRENT"
     },
@@ -466,6 +916,14 @@
         "SEC-002"
       ],
       "retrievalIntent": "Table",
+      "sourceLocations": [
+        {
+          "documentId": "SEC-002",
+          "sectionPath": "SEC-002/数据示例",
+          "sourceText": "未公开财务数据属于L3"
+        }
+      ],
+      "sourceText": "未公开财务数据属于L3",
       "statement": "未公开财务数据属于L3",
       "status": "CURRENT"
     },
@@ -475,6 +933,14 @@
         "SEC-002"
       ],
       "retrievalIntent": "Table",
+      "sourceLocations": [
+        {
+          "documentId": "SEC-002",
+          "sectionPath": "SEC-002/数据示例",
+          "sourceText": "客户身份证数据属于L3"
+        }
+      ],
+      "sourceText": "客户身份证数据属于L3",
       "statement": "客户身份证数据属于L3",
       "status": "CURRENT"
     },
@@ -484,6 +950,14 @@
         "SEC-002"
       ],
       "retrievalIntent": "Table",
+      "sourceLocations": [
+        {
+          "documentId": "SEC-002",
+          "sectionPath": "SEC-002/数据示例",
+          "sourceText": "生产数据库密钥属于L4"
+        }
+      ],
+      "sourceText": "生产数据库密钥属于L4",
       "statement": "生产数据库密钥属于L4",
       "status": "CURRENT"
     },
@@ -494,6 +968,19 @@
         "SEC-001"
       ],
       "retrievalIntent": "Cross-table",
+      "sourceLocations": [
+        {
+          "documentId": "SEC-002",
+          "sectionPath": "SEC-002/加密要求",
+          "sourceText": "L3/L4数据要求受控存储和加密"
+        },
+        {
+          "documentId": "SEC-001",
+          "sectionPath": "SEC-001/数据保护",
+          "sourceText": "L3/L4数据要求受控存储和加密"
+        }
+      ],
+      "sourceText": "L3/L4数据要求受控存储和加密",
       "statement": "L3/L4数据要求受控存储和加密",
       "status": "CURRENT"
     },
@@ -503,6 +990,14 @@
         "SEC-003"
       ],
       "retrievalIntent": "Semantic",
+      "sourceLocations": [
+        {
+          "documentId": "SEC-003",
+          "sectionPath": "SEC-003/报告",
+          "sourceText": "疑似L3/L4泄露15分钟内报告SOC"
+        }
+      ],
+      "sourceText": "疑似L3/L4泄露15分钟内报告SOC",
       "statement": "疑似L3/L4泄露15分钟内报告SOC",
       "status": "CURRENT"
     },
@@ -512,6 +1007,14 @@
         "SEC-003"
       ],
       "retrievalIntent": "Semantic",
+      "sourceLocations": [
+        {
+          "documentId": "SEC-003",
+          "sectionPath": "SEC-003/发现",
+          "sourceText": "发错客户身份证表属于非授权披露"
+        }
+      ],
+      "sourceText": "发错客户身份证表属于非授权披露",
       "statement": "发错客户身份证表属于非授权披露",
       "status": "CURRENT"
     },
@@ -521,6 +1024,14 @@
         "SEC-003"
       ],
       "retrievalIntent": "Procedure",
+      "sourceLocations": [
+        {
+          "documentId": "SEC-003",
+          "sectionPath": "SEC-003/隔离",
+          "sourceText": "安全事件先隔离风险并保留证据"
+        }
+      ],
+      "sourceText": "安全事件先隔离风险并保留证据",
       "statement": "安全事件先隔离风险并保留证据",
       "status": "CURRENT"
     },
@@ -530,6 +1041,14 @@
         "SEC-004"
       ],
       "retrievalIntent": "Hybrid",
+      "sourceLocations": [
+        {
+          "documentId": "SEC-004",
+          "sectionPath": "SEC-004/只读权限",
+          "sourceText": "临时生产库只读需System Owner+DBA审批"
+        }
+      ],
+      "sourceText": "临时生产库只读需System Owner+DBA审批",
       "statement": "临时生产库只读需System Owner+DBA审批",
       "status": "CURRENT"
     },
@@ -539,6 +1058,14 @@
         "SEC-004"
       ],
       "retrievalIntent": "Similarity",
+      "sourceLocations": [
+        {
+          "documentId": "SEC-004",
+          "sectionPath": "SEC-004/写权限",
+          "sourceText": "生产写权限要求更高级审批"
+        }
+      ],
+      "sourceText": "生产写权限要求更高级审批",
       "statement": "生产写权限要求更高级审批",
       "status": "CURRENT"
     },
@@ -548,6 +1075,14 @@
         "SEC-004"
       ],
       "retrievalIntent": "Exact concept",
+      "sourceLocations": [
+        {
+          "documentId": "SEC-004",
+          "sectionPath": "SEC-004/Break Glass",
+          "sourceText": "Break Glass仅用于紧急生产事件"
+        }
+      ],
+      "sourceText": "Break Glass仅用于紧急生产事件",
       "statement": "Break Glass仅用于紧急生产事件",
       "status": "CURRENT"
     },
@@ -557,6 +1092,14 @@
         "SEC-004"
       ],
       "retrievalIntent": "Cross-section",
+      "sourceLocations": [
+        {
+          "documentId": "SEC-004",
+          "sectionPath": "SEC-004/审计与复核",
+          "sourceText": "Break Glass必须事后审计"
+        }
+      ],
+      "sourceText": "Break Glass必须事后审计",
       "statement": "Break Glass必须事后审计",
       "status": "CURRENT"
     },
@@ -566,6 +1109,14 @@
         "SEC-004"
       ],
       "retrievalIntent": "Rule",
+      "sourceLocations": [
+        {
+          "documentId": "SEC-004",
+          "sectionPath": "SEC-004/自动失效",
+          "sourceText": "临时生产权限自动失效"
+        }
+      ],
+      "sourceText": "临时生产权限自动失效",
       "statement": "临时生产权限自动失效",
       "status": "CURRENT"
     },
@@ -576,6 +1127,19 @@
         "SEC-004"
       ],
       "retrievalIntent": "Hard Negative",
+      "sourceLocations": [
+        {
+          "documentId": "IT-004",
+          "sectionPath": "IT-004/生产权限边界",
+          "sourceText": "普通IT账号权限不能替代生产数据访问审批"
+        },
+        {
+          "documentId": "SEC-004",
+          "sectionPath": "SEC-004/总则",
+          "sourceText": "普通IT账号权限不能替代生产数据访问审批"
+        }
+      ],
+      "sourceText": "普通IT账号权限不能替代生产数据访问审批",
       "statement": "普通IT账号权限不能替代生产数据访问审批",
       "status": "CURRENT"
     },
@@ -585,6 +1149,14 @@
         "PROC-003"
       ],
       "retrievalIntent": "Table",
+      "sourceLocations": [
+        {
+          "documentId": "PROC-003",
+          "sectionPath": "PROC-003/审批矩阵",
+          "sourceText": "≤5万元采购仅部门负责人审批"
+        }
+      ],
+      "sourceText": "≤5万元采购仅部门负责人审批",
       "statement": "≤5万元采购仅部门负责人审批",
       "status": "CURRENT"
     },
@@ -594,6 +1166,14 @@
         "PROC-003"
       ],
       "retrievalIntent": "Table",
+      "sourceLocations": [
+        {
+          "documentId": "PROC-003",
+          "sectionPath": "PROC-003/审批矩阵",
+          "sourceText": "5~20万元增加VP审批"
+        }
+      ],
+      "sourceText": "5~20万元增加VP审批",
       "statement": "5~20万元增加VP审批",
       "status": "CURRENT"
     },
@@ -603,6 +1183,14 @@
         "PROC-003"
       ],
       "retrievalIntent": "Table",
+      "sourceLocations": [
+        {
+          "documentId": "PROC-003",
+          "sectionPath": "PROC-003/审批矩阵",
+          "sourceText": "20~100万元增加CFO审批"
+        }
+      ],
+      "sourceText": "20~100万元增加CFO审批",
       "statement": "20~100万元增加CFO审批",
       "status": "CURRENT"
     },
@@ -612,6 +1200,14 @@
         "PROC-003"
       ],
       "retrievalIntent": "Table",
+      "sourceLocations": [
+        {
+          "documentId": "PROC-003",
+          "sectionPath": "PROC-003/审批矩阵",
+          "sourceText": ">100万元增加CEO审批"
+        }
+      ],
+      "sourceText": ">100万元增加CEO审批",
       "statement": ">100万元增加CEO审批",
       "status": "CURRENT"
     },
@@ -621,6 +1217,14 @@
         "PROC-003"
       ],
       "retrievalIntent": "Derived",
+      "sourceLocations": [
+        {
+          "documentId": "PROC-003",
+          "sectionPath": "PROC-003/边界示例",
+          "sourceText": "85万元软件采购需负责人+VP+CFO"
+        }
+      ],
+      "sourceText": "85万元软件采购需负责人+VP+CFO",
       "statement": "85万元软件采购需负责人+VP+CFO",
       "status": "CURRENT"
     },
@@ -630,6 +1234,14 @@
         "PROC-001"
       ],
       "retrievalIntent": "Rule",
+      "sourceLocations": [
+        {
+          "documentId": "PROC-001",
+          "sectionPath": "PROC-001/询价",
+          "sourceText": "一般采购应经过询价/比价"
+        }
+      ],
+      "sourceText": "一般采购应经过询价/比价",
       "statement": "一般采购应经过询价/比价",
       "status": "CURRENT"
     },
@@ -639,6 +1251,14 @@
         "PROC-001"
       ],
       "retrievalIntent": "Exception",
+      "sourceLocations": [
+        {
+          "documentId": "PROC-001",
+          "sectionPath": "PROC-001/单一来源",
+          "sourceText": "特定条件可单一来源采购"
+        }
+      ],
+      "sourceText": "特定条件可单一来源采购",
       "statement": "特定条件可单一来源采购",
       "status": "CURRENT"
     },
@@ -648,6 +1268,14 @@
         "PROC-002"
       ],
       "retrievalIntent": "Cross-doc",
+      "sourceLocations": [
+        {
+          "documentId": "PROC-002",
+          "sectionPath": "PROC-002/资质审核",
+          "sourceText": "供应商准入需资质审核"
+        }
+      ],
+      "sourceText": "供应商准入需资质审核",
       "statement": "供应商准入需资质审核",
       "status": "CURRENT"
     },
@@ -657,6 +1285,14 @@
         "PROC-002"
       ],
       "retrievalIntent": "Cross-doc",
+      "sourceLocations": [
+        {
+          "documentId": "PROC-002",
+          "sectionPath": "PROC-002/安全审查",
+          "sourceText": "高风险供应商需安全审查"
+        }
+      ],
+      "sourceText": "高风险供应商需安全审查",
       "statement": "高风险供应商需安全审查",
       "status": "CURRENT"
     },
@@ -666,6 +1302,14 @@
         "PROC-002"
       ],
       "retrievalIntent": "Rule",
+      "sourceLocations": [
+        {
+          "documentId": "PROC-002",
+          "sectionPath": "PROC-002/黑名单",
+          "sourceText": "黑名单供应商不得正常准入"
+        }
+      ],
+      "sourceText": "黑名单供应商不得正常准入",
       "statement": "黑名单供应商不得正常准入",
       "status": "CURRENT"
     },
@@ -675,6 +1319,14 @@
         "LEG-001"
       ],
       "retrievalIntent": "Hybrid",
+      "sourceLocations": [
+        {
+          "documentId": "LEG-001",
+          "sectionPath": "LEG-001/法务审核",
+          "sourceText": "非标准合同条款需要法务审核"
+        }
+      ],
+      "sourceText": "非标准合同条款需要法务审核",
       "statement": "非标准合同条款需要法务审核",
       "status": "CURRENT"
     },
@@ -685,6 +1337,19 @@
         "PROC-002"
       ],
       "retrievalIntent": "Cross-doc",
+      "sourceLocations": [
+        {
+          "documentId": "LEG-001",
+          "sectionPath": "LEG-001/签署权限",
+          "sourceText": "合同签署前原则上需完成供应商准入"
+        },
+        {
+          "documentId": "PROC-002",
+          "sectionPath": "PROC-002/准入决定",
+          "sourceText": "合同签署前原则上需完成供应商准入"
+        }
+      ],
+      "sourceText": "合同签署前原则上需完成供应商准入",
       "statement": "合同签署前原则上需完成供应商准入",
       "status": "CURRENT"
     },
@@ -695,6 +1360,19 @@
         "PROC-003"
       ],
       "retrievalIntent": "Hard Negative",
+      "sourceLocations": [
+        {
+          "documentId": "LEG-001",
+          "sectionPath": "LEG-001/签署权限",
+          "sourceText": "合同金额权限与采购审批不是同一个流程"
+        },
+        {
+          "documentId": "PROC-003",
+          "sectionPath": "PROC-003/适用说明",
+          "sourceText": "合同金额权限与采购审批不是同一个流程"
+        }
+      ],
+      "sourceText": "合同金额权限与采购审批不是同一个流程",
       "statement": "合同金额权限与采购审批不是同一个流程",
       "status": "CURRENT"
     },
@@ -705,6 +1383,19 @@
         "LEG-001"
       ],
       "retrievalIntent": "FAQ→Policy",
+      "sourceLocations": [
+        {
+          "documentId": "LEG-002",
+          "sectionPath": "LEG-002/补签",
+          "sourceText": "已提供服务不代表可以绕过补签审批"
+        },
+        {
+          "documentId": "LEG-001",
+          "sectionPath": "LEG-001/签署权限",
+          "sourceText": "已提供服务不代表可以绕过补签审批"
+        }
+      ],
+      "sourceText": "已提供服务不代表可以绕过补签审批",
       "statement": "已提供服务不代表可以绕过补签审批",
       "status": "CURRENT"
     },
@@ -714,6 +1405,14 @@
         "OPS-003"
       ],
       "retrievalIntent": "Table",
+      "sourceLocations": [
+        {
+          "documentId": "OPS-003",
+          "sectionPath": "OPS-003/事故等级",
+          "sourceText": "P0=核心业务整体不可用"
+        }
+      ],
+      "sourceText": "P0=核心业务整体不可用",
       "statement": "P0=核心业务整体不可用",
       "status": "CURRENT"
     },
@@ -723,6 +1422,14 @@
         "OPS-003"
       ],
       "retrievalIntent": "Table",
+      "sourceLocations": [
+        {
+          "documentId": "OPS-003",
+          "sectionPath": "OPS-003/响应时限",
+          "sourceText": "P0首次响应≤5分钟"
+        }
+      ],
+      "sourceText": "P0首次响应≤5分钟",
       "statement": "P0首次响应≤5分钟",
       "status": "CURRENT"
     },
@@ -732,6 +1439,14 @@
         "OPS-003"
       ],
       "retrievalIntent": "Table",
+      "sourceLocations": [
+        {
+          "documentId": "OPS-003",
+          "sectionPath": "OPS-003/响应时限",
+          "sourceText": "P0技术负责人≤10分钟介入"
+        }
+      ],
+      "sourceText": "P0技术负责人≤10分钟介入",
       "statement": "P0技术负责人≤10分钟介入",
       "status": "CURRENT"
     },
@@ -741,6 +1456,14 @@
         "OPS-003"
       ],
       "retrievalIntent": "Table",
+      "sourceLocations": [
+        {
+          "documentId": "OPS-003",
+          "sectionPath": "OPS-003/升级与沟通",
+          "sourceText": "P0每15分钟同步状态"
+        }
+      ],
+      "sourceText": "P0每15分钟同步状态",
       "statement": "P0每15分钟同步状态",
       "status": "CURRENT"
     },
@@ -750,6 +1473,14 @@
         "OPS-003"
       ],
       "retrievalIntent": "Similarity",
+      "sourceLocations": [
+        {
+          "documentId": "OPS-003",
+          "sectionPath": "OPS-003/响应时限",
+          "sourceText": "P1首次响应≤10分钟"
+        }
+      ],
+      "sourceText": "P1首次响应≤10分钟",
       "statement": "P1首次响应≤10分钟",
       "status": "CURRENT"
     },
@@ -759,6 +1490,14 @@
         "OPS-001"
       ],
       "retrievalIntent": "Rule",
+      "sourceLocations": [
+        {
+          "documentId": "OPS-001",
+          "sectionPath": "OPS-001/普通变更",
+          "sourceText": "普通生产变更必须事前审批"
+        }
+      ],
+      "sourceText": "普通生产变更必须事前审批",
       "statement": "普通生产变更必须事前审批",
       "status": "CURRENT"
     },
@@ -769,6 +1508,19 @@
         "OPS-002"
       ],
       "retrievalIntent": "Exception",
+      "sourceLocations": [
+        {
+          "documentId": "OPS-001",
+          "sectionPath": "OPS-001/紧急变更",
+          "sourceText": "P0恢复允许紧急变更流程"
+        },
+        {
+          "documentId": "OPS-002",
+          "sectionPath": "OPS-002/P0响应",
+          "sourceText": "P0恢复允许紧急变更流程"
+        }
+      ],
+      "sourceText": "P0恢复允许紧急变更流程",
       "statement": "P0恢复允许紧急变更流程",
       "status": "CURRENT"
     },
@@ -778,6 +1530,14 @@
         "OPS-001"
       ],
       "retrievalIntent": "Rule",
+      "sourceLocations": [
+        {
+          "documentId": "OPS-001",
+          "sectionPath": "OPS-001/紧急变更",
+          "sourceText": "紧急变更仍需事后补审"
+        }
+      ],
+      "sourceText": "紧急变更仍需事后补审",
       "statement": "紧急变更仍需事后补审",
       "status": "CURRENT"
     },
@@ -787,6 +1547,14 @@
         "OPS-001"
       ],
       "retrievalIntent": "Hybrid",
+      "sourceLocations": [
+        {
+          "documentId": "OPS-001",
+          "sectionPath": "OPS-001/风险评估",
+          "sourceText": "高风险变更必须有回滚方案"
+        }
+      ],
+      "sourceText": "高风险变更必须有回滚方案",
       "statement": "高风险变更必须有回滚方案",
       "status": "CURRENT"
     },
@@ -796,6 +1564,14 @@
         "OPS-002"
       ],
       "retrievalIntent": "Structure",
+      "sourceLocations": [
+        {
+          "documentId": "OPS-002",
+          "sectionPath": "OPS-002/回滚失败",
+          "sourceText": "回滚失败需升级Incident Commander"
+        }
+      ],
+      "sourceText": "回滚失败需升级Incident Commander",
       "statement": "回滚失败需升级Incident Commander",
       "status": "CURRENT"
     },
@@ -805,6 +1581,14 @@
         "OPS-002"
       ],
       "retrievalIntent": "Structure",
+      "sourceLocations": [
+        {
+          "documentId": "OPS-002",
+          "sectionPath": "OPS-002/数据库故障",
+          "sourceText": "数据库事故需DBA On-call介入"
+        }
+      ],
+      "sourceText": "数据库事故需DBA On-call介入",
       "statement": "数据库事故需DBA On-call介入",
       "status": "CURRENT"
     },
@@ -814,6 +1598,14 @@
         "OPS-002"
       ],
       "retrievalIntent": "Structure",
+      "sourceLocations": [
+        {
+          "documentId": "OPS-002",
+          "sectionPath": "OPS-002/网络故障",
+          "sourceText": "网络事故需Network On-call介入"
+        }
+      ],
+      "sourceText": "网络事故需Network On-call介入",
       "statement": "网络事故需Network On-call介入",
       "status": "CURRENT"
     },
@@ -823,6 +1615,14 @@
         "OPS-002"
       ],
       "retrievalIntent": "Structure",
+      "sourceLocations": [
+        {
+          "documentId": "OPS-002",
+          "sectionPath": "OPS-002/升级矩阵",
+          "sourceText": "安全事故需Security On-call介入"
+        }
+      ],
+      "sourceText": "安全事故需Security On-call介入",
       "statement": "安全事故需Security On-call介入",
       "status": "CURRENT"
     },
@@ -832,6 +1632,14 @@
         "OPS-002"
       ],
       "retrievalIntent": "Cross-section",
+      "sourceLocations": [
+        {
+          "documentId": "OPS-002",
+          "sectionPath": "OPS-002/指挥体系",
+          "sourceText": "P0必须指定Incident Commander"
+        }
+      ],
+      "sourceText": "P0必须指定Incident Commander",
       "statement": "P0必须指定Incident Commander",
       "status": "CURRENT"
     },
@@ -841,6 +1649,14 @@
         "OPS-002"
       ],
       "retrievalIntent": "Rule",
+      "sourceLocations": [
+        {
+          "documentId": "OPS-002",
+          "sectionPath": "OPS-002/恢复",
+          "sourceText": "事故恢复后需复盘"
+        }
+      ],
+      "sourceText": "事故恢复后需复盘",
       "statement": "事故恢复后需复盘",
       "status": "CURRENT"
     },
@@ -850,6 +1666,14 @@
         "OPS-002"
       ],
       "retrievalIntent": "Rule",
+      "sourceLocations": [
+        {
+          "documentId": "OPS-002",
+          "sectionPath": "OPS-002/复盘",
+          "sourceText": "复盘需记录根因与改进项"
+        }
+      ],
+      "sourceText": "复盘需记录根因与改进项",
       "statement": "复盘需记录根因与改进项",
       "status": "CURRENT"
     },
@@ -859,6 +1683,14 @@
         "ENG-001"
       ],
       "retrievalIntent": "Lifecycle",
+      "sourceLocations": [
+        {
+          "documentId": "ENG-001",
+          "sectionPath": "ENG-001/发布",
+          "sourceText": "发布前必须完成测试与审批"
+        }
+      ],
+      "sourceText": "发布前必须完成测试与审批",
       "statement": "发布前必须完成测试与审批",
       "status": "CURRENT"
     },
@@ -869,6 +1701,19 @@
         "OPS-001"
       ],
       "retrievalIntent": "Rule",
+      "sourceLocations": [
+        {
+          "documentId": "ENG-001",
+          "sectionPath": "ENG-001/发布",
+          "sourceText": "高风险发布必须灰度"
+        },
+        {
+          "documentId": "OPS-001",
+          "sectionPath": "OPS-001/灰度",
+          "sourceText": "高风险发布必须灰度"
+        }
+      ],
+      "sourceText": "高风险发布必须灰度",
       "statement": "高风险发布必须灰度",
       "status": "CURRENT"
     },
@@ -878,6 +1723,14 @@
         "OPS-001"
       ],
       "retrievalIntent": "Similarity",
+      "sourceLocations": [
+        {
+          "documentId": "OPS-001",
+          "sectionPath": "OPS-001/变更窗口",
+          "sourceText": "普通变更窗口与紧急变更不同"
+        }
+      ],
+      "sourceText": "普通变更窗口与紧急变更不同",
       "statement": "普通变更窗口与紧急变更不同",
       "status": "CURRENT"
     },
@@ -888,6 +1741,19 @@
         "OPS-003"
       ],
       "retrievalIntent": "Semantic",
+      "sourceLocations": [
+        {
+          "documentId": "OPS-002",
+          "sectionPath": "OPS-002/数据库故障",
+          "sourceText": "数据库慢但未导致核心业务不可用不当然属于P0"
+        },
+        {
+          "documentId": "OPS-003",
+          "sectionPath": "OPS-003/判定示例",
+          "sourceText": "数据库慢但未导致核心业务不可用不当然属于P0"
+        }
+      ],
+      "sourceText": "数据库慢但未导致核心业务不可用不当然属于P0",
       "statement": "数据库慢但未导致核心业务不可用不当然属于P0",
       "status": "CURRENT"
     },
@@ -897,6 +1763,14 @@
         "OPS-003"
       ],
       "retrievalIntent": "Semantic",
+      "sourceLocations": [
+        {
+          "documentId": "OPS-003",
+          "sectionPath": "OPS-003/判定示例",
+          "sourceText": "核心支付整体不可用属于P0"
+        }
+      ],
+      "sourceText": "核心支付整体不可用属于P0",
       "statement": "核心支付整体不可用属于P0",
       "status": "CURRENT"
     },
@@ -906,6 +1780,14 @@
         "ENG-001"
       ],
       "retrievalIntent": "Structure",
+      "sourceLocations": [
+        {
+          "documentId": "ENG-001",
+          "sectionPath": "ENG-001/总则",
+          "sourceText": "项目需经历需求→设计→开发→测试→发布"
+        }
+      ],
+      "sourceText": "项目需经历需求→设计→开发→测试→发布",
       "statement": "项目需经历需求→设计→开发→测试→发布",
       "status": "CURRENT"
     },
@@ -915,9 +1797,17 @@
         "ENG-001"
       ],
       "retrievalIntent": "Rule",
+      "sourceLocations": [
+        {
+          "documentId": "ENG-001",
+          "sectionPath": "ENG-001/验收",
+          "sourceText": "未完成验收不能直接归档为完成"
+        }
+      ],
+      "sourceText": "未完成验收不能直接归档为完成",
       "statement": "未完成验收不能直接归档为完成",
       "status": "CURRENT"
     }
   ],
-  "specVersion": "1.1"
+  "specVersion": "1.2"
 }

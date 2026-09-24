@@ -181,15 +181,3 @@ QUESTION_SETS = {
     "TABLE": TABLE,
     "STRUCTURE_AGENTIC": STRUCTURE_AGENTIC,
 }
-
-
-VERSION_FORBIDDEN = {
-    "HR-001": ["HR-002"],
-    "HR-002": ["HR-002"],
-    "HR-012": ["HR-002"],
-    "HR-013": ["HR-002"],
-    "FIN-005": ["FIN-002"],
-    "FIN-006": [],
-    "FIN-007": [],
-}
-

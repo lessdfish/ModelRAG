@@ -1,4 +1,4 @@
-"""Authoritative deterministic data definitions for corpus Spec v1.1."""
+"""Authoritative deterministic data definitions for corpus v1.2 remediation."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 
 SEED = 20260917
-SPEC_VERSION = "1.1"
+SPEC_VERSION = "1.2"
 COMPANY = "NovaTech 星云科技"
 
 
@@ -126,6 +126,120 @@ DOCUMENTS = (
 )
 
 
+# Explicit semantic ground truth. Every primary source has exactly one section
+# that owns the fact; generation and evaluation both consume this same map.
+FACT_SOURCE_SECTIONS = {
+    "HR-001": {"HR-003": "陪产假"},
+    "HR-002": {"HR-002": "假期"},
+    "HR-003": {"HR-003": "年假"},
+    "HR-004": {"HR-003": "年假"},
+    "HR-005": {"HR-003": "病假"},
+    "HR-006": {"HR-003": "婚假"},
+    "HR-007": {"HR-003": "育儿假"},
+    "HR-008": {"HR-003": "迟到早退"},
+    "HR-009": {"HR-003": "考勤", "HR-005": "考勤与补卡"},
+    "HR-010": {"HR-003": "特殊情况"},
+    "HR-011": {"HR-003": "申请与审批"},
+    "HR-012": {"HR-004": "健康补贴"},
+    "HR-013": {"HR-002": "薪酬"},
+    "HR-014": {"HR-004": "异地派驻补助"},
+    "HR-015": {"HR-001": "离职", "IT-004": "离职回收"},
+    "FIN-001": {"FIN-001": "交通"},
+    "FIN-002": {"FIN-001": "交通"},
+    "FIN-003": {"FIN-001": "交通"},
+    "FIN-004": {"FIN-002": "城市等级"},
+    "FIN-005": {"FIN-002": "国内住宿标准"},
+    "FIN-006": {"FIN-003": "临时住宿标准"},
+    "FIN-007": {"FIN-003": "有效期"},
+    "FIN-008": {"FIN-003": "不受影响的规则"},
+    "FIN-009": {"FIN-001": "住宿", "FIN-004": "超标准处理"},
+    "FIN-010": {"FIN-001": "特殊情况", "FIN-004": "超标准处理"},
+    "FIN-011": {"FIN-001": "餐费", "FIN-002": "餐费标准"},
+    "FIN-012": {"FIN-004": "报销时限"},
+    "FIN-013": {"FIN-004": "电子发票"},
+    "FIN-014": {"FIN-004": "丢失发票"},
+    "FIN-015": {"FIN-004": "公司卡"},
+    "FIN-016": {"HR-004": "异地派驻补助", "FIN-001": "住宿"},
+    "FIN-017": {"FIN-002": "海外地区"},
+    "FIN-018": {"FIN-001": "监督与附则", "FIN-002": "国内住宿标准"},
+    "IT-001": {"IT-003": "VPN错误码"},
+    "IT-002": {"IT-003": "VPN错误码"},
+    "IT-003": {"IT-003": "SSO错误码"},
+    "IT-004": {"IT-003": "邮箱错误码"},
+    "IT-005": {"IT-002": "设备证书"},
+    "IT-006": {"IT-002": "证书续签"},
+    "IT-007": {"IT-002": "连接流程"},
+    "IT-008": {"IT-005": "管理员权限"},
+    "IT-009": {"IT-005": "软件白名单"},
+    "IT-010": {"IT-004": "GitLab权限"},
+    "IT-011": {"IT-004": "OA权限"},
+    "IT-012": {"IT-004": "生产权限边界", "SEC-004": "总则"},
+    "IT-013": {"IT-004": "离职回收"},
+    "IT-014": {"IT-005": "设备遗失", "SEC-005": "设备遗失"},
+    "IT-015": {"IT-005": "USB", "SEC-002": "分类等级"},
+    "SEC-001": {"SEC-002": "分类等级"},
+    "SEC-002": {"SEC-002": "数据示例"},
+    "SEC-003": {"SEC-002": "数据示例"},
+    "SEC-004": {"SEC-002": "数据示例"},
+    "SEC-005": {"SEC-002": "数据示例"},
+    "SEC-006": {"SEC-002": "加密要求", "SEC-001": "数据保护"},
+    "SEC-007": {"SEC-003": "报告"},
+    "SEC-008": {"SEC-003": "发现"},
+    "SEC-009": {"SEC-003": "隔离"},
+    "SEC-010": {"SEC-004": "只读权限"},
+    "SEC-011": {"SEC-004": "写权限"},
+    "SEC-012": {"SEC-004": "Break Glass"},
+    "SEC-013": {"SEC-004": "审计与复核"},
+    "SEC-014": {"SEC-004": "自动失效"},
+    "SEC-015": {"IT-004": "生产权限边界", "SEC-004": "总则"},
+    "PROC-001": {"PROC-003": "审批矩阵"},
+    "PROC-002": {"PROC-003": "审批矩阵"},
+    "PROC-003": {"PROC-003": "审批矩阵"},
+    "PROC-004": {"PROC-003": "审批矩阵"},
+    "PROC-005": {"PROC-003": "边界示例"},
+    "PROC-006": {"PROC-001": "询价"},
+    "PROC-007": {"PROC-001": "单一来源"},
+    "PROC-008": {"PROC-002": "资质审核"},
+    "PROC-009": {"PROC-002": "安全审查"},
+    "PROC-010": {"PROC-002": "黑名单"},
+    "LEG-001": {"LEG-001": "法务审核"},
+    "LEG-002": {"LEG-001": "签署权限", "PROC-002": "准入决定"},
+    "LEG-003": {"LEG-001": "签署权限", "PROC-003": "适用说明"},
+    "LEG-004": {"LEG-002": "补签", "LEG-001": "签署权限"},
+    "OPS-001": {"OPS-003": "事故等级"},
+    "OPS-002": {"OPS-003": "响应时限"},
+    "OPS-003": {"OPS-003": "响应时限"},
+    "OPS-004": {"OPS-003": "升级与沟通"},
+    "OPS-005": {"OPS-003": "响应时限"},
+    "OPS-006": {"OPS-001": "普通变更"},
+    "OPS-007": {"OPS-001": "紧急变更", "OPS-002": "P0响应"},
+    "OPS-008": {"OPS-001": "紧急变更"},
+    "OPS-009": {"OPS-001": "风险评估"},
+    "OPS-010": {"OPS-002": "回滚失败"},
+    "OPS-011": {"OPS-002": "数据库故障"},
+    "OPS-012": {"OPS-002": "网络故障"},
+    "OPS-013": {"OPS-002": "升级矩阵"},
+    "OPS-014": {"OPS-002": "指挥体系"},
+    "OPS-015": {"OPS-002": "恢复"},
+    "OPS-016": {"OPS-002": "复盘"},
+    "OPS-017": {"ENG-001": "发布"},
+    "OPS-018": {"ENG-001": "发布", "OPS-001": "灰度"},
+    "OPS-019": {"OPS-001": "变更窗口"},
+    "OPS-020": {"OPS-002": "数据库故障", "OPS-003": "判定示例"},
+    "OPS-021": {"OPS-003": "判定示例"},
+    "ENG-001": {"ENG-001": "总则"},
+    "ENG-002": {"ENG-001": "验收"},
+}
+
+
+# Only the corpus surface text is rewritten; the Spec fact statement remains
+# unchanged in metadata/evaluation. This removes an ambiguous internal ID from
+# prose while preserving the same business meaning.
+FACT_SOURCE_TEXT_OVERRIDES = {
+    "FIN-018": "差旅费用标准以《2026差旅费用标准》为基准，而非员工手册",
+}
+
+
 RELATIONS = (
     ("HR-001", "REFERENCES", "HR-003", None),
     ("HR-001", "REFERENCES", "HR-004", None),
@@ -192,4 +306,3 @@ HARD_NEGATIVES = {
     "OPS": ("ENG-001", "OPS-001", "OPS-002", "OPS-003", "OPS-004"),
     "ENG": ("ENG-001", "OPS-001", "OPS-002", "OPS-003", "OPS-004"),
 }
-
